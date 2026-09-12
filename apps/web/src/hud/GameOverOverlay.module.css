@@ -1,0 +1,39 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ui-bg) 55%, transparent);
+  backdrop-filter: blur(3px);
+  z-index: 10;
+  animation: fade-up var(--dur-slow) var(--ease);
+  padding: var(--space-4);
+}
+.card {
+  width: min(420px, 100%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-lg);
+}
+.title {
+  font-size: 1.8rem;
+}
+.won {
+  color: var(--ui-accent);
+}
+.detail {
+  color: var(--ui-text-muted);
+}
+.score {
+  font-family: var(--ui-font-mono);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  flex-wrap: wrap;
+}

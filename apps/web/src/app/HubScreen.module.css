@@ -1,0 +1,90 @@
+.hero {
+  padding-block: 1.5rem 0.5rem;
+  display: grid;
+  gap: 0.6rem;
+}
+.playingAs {
+  margin: 0;
+  color: var(--ui-text-muted);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.gameCard {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-align: left;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease;
+}
+.gameCard:hover:not(.soon) {
+  transform: translateY(-2px);
+  border-color: var(--ui-accent);
+}
+.soon {
+  cursor: default;
+  opacity: 0.6;
+}
+.icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+.body {
+  display: grid;
+  gap: 0.25rem;
+  flex: 1;
+}
+.name {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.tagline {
+  color: var(--ui-text-muted);
+  font-size: 0.9rem;
+}
+.go {
+  color: var(--ui-accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.rowHead h2 {
+  margin: 0;
+}
+.list {
+  display: grid;
+  gap: 0.75rem;
+}
+.match {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  flex-wrap: wrap;
+}
+.matchGame {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.matchBody {
+  display: grid;
+  gap: 0.2rem;
+  flex: 1;
+  min-width: 200px;
+}
+.matchTitle {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-weight: 600;
+}

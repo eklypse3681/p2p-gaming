@@ -1,0 +1,168 @@
+.bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  min-height: 24px;
+  min-width: 0;
+}
+.statusText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.statusMine {
+  color: var(--ui-accent);
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ui-text-muted);
+  flex: none;
+}
+.dotMine {
+  background: var(--ui-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ui-accent) 25%, transparent);
+}
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  touch-action: manipulation;
+}
+.spacer {
+  flex: 1 1 auto;
+}
+.menu {
+  position: relative;
+}
+.menuList {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  max-width: min(320px, 90vw);
+  background: var(--ui-surface-raised);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 20;
+  animation: fade-up var(--dur) var(--ease);
+}
+.menuItem {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.menuItem:hover {
+  background: color-mix(in srgb, var(--ui-text) 8%, transparent);
+}
+.menuItem small {
+  display: block;
+  color: var(--ui-text-muted);
+}
+.menuHeading {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-text-muted);
+  padding: 6px 4px 2px;
+}
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 2px 4px;
+}
+.chip {
+  appearance: none;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 650;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  min-height: 34px;
+}
+.chip:hover {
+  border-color: color-mix(in srgb, var(--ui-accent) 50%, var(--ui-border));
+}
+.chipActive {
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  border-color: transparent;
+}
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+  font-size: 0.92rem;
+}
+.confirmRow {
+  display: flex;
+  gap: 6px;
+}
+.kbd {
+  font-family: var(--ui-font-mono);
+  font-size: 0.7rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+  margin-left: 4px;
+}
+
+/* ---- column layout (landscape phones): short labels, stacked ---- */
+.column {
+  height: 100%;
+  min-height: 0;
+}
+.column .buttons {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 6px;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.column .menu {
+  display: flex;
+}
+.column .menu > .vbtn {
+  flex: 1 1 auto;
+}
+.column .menuList {
+  overflow-y: auto;
+  z-index: 45;
+}
+.vbtn {
+  padding: 4px 4px;
+  min-height: 36px;
+  font-size: 0.74rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  width: 100%;
+}

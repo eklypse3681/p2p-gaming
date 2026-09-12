@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist-types",
+    "rootDir": ".",
+    "jsx": "react-jsx",
+    "types": ["vite/client", "@testing-library/jest-dom", "node"]
+  },
+  "include": ["src", "e2e", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"],
+  "references": [
+    { "path": "../../packages/engine" },
+    { "path": "../../packages/protocol" },
+    { "path": "../../packages/server" },
+    { "path": "../../packages/client" },
+    { "path": "../../packages/transport-peerjs" }
+  ]
+}

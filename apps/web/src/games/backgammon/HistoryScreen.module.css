@@ -1,0 +1,108 @@
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+.statK {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ui-text-muted);
+}
+.statV {
+  font-family: var(--ui-font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.statSub {
+  font-size: 0.8rem;
+  color: var(--ui-text-muted);
+}
+.tableWrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.table th {
+  text-align: left;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ui-text-muted);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--ui-border);
+  vertical-align: middle;
+}
+.rowBtn {
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.rowBtn:hover {
+  background: color-mix(in srgb, var(--ui-text) 4%, transparent);
+}
+.rowActive {
+  background: color-mix(in srgb, var(--ui-accent) 10%, transparent);
+}
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.games {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.game {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--ui-surface-raised);
+  font-size: 0.9rem;
+}
+.opps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.opp {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  font-size: 0.9rem;
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+@media (min-width: 900px) {
+  .layoutDetail {
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+  }
+}

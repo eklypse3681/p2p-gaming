@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "."
+  },
+  "include": [
+    "src",
+    "test"
+  ],
+  "references": [
+    {
+      "path": "../engine"
+    },
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../server"
+    }
+  ]
+}

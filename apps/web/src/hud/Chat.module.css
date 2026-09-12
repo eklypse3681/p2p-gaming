@@ -1,0 +1,49 @@
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  height: 100%;
+}
+.list {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 2px;
+  scrollbar-width: thin;
+}
+.empty {
+  color: var(--ui-text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+.msg {
+  max-width: 88%;
+  padding: 7px 11px;
+  border-radius: 14px;
+  background: var(--ui-surface-raised);
+  border: 1px solid var(--ui-border);
+  font-size: 0.9rem;
+  word-break: break-word;
+  animation: fade-up var(--dur) var(--ease);
+}
+.mine {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--ui-accent) 22%, var(--ui-surface-raised));
+  border-color: color-mix(in srgb, var(--ui-accent) 40%, var(--ui-border));
+}
+.who {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--ui-text-muted);
+  margin-bottom: 2px;
+}
+.form {
+  display: flex;
+  gap: var(--space-2);
+}
