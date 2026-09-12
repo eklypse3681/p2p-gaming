@@ -22,6 +22,7 @@ import { ActionBar, StatusLine } from '../../hud/ActionBar';
 import { MatchPanel } from '../../hud/MatchPanel';
 import { Chat } from '../../hud/Chat';
 import { RoomCode } from '../../hud/RoomCode';
+import { Handoff } from '../../hud/Handoff';
 import { GameOverOverlay } from '../../hud/GameOverOverlay';
 import { ConnectionBadge } from '../../hud/ConnectionBadge';
 import { useToasts } from '../../hud/Toast';
@@ -230,6 +231,8 @@ function RailContent({
             <RoomCode code={session.code} />
           </>
         )}
+        <hr className="divider" />
+        <Handoff code={session.code} />
       </div>
       <div className={`card ${styles.railCard} ${tab !== 'chat' ? styles.railHidden : ''}`}>
         <h3 style={{ marginBottom: 8 }}>Chat</h3>

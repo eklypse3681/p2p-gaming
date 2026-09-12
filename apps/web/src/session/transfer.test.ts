@@ -12,6 +12,7 @@ const mock = idbMocked as unknown as ReturnType<typeof createIdbKeyvalMock>;
 
 import {
   EXPORT_FORMAT,
+  IDENTITY_PREFIX,
   TRANSFER_PREFIX,
   TransferError,
   decodeTransferCode,
@@ -279,5 +280,34 @@ describe('import / export', () => {
       ),
     ).toBe('Updated A as #/a/ (2 matches added, 1 updated)');
     await expect(importFromText('junk')).rejects.toThrow(TransferError);
+  });
+});
+
+describe('identity codes (hand-off)', () => {
+  it('round-trips id, name and avatar and imports as the same player', async () => {
+    const { encodeIdentityCode, identityCodeFor, isTransferCode } = await import('./transfer');
+    const code = encodeIdentityCode({ id: 'phone-id', name: 'Dana', avatar: '🦉' });
+    expect(code.startsWith(IDENTITY_PREFIX)).toBe(true);
+    expect(isTransferCode(code)).toBe(true);
+    expect(decodeTransferCode(code)).toEqual({
+      profile: expect.objectContaining({ id: 'phone-id', name: 'Dana', avatar: '🦉' }),
+    });
+    const result = await importFromText(code);
+    expect(result.created).toBe(true);
+    expect(getProfilesIndex()[result.slug]).toMatchObject({ id: 'phone-id', name: 'Dana' });
+    expect(getSettings(result.slug)).toEqual(DEFAULT_SETTINGS);
+    // Importing again merges: settings are left alone, the name follows the code.
+    updateSettings(result.slug, { pieceSet: 'sky-navy' });
+    const again = await importFromText(encodeIdentityCode({ id: 'phone-id', name: 'Dana K' }));
+    expect(again.created).toBe(false);
+    expect(again.slug).toBe(result.slug);
+    expect(getProfilesIndex()[result.slug]!.name).toBe('Dana K');
+    expect(getSettings(result.slug).pieceSet).toBe('sky-navy');
+    expect(identityCodeFor(result.slug).startsWith(IDENTITY_PREFIX)).toBe(true);
+  });
+
+  it('rejects damaged identity codes', () => {
+    expect(() => decodeTransferCode(`${IDENTITY_PREFIX}!!!`)).toThrow(TransferError);
+    expect(() => decodeTransferCode(`${IDENTITY_PREFIX}e30`)).toThrow(/no id/);
   });
 });

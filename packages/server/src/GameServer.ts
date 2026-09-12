@@ -58,23 +58,24 @@ interface Connection {
 }
 
 export const MAX_CHAT_HISTORY = 200;
+/** How many devices one player may have connected at once; the oldest is dropped beyond this. */
+export const MAX_CONNECTIONS_PER_SEAT = 4;
 
 /**
  * The authoritative game server. It lives in the host's browser (or in a Node test) and only ever
  * sees `Transport` objects: it does not know or care whether a connection is in-memory, a
  * BroadcastChannel or a WebRTC data channel.
+ *
+ * A seat is a player, not a connection: the same profile may be connected from several devices
+ * at once (a laptop and a phone) and every device of a seat receives every message meant for it.
  */
-/** Profile id used for the same person's second seat (second tab / device). */
-export function twinIdFor(profileId: string): string {
-  return `${profileId}#2`;
-}
-
 export class GameServer {
   private snapshot: MatchSnapshot;
   private readonly dice: DiceSource;
   private readonly now: () => number;
   private readonly connections = new Set<Connection>();
-  private readonly seats = new Map<Player, Connection>();
+  /** Live connections per seat, oldest first. A seat with no connections has no entry. */
+  private readonly seats = new Map<Player, Connection[]>();
   private readonly changes = new Emitter<{ snapshot: MatchSnapshot; action?: Action }>();
   private closed = false;
 
@@ -128,8 +129,14 @@ export class GameServer {
     return this.changes.on(({ snapshot, action }) => listener(snapshot, action));
   }
 
+  /** Seats with at least one live connection. */
   connectedSeats(): Player[] {
     return Array.from(this.seats.keys());
+  }
+
+  /** Number of devices currently connected for a seat. */
+  connectionCount(seat: Player): number {
+    return this.seats.get(seat)?.length ?? 0;
   }
 
   /** Accept an inbound connection. The first message must be a `hello`. */
@@ -176,14 +183,14 @@ export class GameServer {
     }
   }
 
+  /** Deliver to every device of a seat. */
   private sendToSeat(seat: Player, message: ServerMessage): void {
-    const conn = this.seats.get(seat);
-    if (conn) this.send(conn, message);
+    for (const conn of this.seats.get(seat) ?? []) this.send(conn, message);
   }
 
   private broadcast(message: ServerMessage, except?: Connection): void {
-    for (const conn of this.seats.values()) {
-      if (conn !== except) this.send(conn, message);
+    for (const list of this.seats.values()) {
+      for (const conn of list) if (conn !== except) this.send(conn, message);
     }
   }
 
@@ -210,10 +217,16 @@ export class GameServer {
     conn.unsubscribe = [];
     this.connections.delete(conn);
     const seat = conn.seat;
-    if (seat !== null && this.seats.get(seat) === conn) {
-      this.seats.delete(seat);
-      if (announce && !this.closed) this.broadcast({ type: 'presence', seat, connected: false });
+    if (seat === null) return;
+    const list = this.seats.get(seat);
+    if (!list) return;
+    const remaining = list.filter((c) => c !== conn);
+    if (remaining.length > 0) {
+      this.seats.set(seat, remaining);
+      return; // another device of this player is still here: presence is unchanged
     }
+    this.seats.delete(seat);
+    if (announce && !this.closed) this.broadcast({ type: 'presence', seat, connected: false });
   }
 
   private reject(
@@ -270,12 +283,12 @@ export class GameServer {
       this.maybeAdopt(conn, msg.snapshot);
     }
 
-    const resolved = this.resolveSeat(conn, msg.profile);
-    if (!resolved) {
+    const seat = this.resolveSeat(msg.profile);
+    if (!seat) {
       this.reject(conn, 'full', 'both seats are taken');
       return;
     }
-    const { seat, profile } = resolved;
+    const profile = msg.profile;
 
     // Record the freshest profile (name/avatar may have changed) and tell the other seat.
     const known = this.snapshot.players[seat];
@@ -292,57 +305,37 @@ export class GameServer {
       this.broadcast({ type: 'state', snapshot: this.snapshot }, conn);
     }
 
-    // Replace any live connection for this seat.
-    const previous = this.seats.get(seat);
-    if (previous && previous !== conn) {
-      previous.seat = null; // so detach does not announce a disconnect for this seat
-      this.closeConnection(previous);
-    }
+    // Join this seat's set of devices; beyond the cap the oldest device is dropped.
+    const list = this.seats.get(seat) ?? [];
+    const first = list.length === 0;
     conn.seat = seat;
-    this.seats.set(seat, conn);
+    this.seats.set(seat, [...list, conn]);
+    while ((this.seats.get(seat)?.length ?? 0) > MAX_CONNECTIONS_PER_SEAT) {
+      const oldest = this.seats.get(seat)![0]!;
+      this.closeConnection(oldest); // the seat stays occupied, so no presence change
+    }
 
     this.send(conn, { type: 'welcome', seat, snapshot: this.snapshot });
     const other = opponent(seat);
     this.send(conn, { type: 'presence', seat: other, connected: this.seats.has(other) });
-    this.sendToSeat(other, { type: 'presence', seat, connected: true });
+    // The opponent only learns about presence when the seat goes from absent to present.
+    if (first) this.sendToSeat(other, { type: 'presence', seat, connected: true });
     this.changes.emit({ snapshot: this.snapshot });
   }
 
   /**
-   * Decide which seat a hello belongs to.
-   * - A known profile id gets its seat back (reconnect).
-   * - A new profile id gets the first free seat.
-   * - The same profile arriving while its seat is still live (the same person opening the
-   *   match in a second tab or device) takes the *other* seat as a "twin" — so one browser can
-   *   play both sides without the second tab kicking the first one off.
+   * Which seat a hello belongs to: a known profile id always gets its own seat (whether that is
+   * a reconnect or a second device joining alongside the first); a new profile id gets the first
+   * free seat; otherwise the table is full.
    */
-  private resolveSeat(
-    conn: Connection,
-    profile: PlayerProfile,
-  ): { seat: Player; profile: PlayerProfile } | null {
+  private resolveSeat(profile: PlayerProfile): Player | null {
     const { players } = this.snapshot;
     const seats = ['white', 'black'] as const;
-    const own = seats.find((s) => players[s]?.id === profile.id) ?? null;
-    if (own) {
-      const live = this.seats.get(own);
-      const other = opponent(own);
-      const otherPlayer = players[other];
-      const twinId = twinIdFor(profile.id);
-      if (
-        live &&
-        live !== conn &&
-        live.transport.status === 'open' &&
-        (otherPlayer === null || otherPlayer.id === twinId)
-      ) {
-        return {
-          seat: other,
-          profile: { ...profile, id: twinId, name: `${profile.name} (2)` },
-        };
-      }
-      return { seat: own, profile };
-    }
-    const free = seats.find((s) => players[s] === null) ?? null;
-    return free ? { seat: free, profile } : null;
+    return (
+      seats.find((s) => players[s]?.id === profile.id) ??
+      seats.find((s) => players[s] === null) ??
+      null
+    );
   }
 
   /** Adopt the peer's snapshot if it is strictly newer and its action log replays cleanly. */
@@ -487,8 +480,13 @@ export class GameServer {
         this.send(conn, { type: 'pong', t: msg.t });
         return;
       case 'bye':
-        this.closeConnection(conn);
-        this.broadcast({ type: 'presence', seat, connected: false });
+        // Announce absence only if this was the player's last device (detach decides).
+        this.detach(conn, true);
+        try {
+          conn.transport.close();
+        } catch {
+          /* ignore */
+        }
         return;
     }
   }

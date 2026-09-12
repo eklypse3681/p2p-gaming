@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useParams } from 'react-router';
 import { PickerScreen } from './PickerScreen';
@@ -112,5 +112,42 @@ describe('PickerScreen import', () => {
     expect(await screen.findByTestId('marker')).toHaveTextContent(
       '{"profile":"dana","game":"backgammon","code":"ABC234"}',
     );
+  });
+});
+
+describe('PickerScreen hand-off (?import=)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetProfilesForTests();
+  });
+
+  it('imports the identity from the link and goes straight to the join', async () => {
+    const { encodeIdentityCode } = await import('../session/transfer');
+    const code = encodeIdentityCode({ id: 'dana-id', name: 'Dana', avatar: '🦉' });
+    renderPicker(`/backgammon/join/abc234?import=${code}`);
+    expect(screen.getByTestId('import-auto')).toHaveTextContent('Continuing as Dana');
+    await waitFor(() => expect(screen.getByTestId('marker')).toBeInTheDocument());
+    const marker = screen.getByTestId('marker').textContent ?? '';
+    expect(marker).toContain('"profile":"dana"');
+    expect(marker).toContain('"code":"ABC234"');
+    expect(listProfiles().map((p) => [p.slug, p.id])).toEqual([['dana', 'dana-id']]);
+  });
+
+  it('merges into an existing player with the same id instead of creating a duplicate', async () => {
+    const { encodeIdentityCode } = await import('../session/transfer');
+    createProfile('Alice', { id: 'alice-id' });
+    const code = encodeIdentityCode({ id: 'alice-id', name: 'Alice on the phone' });
+    renderPicker(`/backgammon/join/abc234?import=${code}`);
+    await waitFor(() => expect(screen.getByTestId('marker')).toBeInTheDocument());
+    expect(screen.getByTestId('marker').textContent).toContain('"profile":"alice"');
+    expect(listProfiles()).toHaveLength(1);
+    expect(listProfiles()[0]!.name).toBe('Alice on the phone');
+  });
+
+  it('shows the picker with an error when the identity code is damaged', async () => {
+    createProfile('Alice');
+    renderPicker('/backgammon/join/abc234?import=p2pi1.garbage');
+    expect(await screen.findByTestId('import-error')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-alice')).toBeInTheDocument();
   });
 });

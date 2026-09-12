@@ -41,7 +41,7 @@ describe('handshake', () => {
     h.close();
   });
 
-  it('reconnecting with a known profile replaces the live connection without a presence blip', async () => {
+  it('a known profile joining again adds a device to its seat without a presence blip', async () => {
     const h = await makeHarness();
     const presence: boolean[] = [];
     h.host.subscribe(() => presence.push(h.host.getState().presence.black));
@@ -49,10 +49,27 @@ describe('handshake', () => {
     await flush();
     expect(guest2.getState().status).toBe('joined');
     expect(guest2.getState().seat).toBe('black');
-    expect(h.guest.getState().status).toBe('disconnected');
+    expect(h.guest.getState().status).toBe('joined'); // the first device is not kicked
     expect(presence.every((p) => p)).toBe(true);
     expect(h.host.getState().snapshot!.players.black!.name).toBe('Bobby');
     expect(h.server.connectedSeats().length).toBe(2);
+    expect(h.server.connectionCount('black')).toBe(2);
+    guest2.close();
+    await flush();
+    expect(h.server.connectionCount('black')).toBe(1);
+    expect(h.host.getState().presence.black).toBe(true);
+    h.close();
+  });
+
+  it('a reconnect after the old transport died simply takes the seat again', async () => {
+    const h = await makeHarness();
+    h.guest.close();
+    await flush();
+    expect(h.server.connectionCount('black')).toBe(0);
+    const { client: guest2 } = h.connect(GUEST);
+    await flush();
+    expect(guest2.getState().seat).toBe('black');
+    expect(h.server.connectionCount('black')).toBe(1);
     guest2.close();
     h.close();
   });
@@ -72,7 +89,13 @@ describe('handshake', () => {
 
   it('rejects a non-hello first message and garbage', async () => {
     const h = await makeHarness({ withGuest: false });
-    for (const first of [{ type: 'roll' }, 'hello', 42, null, { type: 'hello', protocol: 1, profile: { id: '' } }]) {
+    for (const first of [
+      { type: 'roll' },
+      'hello',
+      42,
+      null,
+      { type: 'hello', protocol: 1, profile: { id: '' } },
+    ]) {
       const [serverEnd, raw] = createMemoryPair();
       h.server.accept(serverEnd);
       const got: unknown[] = [];

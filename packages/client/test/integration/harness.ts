@@ -27,7 +27,10 @@ export interface Harness {
   guestStore: MemoryMatchStore;
   clock: ReturnType<typeof fakeClock>;
   /** Connect another client (new transport) to the same server. */
-  connect(profile: PlayerProfile, opts?: { resumeSnapshot?: MatchSnapshot; store?: MemoryMatchStore }): { client: GameClient; transport: Transport };
+  connect(
+    profile: PlayerProfile,
+    opts?: { resumeSnapshot?: MatchSnapshot; store?: MemoryMatchStore },
+  ): { client: GameClient; transport: Transport };
   /** Assert both clients hold identical authoritative state. */
   expectConverged(): void;
   close(): void;
@@ -66,6 +69,7 @@ export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
     resumeSnapshot: opts.hostResume,
     ...clientOpts,
   });
+  const others: GameClient[] = [];
   const connect: Harness['connect'] = (profile, o = {}) => {
     const [serverEnd, clientEnd] = createMemoryPair('guest');
     server.accept(serverEnd);
@@ -76,6 +80,7 @@ export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
       resumeSnapshot: o.resumeSnapshot,
       ...clientOpts,
     });
+    others.push(client);
     return { client, transport: clientEnd };
   };
   let guest: GameClient;
@@ -94,13 +99,15 @@ export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
     clock,
     connect,
     expectConverged() {
-      const a = host.getState().snapshot;
-      const b = guest.getState().snapshot;
-      if (JSON.stringify(a) !== JSON.stringify(b)) {
-        throw new Error(`clients diverged:\nhost seq ${a?.seq}\nguest seq ${b?.seq}`);
+      const s = JSON.stringify(server.getSnapshot());
+      const joined = [host, guest, ...others].filter((c) => c && c.getState().status === 'joined');
+      for (const c of joined) {
+        if (JSON.stringify(c.getState().snapshot) !== s) {
+          throw new Error(
+            `client ${c.profile.name} (${c.getState().seat}) diverged from the server: seq ${c.getState().snapshot?.seq} vs ${server.getSnapshot().seq}`,
+          );
+        }
       }
-      const s = server.getSnapshot();
-      if (JSON.stringify(a) !== JSON.stringify(s)) throw new Error('host client differs from server');
     },
     close() {
       host.close();
@@ -116,7 +123,10 @@ export function clientFor(h: Harness, seat: Player): GameClient {
 }
 
 /** Stage the first legal sub-move repeatedly until the draft is complete, then commit. */
-export function autoPlay(client: GameClient, pick: (next: SubMove[]) => SubMove = (n) => n[0]!): SubMove[] {
+export function autoPlay(
+  client: GameClient,
+  pick: (next: SubMove[]) => SubMove = (n) => n[0]!,
+): SubMove[] {
   let guard = 0;
   while (!client.getState().draft.complete) {
     const next = client.getState().draft.next;
@@ -147,7 +157,8 @@ export async function startAndOpen(h: Harness): Promise<Player> {
     await flush();
   }
   const g = currentGame(h.host);
-  if (g.phase.kind !== 'moving') throw new Error(`expected moving after opening, got ${g.phase.kind}`);
+  if (g.phase.kind !== 'moving')
+    throw new Error(`expected moving after opening, got ${g.phase.kind}`);
   return g.phase.player;
 }
 

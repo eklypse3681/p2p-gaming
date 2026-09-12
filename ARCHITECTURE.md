@@ -59,6 +59,21 @@ single `free` phase: either seat may `free-roll`, `free-move` any checker of eit
 `free-cube`, `free-reset`, and `free-result` (manual scoring). The same server, client,
 transports, persistence and history handle both; the UI switches its interaction model.
 
+## Multi-device seats
+
+A seat is a player, not a connection. `GameServer` keeps a list of live connections per seat
+(oldest first, capped at `MAX_CONNECTIONS_PER_SEAT` = 4; the oldest is dropped beyond that). A
+hello whose profile id matches a seated player joins that seat's list; a new id takes a free seat;
+otherwise the table is full. Every message addressed to a seat reaches all of its devices, and
+any device may act. `preview` goes only to the opponent's devices. Presence changes only when a
+seat's first device arrives or its last device leaves. A device that arrives with a newer
+snapshot (it kept playing while the host copy lagged) still wins the resume merge.
+
+The web app's hand-off link is a join link with `?import=<identity code>` inside the hash
+(`#/backgammon/join/CODE?import=p2pi1.…`). The picker imports (or merges) that identity without
+showing a form and continues to the join, so the second device takes a second connection on the
+same seat.
+
 ## Coordinates (read this before touching board code)
 
 - Engine `Board.points[0..23]` are absolute; index 0 = White's 1-point. `+n` white, `-n` black.

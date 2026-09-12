@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { isValidRoomCode, normalizeRoomCode } from '@bgf/protocol';
 import { createProfile, listProfiles, touchProfile, useProfilesIndex } from '../session/profiles';
 import { profilePath } from '../session/ProfileProvider';
@@ -9,7 +9,13 @@ import { gamePath } from '../games/GameProvider';
 import type { GameId } from '../games/ids';
 import { DEFAULT_GAME } from '../games/ids';
 import { getGame } from '../games/registry';
-import { TransferError, describeImport, importFromText } from '../session/transfer';
+import {
+  TransferError,
+  decodeTransferCode,
+  describeImport,
+  importFromText,
+} from '../session/transfer';
+import { identityFromSearch } from '../session/links';
 import styles from './PickerScreen.module.css';
 
 /**
@@ -20,6 +26,7 @@ import styles from './PickerScreen.module.css';
 export function PickerScreen({ game }: { game?: GameId } = {}) {
   const { code } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const index = useProfilesIndex();
   const profiles = useMemo(() => listProfiles(), [index]); // eslint-disable-line react-hooks/exhaustive-deps
   const joining = code && isValidRoomCode(normalizeRoomCode(code)) ? normalizeRoomCode(code) : null;
@@ -32,6 +39,18 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
   const [importError, setImportError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+
+  // A hand-off link (`?import=<identity code>`) names the player: import them and go straight on.
+  const autoCode = joining ? identityFromSearch(location.search) : null;
+  const autoName = useMemo(() => {
+    if (!autoCode) return null;
+    try {
+      return decodeTransferCode(autoCode).profile.name;
+    } catch {
+      return null;
+    }
+  }, [autoCode]);
+  const autoStarted = useRef<string | null>(null);
 
   const choose = (slug: string) => {
     touchProfile(slug);
@@ -67,6 +86,13 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
       setImporting(false);
     }
   };
+
+  useEffect(() => {
+    if (!autoCode || autoStarted.current === autoCode) return;
+    autoStarted.current = autoCode;
+    void runImport(autoCode);
+    // runImport is recreated every render; the ref guard makes this effectively run-once per code.
+  }, [autoCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const importFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -184,7 +210,12 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
         <div className={styles.hero}>
           <div className="eyebrow">Peer-to-peer · no accounts · no servers</div>
           <h1>{joining ? "You're invited" : "Who's playing?"}</h1>
-          {joining ? (
+          {joining && autoCode && !importError ? (
+            <p className="muted" data-testid="import-auto" role="status">
+              Continuing as <strong>{autoName ?? 'you'}</strong> in {gameName} match{' '}
+              <code className="mono">{joining}</code>…
+            </p>
+          ) : joining ? (
             <p className="muted" data-testid="picker-joining">
               Pick who you are and you'll join {gameName} match{' '}
               <code className="mono">{joining}</code>.
@@ -226,6 +257,12 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
         )}
 
         {profiles.length > 0 && form}
+
+        {autoCode && importError && !importOpen && (
+          <span className="error-text" role="alert" data-testid="import-error">
+            {importError}
+          </span>
+        )}
 
         {importOpen ? (
           importPanel

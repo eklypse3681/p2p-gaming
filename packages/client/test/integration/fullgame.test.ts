@@ -1,9 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { BAR, OFF, boardFrom, newMatch, replay, scriptedDice, seededDice, startGame } from '@bgf/engine';
+import {
+  BAR,
+  OFF,
+  boardFrom,
+  newMatch,
+  replay,
+  scriptedDice,
+  seededDice,
+  startGame,
+} from '@bgf/engine';
 import type { MatchState } from '@bgf/engine';
-import { autoPlay, clientFor, currentGame, flush, makeHarness, playOut, startAndOpen } from './harness.js';
+import {
+  autoPlay,
+  clientFor,
+  currentGame,
+  flush,
+  makeHarness,
+  playOut,
+  startAndOpen,
+} from './harness.js';
 
-function positioned(game: Partial<NonNullable<MatchState['game']>>, config: Partial<MatchState['config']> = { length: 5 }): MatchState {
+function positioned(
+  game: Partial<NonNullable<MatchState['game']>>,
+  config: Partial<MatchState['config']> = { length: 5 },
+): MatchState {
   const m = startGame(newMatch(config));
   return { ...m, game: { ...m.game!, ...game } };
 }
@@ -37,7 +57,11 @@ describe('full game over two clients', () => {
     const board = boardFrom({ 2: 1, [OFF]: 14 }, { 24: 2, 13: 13 });
     const h = await makeHarness({
       dice: scriptedDice([6, 5]),
-      initialMatch: positioned({ board, cube: { value: 2, owner: 'black' }, phase: { kind: 'to-roll', player: 'white' } }),
+      initialMatch: positioned({
+        board,
+        cube: { value: 2, owner: 'black' },
+        phase: { kind: 'to-roll', player: 'white' },
+      }),
     });
     h.host.roll();
     await flush();
@@ -59,7 +83,10 @@ describe('full game over two clients', () => {
     const h = await makeHarness({
       dice: scriptedDice([2, 1]),
       config: { length: 1 },
-      initialMatch: positioned({ board, phase: { kind: 'to-roll', player: 'black' } }, { length: 1 }),
+      initialMatch: positioned(
+        { board, phase: { kind: 'to-roll', player: 'black' } },
+        { length: 1 },
+      ),
     });
     h.guest.roll();
     await flush();
@@ -68,7 +95,11 @@ describe('full game over two clients', () => {
     const snap = h.host.getState().snapshot!;
     expect(snap.match.winner).toBe('black');
     expect(snap.match.score).toEqual({ white: 0, black: 1 });
-    expect(snap.match.games[0]!.result).toMatchObject({ winner: 'black', kind: 'single', points: 1 });
+    expect(snap.match.games[0]!.result).toMatchObject({
+      winner: 'black',
+      kind: 'single',
+      points: 1,
+    });
     h.host.startGame();
     await flush();
     expect(h.host.getState().error?.code).toBe('match-over');
@@ -110,7 +141,10 @@ describe('full game over two clients', () => {
     h.host.drop();
     await flush();
     g = currentGame(h.host);
-    expect(g.phase).toMatchObject({ kind: 'over', result: { winner: 'black', how: 'drop', cube: 2, points: 2 } });
+    expect(g.phase).toMatchObject({
+      kind: 'over',
+      result: { winner: 'black', how: 'drop', cube: 2, points: 2 },
+    });
     expect(h.host.getState().snapshot!.match.score).toEqual({ white: 0, black: 2 });
     expect(g.history.map((t) => t.type)).toEqual(['double', 'take', 'move', 'double', 'drop']);
     h.expectConverged();
@@ -182,7 +216,10 @@ describe('full game over two clients', () => {
   it('resignation: decline restores the phase (and the draft); accept scores the offered stakes', async () => {
     const h = await makeHarness({
       dice: scriptedDice([3, 1]),
-      initialMatch: positioned({ cube: { value: 4, owner: 'white' }, phase: { kind: 'to-roll', player: 'white' } }),
+      initialMatch: positioned({
+        cube: { value: 4, owner: 'white' },
+        phase: { kind: 'to-roll', player: 'white' },
+      }),
     });
     h.host.roll();
     await flush();
@@ -190,14 +227,22 @@ describe('full game over two clients', () => {
     h.host.stage(first);
     h.host.offerResign('gammon');
     await flush();
-    expect(currentGame(h.guest).phase).toMatchObject({ kind: 'resign-offered', by: 'white', stakes: 'gammon' });
+    expect(currentGame(h.guest).phase).toMatchObject({
+      kind: 'resign-offered',
+      by: 'white',
+      stakes: 'gammon',
+    });
     expect(h.host.getState().draft.played).toEqual([first]); // draft survives the offer
     h.host.acceptResign(); // wrong seat
     await flush();
     expect(h.host.getState().error?.code).toBe('not-your-turn');
     h.guest.declineResign();
     await flush();
-    expect(currentGame(h.host).phase).toMatchObject({ kind: 'moving', player: 'white', dice: [3, 1] });
+    expect(currentGame(h.host).phase).toMatchObject({
+      kind: 'moving',
+      player: 'white',
+      dice: [3, 1],
+    });
     expect(h.host.getState().draft.played).toEqual([first]);
     autoPlay(h.host);
     await flush();
@@ -207,7 +252,10 @@ describe('full game over two clients', () => {
     h.host.acceptResign();
     await flush();
     const g = currentGame(h.guest);
-    expect(g.phase).toMatchObject({ kind: 'over', result: { winner: 'white', kind: 'backgammon', how: 'resign', cube: 4, points: 12 } });
+    expect(g.phase).toMatchObject({
+      kind: 'over',
+      result: { winner: 'white', kind: 'backgammon', how: 'resign', cube: 4, points: 12 },
+    });
     expect(h.guest.getState().snapshot!.match.winner).toBe('white');
     h.expectConverged();
     h.close();
@@ -218,13 +266,19 @@ describe('full game over two clients', () => {
     const h = await makeHarness({
       dice: scriptedDice([1, 1, 5, 2]),
       config: { length: 7 },
-      initialMatch: positioned({ board, phase: { kind: 'to-roll', player: 'white' } }, { length: 7 }),
+      initialMatch: positioned(
+        { board, phase: { kind: 'to-roll', player: 'white' } },
+        { length: 7 },
+      ),
     });
     h.host.roll();
     await flush();
     autoPlay(h.host);
     await flush();
-    expect(currentGame(h.guest).phase).toMatchObject({ kind: 'over', result: { kind: 'gammon', points: 2 } });
+    expect(currentGame(h.guest).phase).toMatchObject({
+      kind: 'over',
+      result: { kind: 'gammon', points: 2 },
+    });
     h.guest.startGame();
     await flush();
     const snap = h.host.getState().snapshot!;
@@ -236,7 +290,11 @@ describe('full game over two clients', () => {
     h.host.openingRoll();
     h.guest.openingRoll();
     await flush();
-    expect(currentGame(h.host).phase).toMatchObject({ kind: 'moving', player: 'white', dice: [5, 2] });
+    expect(currentGame(h.host).phase).toMatchObject({
+      kind: 'moving',
+      player: 'white',
+      dice: [5, 2],
+    });
     h.expectConverged();
     h.close();
   });
@@ -246,13 +304,19 @@ describe('full game over two clients', () => {
     const h = await makeHarness({
       dice: scriptedDice([1, 1]),
       config: { length: 0, jacoby: true },
-      initialMatch: positioned({ board, phase: { kind: 'to-roll', player: 'white' } }, { length: 0, jacoby: true }),
+      initialMatch: positioned(
+        { board, phase: { kind: 'to-roll', player: 'white' } },
+        { length: 0, jacoby: true },
+      ),
     });
     h.host.roll();
     await flush();
     autoPlay(h.host);
     await flush();
-    expect(currentGame(h.host).phase).toMatchObject({ kind: 'over', result: { kind: 'gammon', points: 1 } });
+    expect(currentGame(h.host).phase).toMatchObject({
+      kind: 'over',
+      result: { kind: 'gammon', points: 1 },
+    });
     expect(h.host.getState().snapshot!.match.winner).toBeNull();
     h.close();
   });

@@ -22,11 +22,20 @@ import { GAME_IDS, isGameId } from '../games/ids';
  *   is how a resumed match's `players[seat].id` recognises them. From then on the two browsers
  *   have separate histories.
  * - A **transfer code** (`p2pg1.<base64url>`): identity + settings only, short enough to paste.
+ * - An **identity code** (`p2pi1.<base64url>`): identity only (id, name, avatar). Short enough for
+ *   a QR code; used by hand-off links so a phone can pick up a live game as the same player.
  */
 
 export const EXPORT_FORMAT = 'p2p-gaming-profile';
 export const EXPORT_VERSION = 1;
 export const TRANSFER_PREFIX = 'p2pg1.';
+export const IDENTITY_PREFIX = 'p2pi1.';
+
+/** True for either kind of pasteable code. */
+export function isTransferCode(text: string): boolean {
+  const t = text.trim();
+  return t.startsWith(TRANSFER_PREFIX) || t.startsWith(IDENTITY_PREFIX);
+}
 
 export interface ExportedIdentity {
   id: string;
@@ -129,22 +138,44 @@ export function transferCodeFor(slug: string): string {
   return encodeTransferCode(identityOf(slug), getSettings(slug));
 }
 
+/** Identity-only code: id, name and avatar. No settings, no matches; as short as it gets. */
+export function encodeIdentityCode(profile: { id: string; name: string; avatar?: string }): string {
+  const payload: Record<string, string> = { i: profile.id, n: profile.name };
+  if (profile.avatar) payload.a = profile.avatar;
+  return IDENTITY_PREFIX + toBase64Url(JSON.stringify(payload));
+}
+
+/** Identity code for a player stored in this browser. */
+export function identityCodeFor(slug: string): string {
+  const { id, name, avatar } = identityOf(slug);
+  return encodeIdentityCode({ id, name, avatar });
+}
+
 export function decodeTransferCode(code: string): {
   profile: ExportedIdentity;
   settings?: Settings;
 } {
   const trimmed = code.trim();
-  if (!trimmed.startsWith(TRANSFER_PREFIX)) {
-    throw new TransferError('bad-code', `a transfer code starts with "${TRANSFER_PREFIX}"`);
+  const identityOnly = trimmed.startsWith(IDENTITY_PREFIX);
+  if (!identityOnly && !trimmed.startsWith(TRANSFER_PREFIX)) {
+    throw new TransferError(
+      'bad-code',
+      `a transfer code starts with "${TRANSFER_PREFIX}" (or "${IDENTITY_PREFIX}")`,
+    );
   }
+  const prefix = identityOnly ? IDENTITY_PREFIX : TRANSFER_PREFIX;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(fromBase64Url(trimmed.slice(TRANSFER_PREFIX.length)));
+    parsed = JSON.parse(fromBase64Url(trimmed.slice(prefix.length)));
   } catch {
     throw new TransferError('bad-code', 'that transfer code is damaged');
   }
   if (typeof parsed !== 'object' || parsed === null) {
     throw new TransferError('bad-code', 'that transfer code is damaged');
+  }
+  if (identityOnly) {
+    const { i, n, a } = parsed as { i?: unknown; n?: unknown; a?: unknown };
+    return { profile: parseIdentity({ id: i, name: n, avatar: a }, 'bad-code') };
   }
   const { p, s } = parsed as { p?: unknown; s?: unknown };
   const profile = parseIdentity(p, 'bad-code');
@@ -344,7 +375,7 @@ export async function importFromText(
   opts: ImportOptions = {},
 ): Promise<ImportResult> {
   const trimmed = text.trim();
-  const data = trimmed.startsWith(TRANSFER_PREFIX)
+  const data = isTransferCode(trimmed)
     ? exportFromTransferCode(trimmed, opts.now)
     : parseProfileExport(trimmed);
   return importProfile(data, opts);

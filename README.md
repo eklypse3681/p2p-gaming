@@ -56,6 +56,15 @@ other browser open the player picker, choose **Import a player**, and pick the f
 code. The player keeps the same id, so matches saved with them can be resumed there. The two
 copies then keep separate histories.
 
+## Move to another device
+
+Every match screen has a **Move to another device** panel with a QR code. Scan it with your
+phone (or copy the link) and the match opens there *as you*: the link carries your identity, so
+there is nothing to pick or type. Both devices share your seat and stay in sync over the same
+peer-to-peer connection until you close one of them. A player may have up to four devices
+connected at once. If the device you leave was hosting the table, the remaining device offers
+to reconnect and takes the hosting over.
+
 ## Toolchain
 
 TypeScript 7 (native compiler) for `tsc`, with the TypeScript 6 API package aliased as

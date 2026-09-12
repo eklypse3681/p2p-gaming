@@ -3,10 +3,21 @@ import { scriptedDice, newMatch, startGame, boardFrom, BAR } from '@bgf/engine';
 import type { MatchState } from '@bgf/engine';
 import { createMemoryPair, PROTOCOL_VERSION } from '@bgf/protocol';
 import { GameClient } from '../../src/index.js';
-import { GUEST, autoPlay, clientFor, currentGame, flush, makeHarness, startAndOpen } from './harness.js';
+import {
+  GUEST,
+  autoPlay,
+  clientFor,
+  currentGame,
+  flush,
+  makeHarness,
+  startAndOpen,
+} from './harness.js';
 
 /** A match with a game in progress in the given phase, from a custom board. */
-function positioned(game: Partial<MatchState['game'] & object>, config = { length: 5 }): MatchState {
+function positioned(
+  game: Partial<MatchState['game'] & object>,
+  config = { length: 5 },
+): MatchState {
   const m = startGame(newMatch(config));
   return { ...m, game: { ...m.game!, ...game } };
 }
@@ -37,7 +48,11 @@ describe('commands', () => {
     const got: { type: string; code?: string }[] = [];
     raw.onMessage((m) => got.push(m as { type: string }));
     // Reconnect as the host profile on a raw transport so we can send a hand-built illegal play.
-    raw.send({ type: 'hello', protocol: PROTOCOL_VERSION, profile: { id: 'host-id', name: 'Alice' } });
+    raw.send({
+      type: 'hello',
+      protocol: PROTOCOL_VERSION,
+      profile: { id: 'host-id', name: 'Alice' },
+    });
     await flush();
     raw.send({ type: 'play', play: [{ from: 24, to: 19, die: 5, hit: false }] });
     await flush();
@@ -79,7 +94,11 @@ describe('commands', () => {
     h.guest.openingRoll();
     await flush();
     // white 2, black 5 → black starts with [5, 2]
-    expect(currentGame(h.host).phase).toMatchObject({ kind: 'moving', player: 'black', dice: [5, 2] });
+    expect(currentGame(h.host).phase).toMatchObject({
+      kind: 'moving',
+      player: 'black',
+      dice: [5, 2],
+    });
     expect(h.guest.getState().lastAction?.action.type).toBe('opening-roll');
     h.expectConverged();
     h.close();
@@ -133,7 +152,12 @@ describe('commands', () => {
         return typeof v === 'function' ? v.bind(target) : v;
       },
     });
-    const guest = new GameClient({ transport: spied, profile: GUEST, pingIntervalMs: 0, previewThrottleMs: 40 });
+    const guest = new GameClient({
+      transport: spied,
+      profile: GUEST,
+      pingIntervalMs: 0,
+      previewThrottleMs: 40,
+    });
     await flush();
     expect(guest.getState().seat).toBe('black');
     guest.stage(guest.getState().draft.next[0]!);
@@ -201,7 +225,7 @@ describe('commands', () => {
   });
 
   it('presence reflects a transport that dies underneath the client', async () => {
-    const h = await makeHarness();
+    const h = await makeHarness({ withGuest: false });
     const { client, transport } = h.connect(GUEST);
     await flush();
     transport.close(); // simulate the network dropping (no bye)
@@ -222,8 +246,16 @@ describe('commands', () => {
     await flush();
     const g = currentGame(h.guest);
     expect(g.phase).toMatchObject({ kind: 'to-roll', player: 'black' });
-    expect(g.history.at(-1)).toMatchObject({ type: 'move', player: 'white', dice: [3, 4], play: [] });
-    expect(h.guest.getState().lastAction).toMatchObject({ action: { type: 'roll', player: 'white' }, by: 'white' });
+    expect(g.history.at(-1)).toMatchObject({
+      type: 'move',
+      player: 'white',
+      dice: [3, 4],
+      play: [],
+    });
+    expect(h.guest.getState().lastAction).toMatchObject({
+      action: { type: 'roll', player: 'white' },
+      by: 'white',
+    });
     expect(h.host.getState().draft.played).toEqual([]);
     expect(h.host.getState().draft.board).toEqual(g.board);
     h.expectConverged();
@@ -231,7 +263,10 @@ describe('commands', () => {
   });
 
   it('a hit sends the opponent to the bar and they must enter first', async () => {
-    const board = boardFrom({ 7: 1, 6: 4, 8: 3, 13: 5, 24: 2 }, { 21: 1, 6: 4, 8: 3, 13: 5, 24: 2 });
+    const board = boardFrom(
+      { 7: 1, 6: 4, 8: 3, 13: 5, 24: 2 },
+      { 21: 1, 6: 4, 8: 3, 13: 5, 24: 2 },
+    );
     const h = await makeHarness({
       dice: scriptedDice([3, 1, 6, 5]),
       initialMatch: positioned({ board, phase: { kind: 'to-roll', player: 'white' } }),
@@ -256,7 +291,7 @@ describe('commands', () => {
   });
 
   it('bye closes the connection and announces absence', async () => {
-    const h = await makeHarness();
+    const h = await makeHarness({ withGuest: false });
     const [serverEnd, raw] = createMemoryPair();
     h.server.accept(serverEnd);
     raw.send({ type: 'hello', protocol: PROTOCOL_VERSION, profile: GUEST });
