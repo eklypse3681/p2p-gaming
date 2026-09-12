@@ -47,6 +47,15 @@ Try it alone: host as one player, then open a second tab, pick (or create) anoth
 with the code. Each tab is its own player, with its own settings and saved matches.
 `?transport=broadcast` (offline, same browser) and `?transport=memory` exist for tests.
 
+## Moving to another browser
+
+Players live in the browser, so to play as yourself somewhere else, move the player: Settings →
+**Export player…** downloads `p2p-gaming-<player>.json` (identity, settings, saved matches), or
+**Copy transfer code** gives a short `p2pg1.…` string with just the identity and settings. On the
+other browser open the player picker, choose **Import a player**, and pick the file or paste the
+code. The player keeps the same id, so matches saved with them can be resumed there. The two
+copies then keep separate histories.
+
 ## Toolchain
 
 TypeScript 7 (native compiler) for `tsc`, with the TypeScript 6 API package aliased as
@@ -55,15 +64,15 @@ notes). Vite 8, Vitest 5, Playwright, React 19, react-router 8, motion 13, ESLin
 
 ## Scripts
 
-| Command             | What it does                                                        |
-| ------------------- | ------------------------------------------------------------------- |
-| `pnpm dev`          | Vite dev server for the web app                                     |
-| `pnpm build`        | Production build (static files; deploy anywhere, e.g. GitHub Pages) |
-| `pnpm test`         | Unit + component tests for every package (Vitest)                   |
-| `pnpm test:e2e`     | Playwright end-to-end tests (host + guest in one browser)           |
-| `pnpm typecheck`    | TypeScript project references build                                 |
-| `pnpm lint`         | ESLint                                                              |
-| `pnpm check`        | typecheck + lint + unit tests                                       |
+| Command          | What it does                                                        |
+| ---------------- | ------------------------------------------------------------------- |
+| `pnpm dev`       | Vite dev server for the web app                                     |
+| `pnpm build`     | Production build (static files; deploy anywhere, e.g. GitHub Pages) |
+| `pnpm test`      | Unit + component tests for every package (Vitest)                   |
+| `pnpm test:e2e`  | Playwright end-to-end tests (host + guest in one browser)           |
+| `pnpm typecheck` | TypeScript project references build                                 |
+| `pnpm lint`      | ESLint                                                              |
+| `pnpm check`     | typecheck + lint + unit tests                                       |
 
 ## Repository layout
 

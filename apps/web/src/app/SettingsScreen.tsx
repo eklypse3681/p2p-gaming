@@ -4,6 +4,7 @@ import { useSettings, resetSettings, DEFAULT_SETTINGS } from '../session/setting
 import type { HomeSidePreference, ReducedMotionSetting } from '../session/settings';
 import { useProfile } from '../session/ProfileProvider';
 import { deleteProfile, listProfiles } from '../session/profiles';
+import { downloadJson, exportFileName, exportProfile, transferCodeFor } from '../session/transfer';
 import { useTheme } from './ThemeProvider';
 import type { BoardSet, PieceSet } from '../themes/theme';
 import type { Look } from '../themes';
@@ -211,6 +212,28 @@ export function SettingsScreen() {
   const [confirmRemove, setConfirmRemove] = useState(false);
   // The stored name is never empty, so edit through a draft that may be.
   const [nameDraft, setNameDraft] = useState(profile.name);
+  const [transferCode, setTransferCode] = useState<string | null>(null);
+  const [transferNote, setTransferNote] = useState<string | null>(null);
+
+  const exportPlayer = async () => {
+    try {
+      downloadJson(exportFileName(slug), await exportProfile(slug));
+      setTransferNote(`Downloaded ${exportFileName(slug)}`);
+    } catch {
+      setTransferNote('Could not export this player');
+    }
+  };
+
+  const copyTransferCode = async () => {
+    const code = transferCodeFor(slug);
+    setTransferCode(code);
+    try {
+      await navigator.clipboard.writeText(code);
+      setTransferNote('Transfer code copied to the clipboard');
+    } catch {
+      setTransferNote('Copy the code below');
+    }
+  };
 
   return (
     <div className="page page-narrow" data-testid="settings-screen">
@@ -446,6 +469,47 @@ export function SettingsScreen() {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="field" data-testid="transfer-section">
+            <span className="label">Move to another browser</span>
+            <span className="help">
+              Export downloads this player with their settings and saved matches; a transfer code
+              carries just the identity and settings and is short enough to paste. Import it from
+              the player picker on the other browser. From then on the two copies keep separate
+              histories.
+            </span>
+            <div className="row">
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={exportPlayer}
+                data-testid="export-profile"
+              >
+                Export player…
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={copyTransferCode}
+                data-testid="copy-transfer-code"
+              >
+                Copy transfer code
+              </button>
+            </div>
+            {transferNote && (
+              <span className="small" role="status" data-testid="transfer-note">
+                {transferNote}
+              </span>
+            )}
+            {transferCode && (
+              <textarea
+                className="input"
+                readOnly
+                rows={3}
+                value={transferCode}
+                aria-label="Transfer code"
+                data-testid="transfer-code"
+                onFocus={(e) => e.currentTarget.select()}
+              />
+            )}
           </div>
           <div className="row">
             {!confirmRemove ? (

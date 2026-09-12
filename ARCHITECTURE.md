@@ -19,14 +19,14 @@ the host over WebRTC. Both clients are the same code; only the transport differs
 
 ## Packages (pnpm workspace)
 
-| Package                   | Role                                                                                     | Deps                |
-| ------------------------- | ---------------------------------------------------------------------------------------- | ------------------- |
-| `@bgf/engine`             | Pure rules: board, move generation, cube, Crawford/Jacoby, match scoring, action reducer | none                |
-| `@bgf/protocol`           | `Transport` / `Listener` / `TransportProvider` interfaces, message types, memory + BroadcastChannel transports, room codes | engine  |
-| `@bgf/server`             | `GameServer`: authoritative state, seat assignment, validation, dice, snapshots, resume  | engine, protocol    |
-| `@bgf/client`             | `GameClient`: talks to a `Transport`, exposes a subscribable `ClientState`, drafts turns | engine, protocol    |
-| `@bgf/transport-peerjs`   | `peerJsProvider()`: WebRTC via PeerJS + free PeerJS cloud signalling                     | protocol, peerjs    |
-| `@bgf/web` (`apps/web`)   | React 19 + Vite UI: screens, board renderer, themes, persistence (IndexedDB), e2e tests  | all of the above    |
+| Package                 | Role                                                                                                                       | Deps             |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `@bgf/engine`           | Pure rules: board, move generation, cube, Crawford/Jacoby, match scoring, action reducer                                   | none             |
+| `@bgf/protocol`         | `Transport` / `Listener` / `TransportProvider` interfaces, message types, memory + BroadcastChannel transports, room codes | engine           |
+| `@bgf/server`           | `GameServer`: authoritative state, seat assignment, validation, dice, snapshots, resume                                    | engine, protocol |
+| `@bgf/client`           | `GameClient`: talks to a `Transport`, exposes a subscribable `ClientState`, drafts turns                                   | engine, protocol |
+| `@bgf/transport-peerjs` | `peerJsProvider()`: WebRTC via PeerJS + free PeerJS cloud signalling                                                       | protocol, peerjs |
+| `@bgf/web` (`apps/web`) | React 19 + Vite UI: screens, board renderer, themes, persistence (IndexedDB), e2e tests                                    | all of the above |
 
 Packages are consumed from source (`main: src/index.ts`); Vite/Vitest resolve them directly.
 
@@ -66,19 +66,19 @@ transports, persistence and history handle both; the UI switches its interaction
   `to = from - die`. Use `absIndex(player, rel)` / `relPoint(player, idx)`.
 - UI `BoardLocation` uses **absolute point numbers 1..24** (White's numbering). Convert with
   `toRel(player, abs)` / `toAbs(player, rel)` from `board/contract.ts`.
-- The frame prints the *viewing player's* relative numbers; their home board (1..6) is on the
+- The frame prints the _viewing player's_ relative numbers; their home board (1..6) is on the
   bottom row. A match has **one table layout**, chosen by the host (`MatchSnapshot.homeSide`,
   the side of the home boards as seen from `hostSeat`, default **left**). The seat across the
   table necessarily sees the mirror image, exactly like a physical board: `sideForSeat(snapshot,
-  seat)` in `@bgf/protocol` (`homeSideFor(state, seat)` in `@bgf/client`) resolves it.
+seat)` in `@bgf/protocol` (`homeSideFor(state, seat)` in `@bgf/client`) resolves it.
   - `left`: bottom row reads 1..12 left→right, top row 24..13 left→right (13 top-right,
     24 top-left); tray on the left; checkers travel 24 → 13 → 12 → 1, i.e. clockwise.
   - `right`: the mirror image (1 bottom-right, 24 top-right, tray on the right).
-  Settings → "Home board side" is a per-viewer override (`homeSidePreference`: follow the
-  table / always left / always right). "Flip board" views from the opponent's chair, so with
-  "follow the table" it is a true 180° rotation. The geometry is computed once for home-right
-  and mirrored on coordinates (never with an SVG transform, so numbers and dice pips are never
-  flipped); see `board/geometry.ts`.
+    Settings → "Home board side" is a per-viewer override (`homeSidePreference`: follow the
+    table / always left / always right). "Flip board" views from the opponent's chair, so with
+    "follow the table" it is a true 180° rotation. The geometry is computed once for home-right
+    and mirrored on coordinates (never with an SVG transform, so numbers and dice pips are never
+    flipped); see `board/geometry.ts`.
 
 ## Message flow
 
@@ -103,7 +103,7 @@ Screens/HUD: `player-name-input`, `host-button`, `join-code-input`, `join-button
 
 ## URL scheme (hash router, static-host friendly)
 
-The player *and* the game are part of the address. Nothing is ever assumed from a shared
+The player _and_ the game are part of the address. Nothing is ever assumed from a shared
 "current profile", and every game hangs off the same player in the same way:
 
 ```
@@ -122,7 +122,11 @@ The player *and* the game are part of the address. Nothing is ever assumed from 
 Old addresses without the game segment (`#/steve/host`, `#/steve/game/<id>`, …) redirect to
 backgammon. Query `?transport=memory|broadcast|peerjs` overrides the transport (default `peerjs`).
 
-Per-player storage: `bgf:profiles` (slug → id/name/avatar), `bgf:settings:<slug>`.
+Per-player storage: `bgf:profiles` (slug → id/name/avatar), `bgf:settings:<slug>`. A player can
+be moved between browsers (`apps/web/src/session/transfer.ts`): a JSON export
+`{ format: 'p2p-gaming-profile', version: 1, profile, settings, matches: { <game>: [snapshots] } }`
+or a `p2pg1.<base64url>` transfer code (identity + settings only). Importing keeps the profile
+id; matches merge by id, the higher `seq` wins.
 Per-player-per-game storage: IndexedDB `p2p-<slug>-<game>` (saved matches); live sessions are
 keyed `<slug>:<game>:<matchId>`; PeerJS ids use the namespace `<game>-v1`, so room codes of
 different games never collide.
@@ -143,4 +147,3 @@ different games never collide.
 
 Game logic belongs in its own workspace packages (as `@bgf/engine` / `@bgf/server` /
 `@bgf/client` do for backgammon); the transports and the web shell are shared.
-

@@ -72,3 +72,45 @@ describe('PickerScreen', () => {
     );
   });
 });
+
+describe('PickerScreen import', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetProfilesForTests();
+  });
+
+  it('imports a pasted transfer code, creates the player with its id and navigates', async () => {
+    const { encodeTransferCode } = await import('../session/transfer');
+    const code = encodeTransferCode({ id: 'dana-id', name: 'Dana', avatar: '🦉', createdAt: 1 });
+    renderPicker();
+    await userEvent.click(screen.getByTestId('import-profile-toggle'));
+    expect(screen.getByTestId('import-profile-button')).toBeDisabled();
+    await userEvent.type(screen.getByTestId('import-profile-code'), code);
+    await userEvent.click(screen.getByTestId('import-profile-button'));
+    expect(await screen.findByTestId('marker')).toHaveTextContent('{"profile":"dana"}');
+    const dana = listProfiles().find((p) => p.slug === 'dana');
+    expect(dana).toMatchObject({ id: 'dana-id', name: 'Dana', avatar: '🦉' });
+  });
+
+  it('shows an error for a bad code and stays on the picker', async () => {
+    renderPicker();
+    await userEvent.click(screen.getByTestId('import-profile-toggle'));
+    await userEvent.type(screen.getByTestId('import-profile-code'), 'p2pg1.nope');
+    await userEvent.click(screen.getByTestId('import-profile-button'));
+    expect(await screen.findByTestId('import-error')).toHaveTextContent(/damaged/);
+    expect(screen.queryByTestId('marker')).toBeNull();
+    expect(listProfiles()).toEqual([]);
+  });
+
+  it('in invite mode an imported player goes straight to joining', async () => {
+    const { encodeTransferCode } = await import('../session/transfer');
+    const code = encodeTransferCode({ id: 'dana-id', name: 'Dana', avatar: '🦉', createdAt: 1 });
+    renderPicker('/backgammon/join/abc234');
+    await userEvent.click(screen.getByTestId('import-profile-toggle'));
+    await userEvent.type(screen.getByTestId('import-profile-code'), code);
+    await userEvent.click(screen.getByTestId('import-profile-button'));
+    expect(await screen.findByTestId('marker')).toHaveTextContent(
+      '{"profile":"dana","game":"backgammon","code":"ABC234"}',
+    );
+  });
+});

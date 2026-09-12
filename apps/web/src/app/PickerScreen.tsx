@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { isValidRoomCode, normalizeRoomCode } from '@bgf/protocol';
 import { createProfile, listProfiles, touchProfile, useProfilesIndex } from '../session/profiles';
@@ -9,6 +9,7 @@ import { gamePath } from '../games/GameProvider';
 import type { GameId } from '../games/ids';
 import { DEFAULT_GAME } from '../games/ids';
 import { getGame } from '../games/registry';
+import { TransferError, describeImport, importFromText } from '../session/transfer';
 import styles from './PickerScreen.module.css';
 
 /**
@@ -26,6 +27,11 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
   const gameName = getGame(gameId)?.name ?? gameId;
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const choose = (slug: string) => {
     touchProfile(slug);
@@ -45,6 +51,96 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
       setError('Could not create that player');
     }
   };
+
+  const runImport = async (text: string) => {
+    setImporting(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const result = await importFromText(text);
+      const entry = listProfiles().find((p) => p.slug === result.slug);
+      setImportResult(describeImport(result, entry?.name ?? result.slug));
+      choose(result.slug);
+    } catch (e) {
+      setImportError(e instanceof TransferError ? e.message : 'Could not import that player');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const importFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      await runImport(await file.text());
+    } catch {
+      setImportError('Could not read that file');
+    }
+  };
+
+  const importPanel = (
+    <section className={`card ${styles.newCard}`} data-testid="import-profile-panel">
+      <div>
+        <h2>Import a player</h2>
+        <p className="muted small">
+          Bring a player from another browser: pick the file you exported there, or paste a transfer
+          code. The player keeps the same identity, so saved matches recognise them. History
+          diverges from here on.
+        </p>
+      </div>
+      <div className={styles.newRow}>
+        <label className="btn btn-secondary" htmlFor="import-profile-file">
+          Choose export file…
+        </label>
+        <input
+          id="import-profile-file"
+          type="file"
+          accept="application/json,.json"
+          className={styles.fileInput}
+          onChange={importFile}
+          data-testid="import-profile-file"
+          aria-label="Player export file"
+        />
+      </div>
+      <textarea
+        className="input"
+        rows={3}
+        placeholder="…or paste a transfer code (p2pg1.…) or the export file's contents"
+        value={importText}
+        aria-label="Transfer code"
+        onChange={(e) => {
+          setImportText(e.target.value);
+          setImportError(null);
+        }}
+        data-testid="import-profile-code"
+      />
+      <div className={styles.newRow}>
+        <button
+          className="btn btn-primary"
+          type="button"
+          disabled={importing || !importText.trim()}
+          onClick={() => runImport(importText)}
+          data-testid="import-profile-button"
+        >
+          {joining ? 'Import and join' : 'Import'}
+        </button>
+        <button className="btn btn-ghost" type="button" onClick={() => setImportOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      {importError && (
+        <span className="error-text" role="alert" data-testid="import-error">
+          {importError}
+        </span>
+      )}
+      {importResult && (
+        <span className="small" role="status" data-testid="import-result">
+          {importResult}
+        </span>
+      )}
+    </section>
+  );
 
   const form = (
     <form className={`card ${styles.newCard}`} onSubmit={create} data-testid="new-profile-form">
@@ -130,6 +226,22 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
         )}
 
         {profiles.length > 0 && form}
+
+        {importOpen ? (
+          importPanel
+        ) : (
+          <p className="muted small">
+            Played on another browser?{' '}
+            <button
+              type="button"
+              className="btn-link"
+              onClick={() => setImportOpen(true)}
+              data-testid="import-profile-toggle"
+            >
+              Import a player
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );

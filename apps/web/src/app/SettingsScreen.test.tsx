@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SettingsScreen } from './SettingsScreen';
@@ -89,5 +89,54 @@ describe('SettingsScreen', () => {
     await userEvent.click(screen.getByTestId('remove-profile-confirm'));
     expect(getProfile('alice')).toBeNull();
     expect(screen.getByTestId('picker-route')).toBeInTheDocument();
+  });
+});
+
+describe('SettingsScreen transfer', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetSettingsCacheForTests();
+    resetSettings('alice');
+    resetProfilesForTests();
+    createProfile('Alice', { id: 'alice-id', avatar: '🦊' });
+  });
+
+  it('exports the player as a JSON download', async () => {
+    const blobs: Blob[] = [];
+    const createObjectURL = vi.fn((b: Blob) => {
+      blobs.push(b);
+      return 'blob:fake';
+    });
+    const revokeObjectURL = vi.fn();
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderWithProfile('alice', <SettingsScreen />, { route: '/settings' });
+    await userEvent.click(screen.getByTestId('board-marine'));
+    await userEvent.click(screen.getByTestId('export-profile'));
+    expect(await screen.findByTestId('transfer-note')).toHaveTextContent('p2p-gaming-alice.json');
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(blobs).toHaveLength(1);
+    const data = JSON.parse(await blobs[0]!.text());
+    expect(data).toMatchObject({
+      format: 'p2p-gaming-profile',
+      version: 1,
+      profile: { id: 'alice-id', name: 'Alice', avatar: '🦊' },
+      settings: { boardSet: 'marine' },
+      matches: {},
+    });
+    click.mockRestore();
+  });
+
+  it('copies a transfer code and shows it as a fallback', async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    renderWithProfile('alice', <SettingsScreen />, { route: '/settings' });
+    await userEvent.click(screen.getByTestId('copy-transfer-code'));
+    const code = (await screen.findByTestId('transfer-code')) as HTMLTextAreaElement;
+    expect(code.value.startsWith('p2pg1.')).toBe(true);
+    expect(writeText).toHaveBeenCalledWith(code.value);
+    const { decodeTransferCode } = await import('../session/transfer');
+    expect(decodeTransferCode(code.value).profile).toMatchObject({ id: 'alice-id', name: 'Alice' });
+    expect(screen.getByTestId('transfer-note')).toHaveTextContent(/copied/i);
   });
 });

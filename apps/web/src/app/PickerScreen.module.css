@@ -70,3 +70,12 @@
   flex: 1;
   min-width: 200px;
 }
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
