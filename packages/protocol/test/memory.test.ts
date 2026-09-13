@@ -51,3 +51,22 @@ describe('memory transport', () => {
     await expect(p.host('ABC')).resolves.toBeTruthy();
   });
 });
+
+describe('early messages', () => {
+  it('are buffered until the first onMessage subscriber and replayed in order', async () => {
+    const [a, b] = createMemoryPair();
+    a.send('one');
+    a.send('two');
+    await tick();
+    const got: unknown[] = [];
+    b.onMessage((m) => got.push(m));
+    expect(got).toEqual(['one', 'two']);
+    a.send('three');
+    await tick();
+    expect(got).toEqual(['one', 'two', 'three']);
+    // a second subscriber does not get a replay
+    const late: unknown[] = [];
+    b.onMessage((m) => late.push(m));
+    expect(late).toEqual([]);
+  });
+});

@@ -4,7 +4,33 @@ import { routesFor, useRouteGameId } from '../games/GameProvider';
 import { DEFAULT_GAME } from '../games/ids';
 import { getGame } from '../games/registry';
 import { useTheme } from './ThemeProvider';
+import { useSyncStatus } from '../session/sync/registry';
 import styles from './AppBar.module.css';
+
+/** Small dot on the player chip: green while this player's other devices are connected. */
+function SyncDot({ slug }: { slug: string }) {
+  const status = useSyncStatus(slug);
+  const live = status.state === 'hub' || status.state === 'connected';
+  const n = status.devices.length;
+  const title =
+    status.state === 'off'
+      ? `Device sync off${status.reason ? `: ${status.reason}` : ''}`
+      : n
+        ? `Synced with ${n} other device${n === 1 ? '' : 's'}`
+        : status.state === 'error'
+          ? `Device sync: ${status.lastError ?? 'error'}`
+          : 'Looking for your other devices';
+  return (
+    <span
+      className={`${styles.syncDot} ${live && n ? styles.syncLive : ''}`}
+      data-testid="sync-dot"
+      data-state={status.state}
+      data-devices={n}
+      title={title}
+      aria-label={title}
+    />
+  );
+}
 
 function Logo() {
   return (
@@ -96,6 +122,7 @@ export function AppBar() {
               {ctx.profile.avatar ?? '🎲'}
             </span>
             <span className={styles.chipName}>{ctx.profile.name}</span>
+            <SyncDot slug={ctx.slug} />
           </NavLink>
           <NavLink
             to="/"

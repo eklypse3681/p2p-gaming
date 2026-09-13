@@ -24,7 +24,7 @@ export function joinLink(code: string, game: GameId = DEFAULT_GAME): string {
  */
 export function handoffLink(
   code: string,
-  profile: { id: string; name: string; avatar?: string },
+  profile: { id: string; name: string; avatar?: string; syncKey?: string },
   game: GameId = DEFAULT_GAME,
 ): string {
   return `${joinLink(code, game)}?import=${encodeIdentityCode(profile)}`;

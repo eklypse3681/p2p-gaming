@@ -59,11 +59,24 @@ copies then keep separate histories.
 ## Move to another device
 
 Every match screen has a **Move to another device** panel with a QR code. Scan it with your
-phone (or copy the link) and the match opens there *as you*: the link carries your identity, so
+phone (or copy the link) and the match opens there _as you_: the link carries your identity, so
 there is nothing to pick or type. Both devices share your seat and stay in sync over the same
 peer-to-peer connection until you close one of them. A player may have up to four devices
 connected at once. If the device you leave was hosting the table, the remaining device offers
 to reconnect and takes the hosting over.
+
+## Sync between your devices
+
+Open the same player on two devices and they find each other and stay in sync — settings,
+name, avatar and every saved match — directly over WebRTC, with no server in between. It runs
+whenever the app is open on that player on both devices; a device that was away catches up the
+next time both are open. Matches merge by id with the higher sequence number winning, settings
+and profile are last-write-wins.
+
+Devices recognise each other with a per-player **sync key**. It travels only inside your own
+export file, transfer code and hand-off QR, and is never sent to opponents. Settings → Devices
+shows the current state, lets you switch sync off for a player, and can rotate the key if a code
+was exposed (other devices then need a fresh code from you).
 
 ## Toolchain
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as profilesModule from './profiles';
 
 async function loadProfiles() {
   vi.resetModules();
@@ -140,5 +141,48 @@ describe('legacy migration', () => {
     localStorage.setItem('bgf:profile', JSON.stringify({ id: 'id-late', name: 'Late' }));
     m = await loadProfiles();
     expect(m.getProfilesIndex()).toEqual({});
+  });
+});
+
+describe('sync key and change stamps', () => {
+  it('every record gets a sync key and updatedAt, including older stored ones', () => {
+    localStorage.clear();
+    const {
+      completeRecords,
+      createProfile,
+      getProfile,
+      replaceProfilesForTests,
+      resetProfilesForTests,
+      rotateSyncKey,
+      setProfileSyncKey,
+      updateProfile,
+    } = profilesModule;
+    resetProfilesForTests();
+    const legacy = { id: 'x', name: 'X', avatar: '🎲', createdAt: 7, lastUsedAt: 8 } as never;
+    const completed = completeRecords({ x: legacy });
+    expect(completed.changed).toBe(true);
+    expect(completed.index.x!.syncKey).toMatch(/^[0-9a-f-]{16,}$/);
+    expect(completed.index.x!.updatedAt).toBe(7);
+    expect(completeRecords(completed.index).changed).toBe(false);
+
+    replaceProfilesForTests({ x: legacy });
+    expect(getProfile('x')?.syncKey).toBeTruthy();
+
+    const alice = createProfile('Alice', { now: 100 });
+    expect(alice.syncKey).toBeTruthy();
+    expect(alice.updatedAt).toBe(100);
+    expect(createProfile('Bob').syncKey).not.toBe(alice.syncKey);
+
+    expect(updateProfile('alice', { name: 'Alice' })).toBe(false); // nothing changed
+    expect(updateProfile('alice', { name: 'Alicia' }, { updatedAt: 250 })).toBe(true);
+    expect(getProfile('alice')).toMatchObject({ name: 'Alicia', updatedAt: 250 });
+
+    const before = getProfile('alice')!.syncKey;
+    setProfileSyncKey('alice', 'from-import');
+    expect(getProfile('alice')!.syncKey).toBe('from-import');
+    const rotated = rotateSyncKey('alice');
+    expect(rotated).not.toBe('from-import');
+    expect(rotated).not.toBe(before);
+    expect(getProfile('alice')!.syncKey).toBe(rotated);
   });
 });

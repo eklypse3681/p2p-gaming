@@ -143,7 +143,9 @@ export function broadcastChannelProvider(): TransportProvider {
           if (env.conn !== conn) return;
           if (env.kind === 'accept' && !transport) {
             clearTimeout(timer);
-            transport = new BcTransport(`bc-${conn}`, channel, 'guest', conn, () => channel.close());
+            transport = new BcTransport(`bc-${conn}`, channel, 'guest', conn, () =>
+              channel.close(),
+            );
             transport.open();
             resolve(transport);
             return;

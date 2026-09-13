@@ -1,15 +1,18 @@
 import type { MatchSnapshot } from '@bgf/protocol';
 import type { Settings } from './settings';
-import { DEFAULT_SETTINGS, getSettings, migrateSettings, updateSettings } from './settings';
+import { DEFAULT_SETTINGS, getSettings, sanitizeSettings, updateSettings } from './settings';
 import { getMatchStore } from './matchStore';
 import {
   createProfile,
   getProfilesIndex,
   pickAvatar,
   sanitizeName,
+  setProfileSyncKey,
   touchProfile,
   updateProfile,
 } from './profiles';
+
+export { sanitizeSettings };
 import type { GameId } from '../games/ids';
 import { GAME_IDS, isGameId } from '../games/ids';
 
@@ -42,6 +45,8 @@ export interface ExportedIdentity {
   name: string;
   avatar: string;
   createdAt: number;
+  /** Device-sync secret; present in your own exports/codes, never shown to opponents. */
+  syncKey?: string;
 }
 
 export interface ProfileExport {
@@ -79,7 +84,13 @@ export class TransferError extends Error {
 function identityOf(slug: string): ExportedIdentity {
   const record = getProfilesIndex()[slug];
   if (!record) throw new TransferError('unknown-player', `no player "${slug}" in this browser`);
-  return { id: record.id, name: record.name, avatar: record.avatar, createdAt: record.createdAt };
+  return {
+    id: record.id,
+    name: record.name,
+    avatar: record.avatar,
+    createdAt: record.createdAt,
+    ...(record.syncKey ? { syncKey: record.syncKey } : {}),
+  };
 }
 
 /** Identity, settings and every saved match of `slug`, across all games. */
@@ -138,17 +149,26 @@ export function transferCodeFor(slug: string): string {
   return encodeTransferCode(identityOf(slug), getSettings(slug));
 }
 
-/** Identity-only code: id, name and avatar. No settings, no matches; as short as it gets. */
-export function encodeIdentityCode(profile: { id: string; name: string; avatar?: string }): string {
+/**
+ * Identity-only code: id, name, avatar and (for your own devices) the sync key. No settings, no
+ * matches; short enough for a QR code.
+ */
+export function encodeIdentityCode(profile: {
+  id: string;
+  name: string;
+  avatar?: string;
+  syncKey?: string;
+}): string {
   const payload: Record<string, string> = { i: profile.id, n: profile.name };
   if (profile.avatar) payload.a = profile.avatar;
+  if (profile.syncKey) payload.k = profile.syncKey;
   return IDENTITY_PREFIX + toBase64Url(JSON.stringify(payload));
 }
 
-/** Identity code for a player stored in this browser. */
+/** Identity code for a player stored in this browser (includes the sync key). */
 export function identityCodeFor(slug: string): string {
-  const { id, name, avatar } = identityOf(slug);
-  return encodeIdentityCode({ id, name, avatar });
+  const { id, name, avatar, syncKey } = identityOf(slug);
+  return encodeIdentityCode({ id, name, avatar, syncKey });
 }
 
 export function decodeTransferCode(code: string): {
@@ -174,8 +194,8 @@ export function decodeTransferCode(code: string): {
     throw new TransferError('bad-code', 'that transfer code is damaged');
   }
   if (identityOnly) {
-    const { i, n, a } = parsed as { i?: unknown; n?: unknown; a?: unknown };
-    return { profile: parseIdentity({ id: i, name: n, avatar: a }, 'bad-code') };
+    const { i, n, a, k } = parsed as { i?: unknown; n?: unknown; a?: unknown; k?: unknown };
+    return { profile: parseIdentity({ id: i, name: n, avatar: a, syncKey: k }, 'bad-code') };
   }
   const { p, s } = parsed as { p?: unknown; s?: unknown };
   const profile = parseIdentity(p, 'bad-code');
@@ -215,34 +235,8 @@ function parseIdentity(value: unknown, code: TransferError['code']): ExportedIde
     name,
     avatar: typeof v.avatar === 'string' && v.avatar ? v.avatar : pickAvatar(v.id),
     createdAt: typeof v.createdAt === 'number' ? v.createdAt : Date.now(),
+    ...(typeof v.syncKey === 'string' && v.syncKey.trim() ? { syncKey: v.syncKey.trim() } : {}),
   };
-}
-
-/** Keep only known settings keys with the right primitive types; unknown values fall back to defaults. */
-export function sanitizeSettings(value: unknown): Settings {
-  if (typeof value !== 'object' || value === null) return { ...DEFAULT_SETTINGS };
-  const migrated = migrateSettings(value as Partial<Settings>);
-  const out: Settings = { ...DEFAULT_SETTINGS, peer: { ...DEFAULT_SETTINGS.peer } };
-  for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
-    const candidate = migrated[key];
-    if (candidate === undefined) continue;
-    if (key === 'peer') {
-      if (typeof candidate === 'object' && candidate !== null) {
-        const peer = candidate as Partial<Settings['peer']>;
-        for (const pk of Object.keys(DEFAULT_SETTINGS.peer) as (keyof Settings['peer'])[]) {
-          const pv = peer[pk];
-          if (typeof pv === typeof DEFAULT_SETTINGS.peer[pk]) {
-            (out.peer as unknown as Record<string, unknown>)[pk] = pv;
-          }
-        }
-      }
-      continue;
-    }
-    if (typeof candidate === typeof DEFAULT_SETTINGS[key]) {
-      (out as unknown as Record<string, unknown>)[key] = candidate;
-    }
-  }
-  return out;
 }
 
 function isSnapshotLike(v: unknown): v is MatchSnapshot {
@@ -336,11 +330,14 @@ export async function importProfile(
     slug = existingSlug;
     created = false;
     updateProfile(slug, { name: data.profile.name, avatar: data.profile.avatar });
+    // Your own code: adopting its sync key joins this browser to that player's devices.
+    if (data.profile.syncKey) setProfileSyncKey(slug, data.profile.syncKey);
   } else {
     slug = createProfile(data.profile.name, {
       id: data.profile.id,
       avatar: data.profile.avatar,
       now,
+      syncKey: data.profile.syncKey,
     }).slug;
     created = true;
   }

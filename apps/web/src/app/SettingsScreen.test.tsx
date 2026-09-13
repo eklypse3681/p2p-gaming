@@ -139,4 +139,20 @@ describe('SettingsScreen transfer', () => {
     expect(decodeTransferCode(code.value).profile).toMatchObject({ id: 'alice-id', name: 'Alice' });
     expect(screen.getByTestId('transfer-note')).toHaveTextContent(/copied/i);
   });
+
+  it('has a Devices section: sync toggle persists and rotating the key changes it', async () => {
+    renderWithProfile('alice', <SettingsScreen />, { route: '/settings' });
+    const section = screen.getByTestId('sync-section');
+    expect(section).toBeInTheDocument();
+    // jsdom has no WebRTC, so the status explains why it is unavailable
+    expect(screen.getByTestId('sync-status')).toHaveAttribute('data-state', 'off');
+    await userEvent.click(screen.getByRole('switch', { name: /sync between my devices/i }));
+    expect(JSON.parse(localStorage.getItem(KEY) ?? '{}').sync).toBe(false);
+    expect(screen.getByTestId('sync-status')).toHaveTextContent(/off/i);
+    const before = getProfile('alice')!.syncKey;
+    await userEvent.click(screen.getByTestId('rotate-sync-key'));
+    await userEvent.click(screen.getByTestId('rotate-sync-key-confirm'));
+    expect(getProfile('alice')!.syncKey).not.toBe(before);
+    expect(screen.getByTestId('rotate-note')).toBeInTheDocument();
+  });
 });

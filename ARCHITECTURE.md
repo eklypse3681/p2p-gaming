@@ -74,6 +74,32 @@ The web app's hand-off link is a join link with `?import=<identity code>` inside
 showing a form and continues to the join, so the second device takes a second connection on the
 same seat.
 
+## Profile sync (device to device)
+
+`apps/web/src/session/sync/` keeps one player's devices in sync without any match server.
+Each profile record carries a random `syncKey` (never in `hello`, never in snapshots — the
+session layer strips profiles to id/name/avatar). All devices holding the same key meet at the
+PeerJS address `sync-<first 24 hex of SHA-256(key)>` under namespace `sync-v1`. The first one
+there is the **hub**; the others join it and it relays what it receives, so the topology is a
+star. A client that loses its hub retries with backoff (1s → 30s) and races to become the hub.
+
+Handshake, then exchange, then live pushes:
+
+```
+sync-hello {profileId, deviceId, deviceLabel, nonce}   both sides, on open
+sync-auth  {mac = HMAC-SHA-256(syncKey, peer's nonce)}  both sides verify before anything else
+manifest   {profile.updatedAt, settings.updatedAt, matches: {game: [{id, seq, updatedAt}]}}
+want       {profile?, settings?, matches: {game: [id]}}  what the receiver is missing or has older
+data       {profile?, settings?, matches?}               applied with the merge rules
+```
+
+Merge rules: matches by id, higher `seq` wins (equal keeps local); profile name/avatar and the
+settings blob are last-write-wins by `updatedAt`; deletions are not synced. Local changes are
+coalesced for 250 ms and pushed as `data`; the hub forwards to every other device. A device
+arriving with a wrong key fails the MAC check and is dropped. `SyncManager` never throws into
+React; status (`off | searching | hub | connected | error`, devices, last sync, last error) is
+exposed through `useSyncStatus(slug)`.
+
 ## Coordinates (read this before touching board code)
 
 - Engine `Board.points[0..23]` are absolute; index 0 = White's 1-point. `+n` white, `-n` black.

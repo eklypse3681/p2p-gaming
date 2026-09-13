@@ -45,12 +45,7 @@ export interface TransportProvider {
 export class TransportError extends Error {
   constructor(
     public readonly code:
-      | 'address-taken'
-      | 'not-found'
-      | 'timeout'
-      | 'closed'
-      | 'network'
-      | 'unsupported',
+      'address-taken' | 'not-found' | 'timeout' | 'closed' | 'network' | 'unsupported',
     message: string,
   ) {
     super(message);
@@ -58,9 +53,15 @@ export class TransportError extends Error {
   }
 }
 
+/** How many messages a transport keeps for a listener that has not subscribed yet. */
+export const EARLY_BUFFER_LIMIT = 256;
+
 /** Small typed event emitter used by transport implementations. */
 export class Emitter<T> {
   private listeners = new Set<(value: T) => void>();
+  get size(): number {
+    return this.listeners.size;
+  }
   on(fn: (value: T) => void): Unsubscribe {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -76,11 +77,16 @@ export class Emitter<T> {
 /**
  * Base class that handles listener bookkeeping and status transitions. Subclasses implement
  * `doSend` and `doClose` and call `deliver` / `setStatus`.
+ *
+ * Messages that arrive before anyone has subscribed with `onMessage` are buffered and replayed
+ * to the first subscriber, so a peer that talks the instant a connection opens is never missed
+ * by a receiver still returning from `await provider.join()`.
  */
 export abstract class BaseTransport implements Transport {
   private _status: TransportStatus = 'connecting';
   private messages = new Emitter<unknown>();
   private statuses = new Emitter<{ status: TransportStatus; reason?: string }>();
+  private early: unknown[] = [];
 
   constructor(public readonly id: string) {}
 
@@ -94,7 +100,13 @@ export abstract class BaseTransport implements Transport {
   }
 
   onMessage(listener: (message: unknown) => void): Unsubscribe {
-    return this.messages.on(listener);
+    const unsubscribe = this.messages.on(listener);
+    if (this.early.length > 0) {
+      const queued = this.early;
+      this.early = [];
+      for (const m of queued) listener(m);
+    }
+    return unsubscribe;
   }
 
   onStatus(listener: (status: TransportStatus, reason?: string) => void): Unsubscribe {
@@ -109,6 +121,11 @@ export abstract class BaseTransport implements Transport {
 
   protected deliver(message: unknown): void {
     if (this._status === 'closed') return;
+    if (this.messages.size === 0) {
+      this.early.push(message);
+      if (this.early.length > EARLY_BUFFER_LIMIT) this.early.shift();
+      return;
+    }
     this.messages.emit(message);
   }
 
@@ -120,6 +137,7 @@ export abstract class BaseTransport implements Transport {
     if (status === 'closed') {
       this.messages.clear();
       this.statuses.clear();
+      this.early = [];
     }
   }
 

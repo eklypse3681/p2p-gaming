@@ -13,6 +13,8 @@ const mock = idbMocked as unknown as ReturnType<typeof createIdbKeyvalMock>;
 import {
   EXPORT_FORMAT,
   IDENTITY_PREFIX,
+  encodeIdentityCode,
+  identityCodeFor,
   TRANSFER_PREFIX,
   TransferError,
   decodeTransferCode,
@@ -243,7 +245,13 @@ describe('import / export', () => {
     expect(data.format).toBe(EXPORT_FORMAT);
     expect(data.version).toBe(1);
     expect(data.exportedAt).toBe(99);
-    expect(data.profile).toEqual({ id: 'alice-id', name: 'Alice', avatar: '🦊', createdAt: 5 });
+    expect(data.profile).toMatchObject({
+      id: 'alice-id',
+      name: 'Alice',
+      avatar: '🦊',
+      createdAt: 5,
+    });
+    expect(data.profile.syncKey).toBe(getProfile('alice')!.syncKey);
     expect(data.settings.look).toBe('paper');
     expect(data.matches.backgammon?.map((m) => m.id)).toEqual(['m1']);
     expect(exportFileName('alice')).toBe('p2p-gaming-alice.json');
@@ -309,5 +317,40 @@ describe('identity codes (hand-off)', () => {
   it('rejects damaged identity codes', () => {
     expect(() => decodeTransferCode(`${IDENTITY_PREFIX}!!!`)).toThrow(TransferError);
     expect(() => decodeTransferCode(`${IDENTITY_PREFIX}e30`)).toThrow(/no id/);
+  });
+});
+
+describe('sync key travels only in your own codes', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetSettingsCacheForTests();
+    resetProfilesForTests();
+    setMatchStoreForTests();
+  });
+
+  it('transfer and identity codes carry the key; importing adopts it', async () => {
+    createProfile('Alice', { id: 'alice-id', syncKey: 'key-from-laptop' });
+    const transfer = transferCodeFor('alice');
+    expect(decodeTransferCode(transfer).profile.syncKey).toBe('key-from-laptop');
+    const identity = identityCodeFor('alice');
+    expect(identity.startsWith(IDENTITY_PREFIX)).toBe(true);
+    expect(decodeTransferCode(identity).profile.syncKey).toBe('key-from-laptop');
+
+    // A fresh browser: created with the same id AND the same key.
+    resetProfilesForTests();
+    const created = await importFromText(identity);
+    expect(created.created).toBe(true);
+    expect(getProfile(created.slug)).toMatchObject({ id: 'alice-id', syncKey: 'key-from-laptop' });
+
+    // An existing copy with an older key adopts the incoming one (the owner rotated it).
+    createProfile('Alice', { id: 'alice-id', syncKey: 'stale' });
+    const merged = await importFromText(
+      encodeIdentityCode({ id: 'alice-id', name: 'Alice', syncKey: 'rotated' }),
+    );
+    expect(merged.created).toBe(false);
+    expect(getProfile(merged.slug)?.syncKey).toBe('rotated');
+    // Codes without a key leave the local key alone.
+    await importFromText(encodeIdentityCode({ id: 'alice-id', name: 'Alice' }));
+    expect(getProfile(merged.slug)?.syncKey).toBe('rotated');
   });
 });

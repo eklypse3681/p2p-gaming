@@ -129,3 +129,29 @@ describe('settings', () => {
     expect(effectiveHomeSide('right', 'left')).toBe('right');
   });
 });
+
+describe('device sync fields', () => {
+  it('sync defaults on, writes are stamped, and replaceSettings applies a remote copy', async () => {
+    const m = await import('./settings');
+    localStorage.clear();
+    m.resetSettingsCacheForTests();
+    expect(m.getSettings('carol').sync).toBe(true);
+    expect(m.getSettingsUpdatedAt('carol')).toBe(0);
+    m.updateSettings('carol', { look: 'paper' }, { updatedAt: 1234 });
+    expect(m.getSettingsUpdatedAt('carol')).toBe(1234);
+    const stored = JSON.parse(localStorage.getItem(m.settingsKey('carol'))!);
+    expect(stored.updatedAt).toBe(1234);
+    expect(stored.look).toBe('paper');
+    // Reload from storage keeps the stamp and does not leak it into the settings object.
+    m.resetSettingsCacheForTests();
+    expect(m.getSettingsUpdatedAt('carol')).toBe(1234);
+    expect('updatedAt' in m.getSettings('carol')).toBe(false);
+    m.replaceSettings('carol', { ...m.DEFAULT_SETTINGS, look: 'slate', sync: false }, 2000);
+    expect(m.getSettings('carol')).toMatchObject({ look: 'slate', sync: false });
+    expect(m.getSettingsUpdatedAt('carol')).toBe(2000);
+    // sanitizeSettings drops unknown keys and keeps known ones
+    const clean = m.sanitizeSettings({ look: 'paper', bogus: 1, sync: false });
+    expect((clean as unknown as Record<string, unknown>).bogus).toBeUndefined();
+    expect(clean.sync).toBe(false);
+  });
+});

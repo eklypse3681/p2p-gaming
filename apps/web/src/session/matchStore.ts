@@ -7,10 +7,17 @@ import { useProfile } from './ProfileProvider';
 import type { GameId } from '../games/ids';
 import { GAME_IDS } from '../games/ids';
 
-type Listener = () => void;
+/** What changed, when known (stores created through `getMatchStore` know their owner). */
+export interface MatchStoreEvent {
+  slug?: string;
+  game?: GameId;
+  id?: string;
+  kind: 'put' | 'delete';
+}
+type Listener = (event: MatchStoreEvent) => void;
 const listeners = new Set<Listener>();
 
-/** Fires whenever any IdbMatchStore writes, so lists can refresh. */
+/** Fires whenever any IdbMatchStore writes, so lists can refresh (and devices can sync). */
 export const matchStoreBus = {
   subscribe(l: Listener) {
     listeners.add(l);
@@ -18,8 +25,8 @@ export const matchStoreBus = {
       listeners.delete(l);
     };
   },
-  emit() {
-    for (const l of Array.from(listeners)) l();
+  emit(event: MatchStoreEvent = { kind: 'put' }) {
+    for (const l of Array.from(listeners)) l(event);
   },
 };
 
@@ -46,7 +53,11 @@ export const MATCH_STORE_NAME = 'matches';
 export class IdbMatchStore implements MatchStore {
   private readonly store: UseStore;
 
-  constructor(dbName: string, storeName: string = MATCH_STORE_NAME) {
+  constructor(
+    dbName: string,
+    storeName: string = MATCH_STORE_NAME,
+    private readonly owner: { slug: string; game: GameId } | null = null,
+  ) {
     this.store = createIdbStore(dbName, storeName);
   }
 
@@ -67,12 +78,12 @@ export class IdbMatchStore implements MatchStore {
 
   async put(snapshot: MatchSnapshot): Promise<void> {
     await set(snapshot.id, snapshot, this.store);
-    matchStoreBus.emit();
+    matchStoreBus.emit({ ...this.owner, id: snapshot.id, kind: 'put' });
   }
 
   async delete(id: string): Promise<void> {
     await del(id, this.store);
-    matchStoreBus.emit();
+    matchStoreBus.emit({ ...this.owner, id, kind: 'delete' });
   }
 
   /** Find a saved match by its room code (most recently updated wins). */
@@ -89,7 +100,7 @@ export function getMatchStore(slug: string, game: GameId): IdbMatchStore {
   const key = `${slug}/${game}`;
   let s = shared.get(key);
   if (!s) {
-    s = new IdbMatchStore(matchDbName(slug, game));
+    s = new IdbMatchStore(matchDbName(slug, game), MATCH_STORE_NAME, { slug, game });
     shared.set(key, s);
   }
   return s;

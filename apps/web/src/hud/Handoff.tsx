@@ -12,9 +12,13 @@ import styles from './Handoff.module.css';
  * every state until one of them leaves.
  */
 export function Handoff({ code }: { code: string }) {
-  const { profile } = useProfile();
+  const { profile, record } = useProfile();
   const game = useOptionalGame();
-  const link = useMemo(() => handoffLink(code, profile, game?.id), [code, profile, game?.id]);
+  // Your own QR carries the sync key too, so the phone joins your device sync group as well.
+  const link = useMemo(
+    () => handoffLink(code, { ...profile, syncKey: record.syncKey }, game?.id),
+    [code, profile, record.syncKey, game?.id],
+  );
   const [svg, setSvg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 

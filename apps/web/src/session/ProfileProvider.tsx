@@ -11,6 +11,7 @@ import {
   updateProfile,
   useProfilesIndex,
 } from './profiles';
+import { attachSync } from './sync/registry';
 
 export interface ProfileContext {
   /** URL segment this tab plays as. */
@@ -53,6 +54,12 @@ export function ProfileProvider({
     ensureProfile(slug);
     touchProfile(slug);
   }, [slug, valid]);
+
+  // Keep this player's devices in sync while the profile is open (honours the `sync` setting).
+  useEffect(() => {
+    if (!valid || !record) return;
+    return attachSync(slug);
+  }, [slug, valid, record]);
 
   const setName = useCallback((name: string) => updateProfile(slug, { name }), [slug]);
   const setAvatar = useCallback((avatar: string) => updateProfile(slug, { avatar }), [slug]);

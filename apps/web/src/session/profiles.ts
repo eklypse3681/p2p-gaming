@@ -36,6 +36,14 @@ export interface ProfileRecord {
   avatar: string;
   createdAt: number;
   lastUsedAt: number;
+  /**
+   * Secret shared only between this player's own devices (it travels in exports, transfer codes
+   * and hand-off links, never to opponents). Devices holding the same key find each other and
+   * sync settings and saved matches over WebRTC. Rotating it cuts every other device off.
+   */
+  syncKey: string;
+  /** Last change to name/avatar; used for last-write-wins between devices. */
+  updatedAt: number;
 }
 
 export type ProfilesIndex = Record<string, ProfileRecord>;
@@ -133,6 +141,8 @@ export function migrateLegacyProfiles(now: number = Date.now()): ProfilesIndex {
         typeof legacy.avatar === 'string' && legacy.avatar ? legacy.avatar : pickAvatar(legacy.id),
       createdAt: now,
       lastUsedAt: now,
+      syncKey: generateId(),
+      updatedAt: now,
     };
     if (legacySettings) writeJson(`bgf:settings:${slug}`, legacySettings);
     pending.push({ db: ns ? `bgf-${ns}` : 'bgf', slug });
@@ -141,9 +151,33 @@ export function migrateLegacyProfiles(now: number = Date.now()): ProfilesIndex {
   return index;
 }
 
+/** Older records lack `syncKey`/`updatedAt`: fill them in (and persist) so every player can sync. */
+export function completeRecords(index: ProfilesIndex): { index: ProfilesIndex; changed: boolean } {
+  let changed = false;
+  const out: ProfilesIndex = {};
+  for (const [slug, record] of Object.entries(index)) {
+    if (!record || typeof record !== 'object') continue;
+    const next: ProfileRecord = { ...record };
+    if (typeof next.syncKey !== 'string' || !next.syncKey) {
+      next.syncKey = generateId();
+      changed = true;
+    }
+    if (typeof next.updatedAt !== 'number') {
+      next.updatedAt = typeof next.createdAt === 'number' ? next.createdAt : 0;
+      changed = true;
+    }
+    out[slug] = next;
+  }
+  return { index: out, changed };
+}
+
 function load(): ProfilesIndex {
   const stored = readJson<ProfilesIndex>(PROFILES_KEY);
-  if (stored && typeof stored === 'object') return stored;
+  if (stored && typeof stored === 'object') {
+    const { index, changed } = completeRecords(stored);
+    if (changed) writeJson(PROFILES_KEY, index);
+    return index;
+  }
   let index: ProfilesIndex = {};
   if (!readJson<number>(MIGRATED_KEY)) {
     index = migrateLegacyProfiles();
@@ -182,7 +216,14 @@ export function toPlayerProfile(record: ProfileRecord): PlayerProfile {
 /** Create a player from a display name; the slug is derived and made unique. */
 export function createProfile(
   name: string,
-  opts: { slug?: string; id?: string; avatar?: string; now?: number } = {},
+  opts: {
+    slug?: string;
+    id?: string;
+    avatar?: string;
+    now?: number;
+    syncKey?: string;
+    updatedAt?: number;
+  } = {},
 ): ProfileEntry {
   const clean = sanitizeName(name);
   if (!clean) throw new Error('name required');
@@ -198,6 +239,8 @@ export function createProfile(
     avatar: opts.avatar ?? pickAvatar(id),
     createdAt: now,
     lastUsedAt: now,
+    syncKey: opts.syncKey ?? generateId(),
+    updatedAt: opts.updatedAt ?? now,
   };
   commit({ ...index, [slug]: record });
   return { slug, ...record };
@@ -212,20 +255,43 @@ export function ensureProfile(slug: string): ProfileRecord {
   return store.get()[slug]!;
 }
 
+/**
+ * Change name and/or avatar. Stamps `updatedAt` (now, or the explicit time when applying a change
+ * that happened on another device). Nothing is written when nothing changes.
+ */
 export function updateProfile(
   slug: string,
   patch: Partial<Pick<ProfileRecord, 'name' | 'avatar'>>,
-): void {
+  opts: { updatedAt?: number } = {},
+): boolean {
   const index = store.get();
   const record = index[slug];
-  if (!record) return;
+  if (!record) return false;
   const next: ProfileRecord = { ...record };
   if (patch.name !== undefined) {
     const clean = sanitizeName(patch.name);
     if (clean) next.name = clean;
   }
-  if (patch.avatar !== undefined) next.avatar = patch.avatar;
+  if (patch.avatar !== undefined && patch.avatar) next.avatar = patch.avatar;
+  if (next.name === record.name && next.avatar === record.avatar) return false;
+  next.updatedAt = opts.updatedAt ?? Date.now();
   commit({ ...index, [slug]: next });
+  return true;
+}
+
+/** Adopt a sync key (e.g. from an import) so this device joins that player's sync group. */
+export function setProfileSyncKey(slug: string, syncKey: string): void {
+  const index = store.get();
+  const record = index[slug];
+  if (!record || !syncKey || record.syncKey === syncKey) return;
+  commit({ ...index, [slug]: { ...record, syncKey } });
+}
+
+/** New secret: every other device stops syncing until it imports a fresh code. */
+export function rotateSyncKey(slug: string): string {
+  const key = generateId();
+  setProfileSyncKey(slug, key);
+  return key;
 }
 
 export function touchProfile(slug: string, now: number = Date.now()): void {
@@ -251,9 +317,9 @@ export function useProfilesIndex(): ProfilesIndex {
   return useSyncExternalStore(store.subscribe, store.get, store.get);
 }
 
-/** For tests: replace the whole index (also persisted). */
+/** For tests: replace the whole index (also persisted); partial records are completed. */
 export function replaceProfilesForTests(index: ProfilesIndex): void {
-  commit(index);
+  commit(completeRecords(index).index);
 }
 
 /** For tests: empty index, migration marked done. */

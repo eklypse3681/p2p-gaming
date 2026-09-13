@@ -34,6 +34,8 @@ export interface Settings {
   peer: PeerServerSettings;
   /** One ICE server per line: `stun:host:port` or `turn:host:port|username|credential`. */
   iceServers: string;
+  /** Sync settings and saved matches with this player's other devices over WebRTC. */
+  sync: boolean;
 }
 
 /** Settings live per player: `bgf:settings:<slug>`. Outside a profile route (`slug === ''`) the
@@ -54,9 +56,13 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: true,
   peer: { host: '', port: '', path: '', secure: true, key: '' },
   iceServers: '',
+  sync: true,
 };
 
-type LegacySettings = Partial<Settings> & { homeSide?: HomeSide; themeId?: string };
+/** What is actually persisted: the settings plus when they last changed (for device sync). */
+type StoredSettings = Partial<Settings> & { updatedAt?: number };
+
+type LegacySettings = StoredSettings & { homeSide?: HomeSide; themeId?: string };
 
 /**
  * Older builds stored a per-viewer `homeSide` (now an explicit preference) and a single
@@ -65,7 +71,7 @@ type LegacySettings = Partial<Settings> & { homeSide?: HomeSide; themeId?: strin
  */
 export function migrateSettings(stored: LegacySettings | null): Partial<Settings> {
   if (!stored) return {};
-  const { homeSide, themeId, ...rest } = stored;
+  const { homeSide, themeId, updatedAt: _updatedAt, ...rest } = stored;
   const out: Partial<Settings> = { ...rest };
   if (out.homeSidePreference === undefined && (homeSide === 'left' || homeSide === 'right')) {
     out.homeSidePreference = homeSide;
@@ -81,13 +87,47 @@ export function migrateSettings(stored: LegacySettings | null): Partial<Settings
   return out;
 }
 
-function load(slug: string): Settings {
-  const stored = migrateSettings(readJson<LegacySettings>(settingsKey(slug)));
+function load(slug: string): { settings: Settings; updatedAt: number } {
+  const raw = readJson<LegacySettings>(settingsKey(slug));
+  const stored = migrateSettings(raw);
   return {
-    ...DEFAULT_SETTINGS,
-    ...stored,
-    peer: { ...DEFAULT_SETTINGS.peer, ...(stored.peer ?? {}) },
+    settings: {
+      ...DEFAULT_SETTINGS,
+      ...stored,
+      peer: { ...DEFAULT_SETTINGS.peer, ...(stored.peer ?? {}) },
+    },
+    updatedAt: typeof raw?.updatedAt === 'number' ? raw.updatedAt : 0,
   };
+}
+
+/**
+ * Keep only known settings keys with the right primitive types; anything else falls back to the
+ * defaults. Used for imports and for data arriving from another device.
+ */
+export function sanitizeSettings(value: unknown): Settings {
+  if (typeof value !== 'object' || value === null) return { ...DEFAULT_SETTINGS };
+  const migrated = migrateSettings(value as LegacySettings);
+  const out: Settings = { ...DEFAULT_SETTINGS, peer: { ...DEFAULT_SETTINGS.peer } };
+  for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
+    const candidate = migrated[key];
+    if (candidate === undefined) continue;
+    if (key === 'peer') {
+      if (typeof candidate === 'object' && candidate !== null) {
+        const peer = candidate as Partial<Settings['peer']>;
+        for (const pk of Object.keys(DEFAULT_SETTINGS.peer) as (keyof Settings['peer'])[]) {
+          const pv = peer[pk];
+          if (typeof pv === typeof DEFAULT_SETTINGS.peer[pk]) {
+            (out.peer as unknown as Record<string, unknown>)[pk] = pv;
+          }
+        }
+      }
+      continue;
+    }
+    if (typeof candidate === typeof DEFAULT_SETTINGS[key]) {
+      (out as unknown as Record<string, unknown>)[key] = candidate;
+    }
+  }
+  return out;
 }
 
 /** Resolve the preference against the table layout for the seat being viewed from. */
@@ -97,12 +137,15 @@ export function effectiveHomeSide(preference: HomeSidePreference, tableSide: Hom
 
 type SettingsStore = ReturnType<typeof createStore<Settings>>;
 const stores = new Map<string, SettingsStore>();
+const updatedAts = new Map<string, number>();
 
 function storeFor(slug: string): SettingsStore {
   let s = stores.get(slug);
   if (!s) {
-    s = createStore<Settings>(load(slug));
+    const loaded = load(slug);
+    s = createStore<Settings>(loaded.settings);
     stores.set(slug, s);
+    updatedAts.set(slug, loaded.updatedAt);
   }
   return s;
 }
@@ -111,22 +154,44 @@ export function getSettings(slug = ''): Settings {
   return storeFor(slug).get();
 }
 
-export function updateSettings(slug: string, patch: Partial<Settings>): void {
+/** When this player's settings last changed (0 when never written). */
+export function getSettingsUpdatedAt(slug = ''): number {
+  storeFor(slug);
+  return updatedAts.get(slug) ?? 0;
+}
+
+function persist(slug: string, next: Settings, updatedAt: number): void {
   const s = storeFor(slug);
-  const next = { ...s.get(), ...patch };
+  updatedAts.set(slug, updatedAt);
   s.set(next);
-  writeJson(settingsKey(slug), next);
+  writeJson(settingsKey(slug), { ...next, updatedAt } satisfies StoredSettings);
+}
+
+export function updateSettings(
+  slug: string,
+  patch: Partial<Settings>,
+  opts: { updatedAt?: number } = {},
+): void {
+  persist(slug, { ...storeFor(slug).get(), ...patch }, opts.updatedAt ?? Date.now());
+}
+
+/** Replace every setting (e.g. with a copy from another device) with an explicit timestamp. */
+export function replaceSettings(slug: string, settings: Settings, updatedAt: number): void {
+  persist(slug, sanitizeSettings(settings), updatedAt);
 }
 
 export function resetSettings(slug = ''): void {
-  const s = storeFor(slug);
-  s.set(DEFAULT_SETTINGS);
-  writeJson(settingsKey(slug), DEFAULT_SETTINGS);
+  persist(slug, DEFAULT_SETTINGS, Date.now());
+}
+
+export function subscribeSettings(slug: string, listener: () => void): () => void {
+  return storeFor(slug).subscribe(listener);
 }
 
 /** Drop cached stores (tests). */
 export function resetSettingsCacheForTests(): void {
   stores.clear();
+  updatedAts.clear();
 }
 
 /**

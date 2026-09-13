@@ -9,7 +9,14 @@ import type {
 import { TransportError, createMemoryPair } from '@bgf/protocol';
 import type { ClientState, GameClientApi } from '@bgf/client';
 import { newMatch } from '@bgf/engine';
-import { awaitJoined, hostNewMatch, joinMatch, resumeMatch, SessionError } from './session';
+import {
+  awaitJoined,
+  hostNewMatch,
+  joinMatch,
+  publicProfile,
+  resumeMatch,
+  SessionError,
+} from './session';
 
 const profile: PlayerProfile = { id: 'me', name: 'Me' };
 
@@ -235,5 +242,33 @@ describe('session factories', () => {
     const { factory } = fakeClientFactory('never');
     const client = factory({ transport: createMemoryPair()[0], profile });
     await expect(awaitJoined(client, 10)).rejects.toBeInstanceOf(SessionError);
+  });
+});
+
+describe('the sync key never reaches a match', () => {
+  it('publicProfile keeps id/name/avatar only and the factories apply it', async () => {
+    const leaky = { id: 'me', name: 'Me', avatar: '🦊', syncKey: 'secret' } as PlayerProfile;
+    expect(publicProfile(leaky)).toEqual({ id: 'me', name: 'Me', avatar: '🦊' });
+    expect('syncKey' in publicProfile(leaky)).toBe(false);
+
+    const { provider } = fakeProvider();
+    const server = fakeServer();
+    const hosted = fakeClientFactory();
+    const s1 = await hostNewMatch(
+      { profile: leaky, config: { length: 1 } },
+      { provider, createServer: () => server as never, createClient: hosted.factory as never },
+    );
+    const hostOpts = hosted.created[0]!.opts as { profile: Record<string, unknown> };
+    expect(hostOpts.profile).toEqual({ id: 'me', name: 'Me', avatar: '🦊' });
+    s1.dispose();
+
+    const joined = fakeClientFactory();
+    const s2 = await joinMatch(
+      { code: 'ROOM42', profile: leaky },
+      { provider, createClient: joined.factory as never },
+    );
+    const joinOpts = joined.created[0]!.opts as { profile: Record<string, unknown> };
+    expect(joinOpts.profile).toEqual({ id: 'me', name: 'Me', avatar: '🦊' });
+    s2.dispose();
   });
 });

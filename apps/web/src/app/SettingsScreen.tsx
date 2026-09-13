@@ -3,8 +3,11 @@ import { Link, useNavigate } from 'react-router';
 import { useSettings, resetSettings, DEFAULT_SETTINGS } from '../session/settings';
 import type { HomeSidePreference, ReducedMotionSetting } from '../session/settings';
 import { useProfile } from '../session/ProfileProvider';
-import { deleteProfile, listProfiles } from '../session/profiles';
+import { deleteProfile, listProfiles, rotateSyncKey } from '../session/profiles';
 import { downloadJson, exportFileName, exportProfile, transferCodeFor } from '../session/transfer';
+import { restartSync, syncSupported, useSyncStatus } from '../session/sync/registry';
+import type { SyncStatus } from '../session/sync/SyncManager';
+import { relativeTime } from '../session/time';
 import { useTheme } from './ThemeProvider';
 import type { BoardSet, PieceSet } from '../themes/theme';
 import type { Look } from '../themes';
@@ -201,6 +204,103 @@ function PiecesSwatch({ pieces }: { pieces: PieceSet }) {
       {checker(38, pieces.white)}
       {checker(82, pieces.black)}
     </svg>
+  );
+}
+
+/** One line about the sync state, for the Devices section. */
+export function describeSyncStatus(status: SyncStatus, enabled: boolean): string {
+  if (!enabled) return 'Off — this player only lives in this browser.';
+  const n = status.devices.length;
+  const names = status.devices.map((d) => d.label).join(', ');
+  switch (status.state) {
+    case 'off':
+      return status.reason ? `Unavailable: ${status.reason}` : 'Off';
+    case 'searching':
+      return 'Looking for your other devices…';
+    case 'error':
+      return `Trouble connecting${status.lastError ? `: ${status.lastError}` : ''} — retrying`;
+    case 'hub':
+      return n
+        ? `This device is the hub for ${n} device${n === 1 ? '' : 's'}: ${names}`
+        : 'Ready — this device is the hub; nothing else is online right now.';
+    case 'connected':
+      return n ? `Connected to ${n} device${n === 1 ? '' : 's'}: ${names}` : 'Connected';
+  }
+}
+
+function DevicesSection({ slug }: { slug: string }) {
+  const [settings, update] = useSettings(slug);
+  const status = useSyncStatus(slug);
+  const support = syncSupported();
+  const [confirmRotate, setConfirmRotate] = useState(false);
+  const [rotated, setRotated] = useState(false);
+  const enabled = settings.sync !== false;
+  return (
+    <section className={`card ${styles.section}`} data-testid="sync-section">
+      <h2>Devices</h2>
+      <div className={styles.rowField}>
+        <div className={styles.rowText}>
+          Sync between my devices
+          <small>
+            Settings and saved matches follow you to every browser that holds this player.
+          </small>
+        </div>
+        <Switch
+          on={enabled}
+          onChange={(v) => update({ sync: v })}
+          label="Sync between my devices"
+        />
+      </div>
+      <p className="small" role="status" data-testid="sync-status" data-state={status.state}>
+        {describeSyncStatus(status, enabled)}
+        {enabled && status.lastSyncAt ? ` · last change ${relativeTime(status.lastSyncAt)}` : ''}
+      </p>
+      {!support.ok && enabled && <p className="muted small">{support.reason}</p>}
+      <p className="muted small">
+        Sync happens whenever the app is open on this player on both devices, directly between them
+        over WebRTC — nothing is uploaded anywhere. Devices recognise each other with a secret sync
+        key that travels only inside your export file, transfer code and hand-off QR; opponents
+        never see it.
+      </p>
+      <div className="row">
+        {!confirmRotate ? (
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setConfirmRotate(true)}
+            data-testid="rotate-sync-key"
+          >
+            Rotate sync key
+          </button>
+        ) : (
+          <>
+            <span className="small">
+              Your other devices stop syncing until they import a fresh code from this one. Do it if
+              a QR or transfer code was seen by someone else.
+            </span>
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={() => {
+                rotateSyncKey(slug);
+                restartSync(slug);
+                setConfirmRotate(false);
+                setRotated(true);
+              }}
+              data-testid="rotate-sync-key-confirm"
+            >
+              Yes, rotate
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setConfirmRotate(false)}>
+              Cancel
+            </button>
+          </>
+        )}
+        {rotated && (
+          <span className="small" role="status" data-testid="rotate-note">
+            New sync key in use. Re-export or re-share a code to reconnect other devices.
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -545,6 +645,8 @@ export function SettingsScreen() {
             )}
           </div>
         </section>
+
+        <DevicesSection slug={slug} />
 
         <section className={`card ${styles.section}`}>
           <h2>Networking</h2>

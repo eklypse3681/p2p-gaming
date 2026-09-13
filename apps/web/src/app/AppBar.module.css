@@ -109,3 +109,20 @@
 .crumb {
   font-weight: 700;
 }
+
+.syncDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ui-text-muted);
+  opacity: 0.55;
+  margin-left: 2px;
+  flex: none;
+}
+
+.syncLive {
+  background: var(--ui-success);
+  opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-success) 25%, transparent);
+}

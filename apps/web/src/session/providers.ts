@@ -21,9 +21,12 @@ function peerKey(s: Settings): string {
   return JSON.stringify([s.peer, s.iceServers]);
 }
 
-/** PeerJS id namespace for a game: room codes of different games never collide. */
-export function peerNamespaceFor(game: GameId): string {
-  return `${game}-v1`;
+/** A game, or the device-to-device profile sync channel. */
+export type Channel = GameId | 'sync';
+
+/** PeerJS id namespace per channel: room codes of different games (and sync) never collide. */
+export function peerNamespaceFor(channel: Channel): string {
+  return `${channel}-v1`;
 }
 
 /**
@@ -33,12 +36,12 @@ export function peerNamespaceFor(game: GameId): string {
  */
 export function getProvider(
   slug: string,
-  game: GameId,
+  channel: Channel,
   name: TransportName = getTransportName(),
 ): TransportProvider {
   const settings = getSettings(slug);
-  const namespace = peerNamespaceFor(game);
-  const key = name === 'peerjs' ? `peerjs:${namespace}:${peerKey(settings)}` : `${name}:${game}`;
+  const namespace = peerNamespaceFor(channel);
+  const key = name === 'peerjs' ? `peerjs:${namespace}:${peerKey(settings)}` : `${name}:${channel}`;
   const existing = cache.get(key);
   if (existing) return existing;
   let provider: TransportProvider;

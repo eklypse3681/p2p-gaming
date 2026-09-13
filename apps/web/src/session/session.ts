@@ -57,6 +57,16 @@ function requireName(profile: PlayerProfile): void {
   if (!profile.name.trim()) throw new SessionError('no-name', 'Pick a name before playing');
 }
 
+/**
+ * What opponents may see: id, name, avatar — nothing else. Profile records carry a device-sync
+ * secret; this is the boundary that keeps it out of every `hello` and snapshot.
+ */
+export function publicProfile(profile: PlayerProfile): PlayerProfile {
+  const out: PlayerProfile = { id: profile.id, name: profile.name };
+  if (profile.avatar) out.avatar = profile.avatar;
+  return out;
+}
+
 /** Resolve once the client is welcomed; reject if it is rejected, disconnects, or times out. */
 export function awaitJoined(client: GameClientApi, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -200,7 +210,8 @@ export interface HostOptions {
 }
 
 /** Create a brand-new match: run the server here and connect our own client to it. */
-export async function hostNewMatch(opts: HostOptions, deps: SessionDeps): Promise<Session> {
+export async function hostNewMatch(rawOpts: HostOptions, deps: SessionDeps): Promise<Session> {
+  const opts = { ...rawOpts, profile: publicProfile(rawOpts.profile) };
   requireName(opts.profile);
   const createServer = deps.createServer ?? ((o) => new GameServer(o));
   const code = generateRoomCode();
@@ -222,7 +233,8 @@ export interface JoinOptions {
 }
 
 /** Join a match someone else is hosting. */
-export async function joinMatch(opts: JoinOptions, deps: SessionDeps): Promise<Session> {
+export async function joinMatch(rawOpts: JoinOptions, deps: SessionDeps): Promise<Session> {
+  const opts = { ...rawOpts, profile: publicProfile(rawOpts.profile) };
   requireName(opts.profile);
   const createClient = deps.createClient ?? ((o) => new GameClient(o));
   const timeoutMs = deps.joinTimeoutMs ?? DEFAULT_JOIN_TIMEOUT;
@@ -273,7 +285,8 @@ export interface ResumeOptions {
  * Resume a saved match. Try to host under its room code; if someone (the other player) already
  * hosts it, join them instead, offering our snapshot so the newer copy wins.
  */
-export async function resumeMatch(opts: ResumeOptions, deps: SessionDeps): Promise<Session> {
+export async function resumeMatch(rawOpts: ResumeOptions, deps: SessionDeps): Promise<Session> {
+  const opts = { ...rawOpts, profile: publicProfile(rawOpts.profile) };
   requireName(opts.profile);
   const createServer = deps.createServer ?? ((o) => new GameServer(o));
   const { snapshot, profile } = opts;

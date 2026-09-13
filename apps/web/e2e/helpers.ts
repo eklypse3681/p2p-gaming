@@ -29,10 +29,18 @@ export function profileUrl(profile: string, hash = '/'): string {
   return `/?transport=broadcast#/${profile}/${sub}`;
 }
 
-/** Seed a player (slug → id/name) and calm settings before the app boots. */
-export async function seedProfile(page: Page, slug: string, profile: TestProfile): Promise<void> {
+/**
+ * Seed a player (slug → id/name) and calm settings before the app boots. Pass `syncKey` to put
+ * two contexts in the same device-sync group; otherwise a fresh key is generated on load.
+ */
+export async function seedProfile(
+  page: Page,
+  slug: string,
+  profile: TestProfile,
+  opts: { syncKey?: string; sync?: boolean } = {},
+): Promise<void> {
   await page.addInitScript(
-    ({ slug, profile }) => {
+    ({ slug, profile, opts }) => {
       const key = 'bgf:profiles';
       const index = JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, unknown>;
       if (!index[slug]) {
@@ -41,6 +49,8 @@ export async function seedProfile(page: Page, slug: string, profile: TestProfile
           avatar: '🎲',
           createdAt: Date.now(),
           lastUsedAt: Date.now(),
+          updatedAt: Date.now(),
+          ...(opts.syncKey ? { syncKey: opts.syncKey } : {}),
         };
         localStorage.setItem(key, JSON.stringify(index));
       }
@@ -53,10 +63,12 @@ export async function seedProfile(page: Page, slug: string, profile: TestProfile
           pieceSet: 'pearl-obsidian',
           reducedMotion: 'on',
           flipBoard: false,
+          sync: opts.sync ?? true,
+          updatedAt: 1,
         }),
       );
     },
-    { slug, profile },
+    { slug, profile, opts },
   );
 }
 
