@@ -1,4 +1,5 @@
 import type { ClientMessage, PlayerProfile } from '@bgf/protocol';
+import { looksLikePublicKey } from '@bgf/protocol';
 import type { CubeOwner, Player, ResultKind, SubMove } from '@bgf/engine';
 
 /**
@@ -24,7 +25,7 @@ function isInt(v: unknown): v is number {
 
 export function validateProfile(v: unknown): PlayerProfile | null {
   if (!isRecord(v)) return null;
-  const { id, name, avatar } = v;
+  const { id, name, avatar, publicKey } = v;
   if (typeof id !== 'string' || id.length === 0 || id.length > 128) return null;
   if (typeof name !== 'string') return null;
   const trimmed = name.trim().slice(0, MAX_NAME_LENGTH);
@@ -32,6 +33,10 @@ export function validateProfile(v: unknown): PlayerProfile | null {
   const profile: PlayerProfile = { id, name: trimmed };
   if (typeof avatar === 'string' && avatar.length > 0 && avatar.length <= 16)
     profile.avatar = avatar;
+  if (publicKey !== undefined) {
+    if (!looksLikePublicKey(publicKey)) return null;
+    profile.publicKey = publicKey;
+  }
   return profile;
 }
 
@@ -79,6 +84,11 @@ export function validateClientMessage(raw: unknown): ValidationResult {
         msg.snapshot = raw.snapshot as unknown as NonNullable<typeof msg.snapshot>;
       }
       return { ok: true, message: msg };
+    }
+    case 'auth': {
+      if (typeof raw.signature !== 'string' || raw.signature.length === 0 || raw.signature.length > 512)
+        return { ok: false, reason: 'invalid signature' };
+      return { ok: true, message: { type: 'auth', signature: raw.signature } };
     }
     case 'start-game':
     case 'opening-roll':

@@ -145,7 +145,7 @@ describe('legacy migration', () => {
 });
 
 describe('sync key and change stamps', () => {
-  it('every record gets a sync key and updatedAt, including older stored ones', () => {
+  it('every record gets a sync key and updatedAt, including older stored ones', async () => {
     localStorage.clear();
     const {
       completeRecords,
@@ -178,9 +178,9 @@ describe('sync key and change stamps', () => {
     expect(getProfile('alice')).toMatchObject({ name: 'Alicia', updatedAt: 250 });
 
     const before = getProfile('alice')!.syncKey;
-    setProfileSyncKey('alice', 'from-import');
+    await setProfileSyncKey('alice', 'from-import');
     expect(getProfile('alice')!.syncKey).toBe('from-import');
-    const rotated = rotateSyncKey('alice');
+    const rotated = await rotateSyncKey('alice');
     expect(rotated).not.toBe('from-import');
     expect(rotated).not.toBe(before);
     expect(getProfile('alice')!.syncKey).toBe(rotated);

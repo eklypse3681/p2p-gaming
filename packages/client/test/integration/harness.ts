@@ -1,13 +1,65 @@
 import type { Action, DiceSource, MatchConfig, MatchState, Player, SubMove } from '@bgf/engine';
 import { seededDice } from '@bgf/engine';
-import type { MatchSnapshot, PlayerProfile, Transport } from '@bgf/protocol';
-import { createMemoryPair } from '@bgf/protocol';
+import type { KeyPair, MatchSnapshot, PlayerProfile, Signer, Transport } from '@bgf/protocol';
+import {
+  PROTOCOL_VERSION,
+  bytesToBase64Url,
+  challengeBytes,
+  createMemoryPair,
+  generateKeyPair,
+  signerFor,
+} from '@bgf/protocol';
 import { GameClient, MemoryMatchStore } from '../../src/index.js';
 import { GameServer } from '@bgf/server';
 
 export const HOST: PlayerProfile = { id: 'host-id', name: 'Alice' };
 export const GUEST: PlayerProfile = { id: 'guest-id', name: 'Bob' };
 export const STRANGER: PlayerProfile = { id: 'stranger-id', name: 'Mallory' };
+
+// ---- keys: every test player owns a key pair, generated once per process ----
+const keyCache = new Map<string, KeyPair>();
+
+/** Generate (once) the key pairs for these profiles so `keyedProfile`/`signerOf` are synchronous. */
+export async function ensureKeys(...profiles: PlayerProfile[]): Promise<void> {
+  for (const p of profiles) {
+    if (!keyCache.has(p.id)) keyCache.set(p.id, await generateKeyPair());
+  }
+}
+
+export function keysFor(id: string): KeyPair {
+  const k = keyCache.get(id);
+  if (!k) throw new Error(`no keys generated for ${id}; call ensureKeys first`);
+  return k;
+}
+
+/** The profile as the server sees it: with its public key. */
+export function keyedProfile(base: PlayerProfile): PlayerProfile {
+  return { ...base, publicKey: keysFor(base.id).publicKey };
+}
+
+export function signerOf(base: PlayerProfile): Signer {
+  return signerFor(keysFor(base.id).privateKey);
+}
+
+/**
+ * Raw-transport hello for tests that bypass GameClient: sends the keyed profile and answers the
+ * server's challenge with the cached private key.
+ */
+export function rawHello(transport: Transport, base: PlayerProfile): void {
+  const profile = keyedProfile(base);
+  const signer = signerOf(base);
+  transport.onMessage((m) => {
+    const msg = m as { type?: string; nonce?: string; matchId?: string };
+    if (msg.type !== 'challenge' || !msg.nonce || !msg.matchId) return;
+    void signer(
+      challengeBytes({ matchId: msg.matchId, profileId: profile.id, nonce: msg.nonce }),
+    ).then((sig) => {
+      if (transport.status === 'open')
+        transport.send({ type: 'auth', signature: bytesToBase64Url(sig) });
+    });
+  });
+  transport.send({ type: 'hello', protocol: PROTOCOL_VERSION, profile });
+}
 
 /** Let queued microtasks / macrotasks drain so messages propagate both ways. */
 export async function flush(rounds = 6): Promise<void> {
@@ -26,10 +78,19 @@ export interface Harness {
   hostStore: MemoryMatchStore;
   guestStore: MemoryMatchStore;
   clock: ReturnType<typeof fakeClock>;
-  /** Connect another client (new transport) to the same server. */
+  /**
+   * Connect another client (new transport) to the same server. Profiles with generated keys are
+   * sent keyed and signed automatically; pass `legacy: true` for an unkeyed client, or a custom
+   * `signer` (with a profile carrying its own `publicKey`) to impersonate.
+   */
   connect(
     profile: PlayerProfile,
-    opts?: { resumeSnapshot?: MatchSnapshot; store?: MemoryMatchStore },
+    opts?: {
+      resumeSnapshot?: MatchSnapshot;
+      store?: MemoryMatchStore;
+      signer?: Signer;
+      legacy?: boolean;
+    },
   ): { client: GameClient; transport: Transport };
   /** Assert both clients hold identical authoritative state. */
   expectConverged(): void;
@@ -48,10 +109,11 @@ export interface HarnessOptions {
 }
 
 export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
+  await ensureKeys(HOST, GUEST, STRANGER);
   const clock = fakeClock();
   const server = new GameServer({
     code: 'TEST42',
-    host: HOST,
+    host: keyedProfile(HOST),
     hostSeat: opts.hostSeat,
     config: opts.config,
     dice: opts.dice ?? seededDice(7),
@@ -64,7 +126,8 @@ export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
   const clientOpts = { pingIntervalMs: 0, previewThrottleMs: 0, now: clock.now };
   const host = new GameClient({
     transport: server.connectLocal(),
-    profile: HOST,
+    profile: keyedProfile(HOST),
+    signer: signerOf(HOST),
     store: hostStore,
     resumeSnapshot: opts.hostResume,
     ...clientOpts,
@@ -73,9 +136,16 @@ export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
   const connect: Harness['connect'] = (profile, o = {}) => {
     const [serverEnd, clientEnd] = createMemoryPair('guest');
     server.accept(serverEnd);
+    let sent = profile;
+    let signer = o.signer;
+    if (!o.legacy && !signer && keyCache.has(profile.id) && !profile.publicKey) {
+      sent = keyedProfile(profile);
+      signer = signerOf(profile);
+    }
     const client = new GameClient({
       transport: clientEnd,
-      profile,
+      profile: sent,
+      signer,
       store: o.store,
       resumeSnapshot: o.resumeSnapshot,
       ...clientOpts,

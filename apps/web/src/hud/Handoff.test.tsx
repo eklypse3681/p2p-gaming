@@ -15,6 +15,9 @@ describe('Handoff', () => {
     expect(link.value).toContain(`#/backgammon/join/ABC234?import=${IDENTITY_PREFIX}`);
     const code = link.value.slice(link.value.indexOf('?import=') + '?import='.length);
     expect(decodeTransferCode(code).profile.id).toBe(getProfile('alice')!.id);
+    // The link carries the player's secrets, so the panel says to treat it like a password.
+    expect(decodeTransferCode(code).profile.syncKey).toBe(getProfile('alice')!.syncKey);
+    expect(screen.getByTestId('handoff-warning')).toHaveTextContent(/like a password/i);
     await waitFor(() =>
       expect(screen.getByTestId('handoff-qr').querySelector('svg')).not.toBeNull(),
     );

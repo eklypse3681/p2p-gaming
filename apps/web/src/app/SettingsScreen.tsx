@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router';
 import { useSettings, resetSettings, DEFAULT_SETTINGS } from '../session/settings';
 import type { HomeSidePreference, ReducedMotionSetting } from '../session/settings';
 import { useProfile } from '../session/ProfileProvider';
+import { changePassword, lockProfile, removePassword } from '../session/profiles';
+import { SecretsError } from '../session/secrets';
 import { deleteProfile, listProfiles, rotateSyncKey } from '../session/profiles';
 import { downloadJson, exportFileName, exportProfile, transferCodeFor } from '../session/transfer';
 import { restartSync, syncSupported, useSyncStatus } from '../session/sync/registry';
@@ -232,7 +234,10 @@ function DevicesSection({ slug }: { slug: string }) {
   const [settings, update] = useSettings(slug);
   const status = useSyncStatus(slug);
   const support = syncSupported();
+  const { locked } = useProfile();
   const [confirmRotate, setConfirmRotate] = useState(false);
+  const [rotatePassword, setRotatePassword] = useState('');
+  const [rotateError, setRotateError] = useState<string | null>(null);
   const [rotated, setRotated] = useState(false);
   const enabled = settings.sync !== false;
   return (
@@ -277,18 +282,45 @@ function DevicesSection({ slug }: { slug: string }) {
               Your other devices stop syncing until they import a fresh code from this one. Do it if
               a QR or transfer code was seen by someone else.
             </span>
+            {locked && (
+              <input
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                placeholder="Password"
+                aria-label="Password"
+                value={rotatePassword}
+                onChange={(e) => setRotatePassword(e.target.value)}
+                data-testid="rotate-password"
+              />
+            )}
             <button
               className="btn btn-danger btn-sm"
+              disabled={locked && !rotatePassword}
               onClick={() => {
-                rotateSyncKey(slug);
-                restartSync(slug);
-                setConfirmRotate(false);
-                setRotated(true);
+                setRotateError(null);
+                rotateSyncKey(slug, locked ? { password: rotatePassword } : {})
+                  .then(() => {
+                    restartSync(slug);
+                    setConfirmRotate(false);
+                    setRotatePassword('');
+                    setRotated(true);
+                  })
+                  .catch((e: unknown) => {
+                    setRotateError(
+                      e instanceof SecretsError ? e.message : 'Could not rotate the sync key',
+                    );
+                  });
               }}
               data-testid="rotate-sync-key-confirm"
             >
               Yes, rotate
             </button>
+            {rotateError && (
+              <span className="error-text" role="alert" data-testid="rotate-error">
+                {rotateError}
+              </span>
+            )}
             <button className="btn btn-ghost btn-sm" onClick={() => setConfirmRotate(false)}>
               Cancel
             </button>
@@ -304,10 +336,207 @@ function DevicesSection({ slug }: { slug: string }) {
   );
 }
 
+/**
+ * Optional password lock. When set, the player's private key and sync key are stored encrypted
+ * and every tab must enter the password before playing as them.
+ */
+function PasswordSection({
+  slug,
+  locked,
+  onLockNow,
+}: {
+  slug: string;
+  locked: boolean;
+  onLockNow: () => void;
+}) {
+  const [mode, setMode] = useState<'idle' | 'set' | 'change' | 'remove'>('idle');
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const reset = () => {
+    setMode('idle');
+    setCurrent('');
+    setNext('');
+    setConfirm('');
+    setError(null);
+  };
+
+  const run = async (work: () => Promise<string>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setNote(await work());
+      reset();
+    } catch (e) {
+      setError(e instanceof SecretsError ? e.message : 'Something went wrong');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const passwordsMatch = next.length > 0 && next === confirm;
+
+  return (
+    <div className="field" data-testid="password-section">
+      <span className="label">Password</span>
+      <span className="help">
+        {locked
+          ? 'This player is password protected: every tab must unlock it before playing, and exports carry the encrypted keys.'
+          : 'Optional. Encrypts this player’s keys in the browser so nobody at this computer can play as you, export you, or hand you off without the password.'}
+      </span>
+      {mode === 'idle' && (
+        <div className="row">
+          {locked ? (
+            <>
+              <button
+                className="btn btn-secondary btn-sm"
+                type="button"
+                onClick={() => setMode('change')}
+                data-testid="change-password"
+              >
+                Change password
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                type="button"
+                onClick={() => setMode('remove')}
+                data-testid="remove-password"
+              >
+                Remove password
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={onLockNow}
+                data-testid="lock-now"
+              >
+                Lock now
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn btn-secondary btn-sm"
+              type="button"
+              onClick={() => setMode('set')}
+              data-testid="set-password"
+            >
+              Set a password…
+            </button>
+          )}
+        </div>
+      )}
+      {mode !== 'idle' && (
+        <form
+          className="stack"
+          data-testid="password-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (mode === 'set') {
+              if (!passwordsMatch) {
+                setError('The passwords do not match');
+                return;
+              }
+              void run(async () => {
+                await lockProfile(slug, next);
+                return 'Password set. Other tabs and devices will ask for it.';
+              });
+            } else if (mode === 'change') {
+              if (!passwordsMatch) {
+                setError('The new passwords do not match');
+                return;
+              }
+              void run(async () => {
+                await changePassword(slug, current, next);
+                return 'Password changed.';
+              });
+            } else {
+              void run(async () => {
+                await removePassword(slug, current);
+                return 'Password removed; keys are stored in the clear again.';
+              });
+            }
+          }}
+        >
+          {mode !== 'set' && (
+            <label className="field">
+              <span className="label">Current password</span>
+              <input
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                data-testid="password-current"
+              />
+            </label>
+          )}
+          {mode !== 'remove' && (
+            <>
+              <label className="field">
+                <span className="label">{mode === 'change' ? 'New password' : 'Password'}</span>
+                <input
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  value={next}
+                  onChange={(e) => setNext(e.target.value)}
+                  data-testid="password-input"
+                />
+              </label>
+              <label className="field">
+                <span className="label">Repeat it</span>
+                <input
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  data-testid="password-confirm"
+                />
+              </label>
+            </>
+          )}
+          <div className="row">
+            <button
+              className={`btn btn-sm ${mode === 'remove' ? 'btn-danger' : 'btn-primary'}`}
+              type="submit"
+              disabled={busy}
+              data-testid="password-submit"
+            >
+              {mode === 'set'
+                ? 'Set password'
+                : mode === 'change'
+                  ? 'Change password'
+                  : 'Remove password'}
+            </button>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={reset}>
+              Cancel
+            </button>
+          </div>
+          {error && (
+            <span className="error-text" role="alert" data-testid="password-error">
+              {error}
+            </span>
+          )}
+        </form>
+      )}
+      {note && (
+        <span className="small" role="status" data-testid="password-note">
+          {note}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function SettingsScreen() {
   const [settings, update] = useSettings();
   const { theme, presets, looks, boardSets, pieceSets, applyPreset } = useTheme();
-  const { profile, slug, setName, setAvatar, avatars } = useProfile();
+  const { profile, slug, setName, setAvatar, avatars, locked, lockNow } = useProfile();
   const navigate = useNavigate();
   const [confirmRemove, setConfirmRemove] = useState(false);
   // The stored name is never empty, so edit through a draft that may be.
@@ -325,7 +554,13 @@ export function SettingsScreen() {
   };
 
   const copyTransferCode = async () => {
-    const code = transferCodeFor(slug);
+    let code: string;
+    try {
+      code = transferCodeFor(slug);
+    } catch {
+      setTransferNote('Unlock this player first');
+      return;
+    }
     setTransferCode(code);
     try {
       await navigator.clipboard.writeText(code);
@@ -611,6 +846,7 @@ export function SettingsScreen() {
               />
             )}
           </div>
+          <PasswordSection slug={slug} locked={locked} onLockNow={lockNow} />
           <div className="row">
             {!confirmRemove ? (
               <button

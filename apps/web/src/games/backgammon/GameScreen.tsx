@@ -51,7 +51,7 @@ const inflightResumes = new Map<string, Promise<Session | null>>();
 export function GameScreen() {
   const { matchId } = useParams();
   const registry = useSessionRegistry();
-  const { profile, slug } = useProfile();
+  const { profile, slug, ready } = useProfile();
   const { path, id: gameId } = useGame();
   const existing = useSession(slug, gameId, matchId);
   const navigate = useNavigate();
@@ -64,6 +64,9 @@ export function GameScreen() {
     if (stale && matchId) registry.remove(slug, gameId, matchId, true);
   }, [stale, matchId, registry, slug, gameId]);
   const session = stale ? undefined : existing;
+  // Set when the player leaves on purpose: the session is gone but must not be resumed by the
+  // effect below before navigation unmounts this screen (that would re-host the table here).
+  const leaving = useRef(false);
   type Resume = { status: 'loading' | 'missing' | 'error'; error?: string };
   const [resume, setResume] = useState<Resume>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -71,15 +74,16 @@ export function GameScreen() {
   // Page refresh / deep link: rebuild the session from the saved snapshot. In-flight resumes are
   // deduplicated per match so StrictMode's double effects (and quick re-mounts) never race.
   useEffect(() => {
-    if (session || !matchId) return;
+    if (session || !matchId || leaving.current) return;
     const key = `${slug}:${gameId}:${matchId}`;
     let p = inflightResumes.get(key);
     if (!p) {
       p = (async () => {
         const snapshot = await getMatchStore(slug, gameId).get(matchId);
         if (!snapshot) return null;
+        const { profile, signer } = await ready();
         return resumeMatch(
-          { snapshot, profile },
+          { snapshot, profile, signer: signer ?? undefined },
           { provider: getProvider(slug, gameId), store: getMatchStore(slug, gameId) },
         );
       })().finally(() => inflightResumes.delete(key));
@@ -104,7 +108,7 @@ export function GameScreen() {
     return () => {
       active = false;
     };
-  }, [session, matchId, slug, gameId, profile, registry, attempt]);
+  }, [session, matchId, slug, gameId, ready, registry, attempt]);
 
   const resumeState: Resume = resume;
 
@@ -114,6 +118,7 @@ export function GameScreen() {
       <LiveGame
         session={session}
         onLeave={() => {
+          leaving.current = true;
           registry.remove(slug, gameId, session.matchId, true);
           navigate(path('/'));
         }}

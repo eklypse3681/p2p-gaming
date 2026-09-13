@@ -47,6 +47,21 @@ Try it alone: host as one player, then open a second tab, pick (or create) anoth
 with the code. Each tab is its own player, with its own settings and saved matches.
 `?transport=broadcast` (offline, same browser) and `?transport=memory` exist for tests.
 
+## Who you are
+
+Every player owns a cryptographic key pair, made in the browser the first time the player is
+used. Opponents see your name, avatar and **public** key; the private key never leaves your own
+devices. When you sit down at a table, the host's server binds your public key to your seat, and
+from then on a device can only claim that seat by signing the server's challenge with the private
+key — whoever runs the server. Knowing someone's id is not enough to play as them.
+
+Your hand-off QR, transfer code and export file carry the private key (that is what makes "scan
+to become me" work), so treat them like a password. Settings → Player → **Password** adds an
+optional lock: the keys are then stored encrypted (PBKDF2 + AES-GCM) and every tab must enter
+the password before playing as, exporting or handing off that player. **Lock now** forgets the
+password in the current tab; exports of a locked player carry the encrypted keys and ask for
+the password on import.
+
 ## Moving to another browser
 
 Players live in the browser, so to play as yourself somewhere else, move the player: Settings →

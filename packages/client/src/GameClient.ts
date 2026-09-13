@@ -22,16 +22,22 @@ import type {
   MatchSnapshot,
   PlayerProfile,
   ServerMessage,
+  Signer,
   Transport,
   Unsubscribe,
 } from '@bgf/protocol';
-import { PROTOCOL_VERSION, isServerMessage } from '@bgf/protocol';
+import { PROTOCOL_VERSION, bytesToBase64Url, challengeBytes, isServerMessage } from '@bgf/protocol';
 import type { MatchStore } from './store.js';
 import type { ClientState, GameClientApi, TurnDraft } from './types.js';
 
 export interface GameClientOptions {
   transport: Transport;
   profile: PlayerProfile;
+  /**
+   * Signs the server's seat challenge with this player's private key. Required to take a seat
+   * bound to `profile.publicKey`; without it only legacy unkeyed seats can be joined.
+   */
+  signer?: Signer;
   /** Our persisted copy of the match, offered to the server so the newest state wins. */
   resumeSnapshot?: MatchSnapshot;
   /** Every received snapshot is saved here (fire and forget). */
@@ -95,6 +101,7 @@ export class GameClient implements GameClientApi {
   private readonly pingIntervalMs: number;
   private readonly now: () => number;
   private readonly onStoreError: (error: unknown) => void;
+  private readonly signer: Signer | undefined;
   private readonly unsubscribe: Unsubscribe[] = [];
 
   private basis: TurnBasis | null = null;
@@ -109,6 +116,7 @@ export class GameClient implements GameClientApi {
     this.transport = opts.transport;
     this.store = opts.store;
     this.resumeSnapshot = opts.resumeSnapshot;
+    this.signer = opts.signer;
     this.previewThrottleMs = opts.previewThrottleMs ?? 120;
     this.pingIntervalMs = opts.pingIntervalMs ?? 10_000;
     this.now = opts.now ?? Date.now;
@@ -183,6 +191,40 @@ export class GameClient implements GameClientApi {
     if (this.send(hello)) this.helloSent = true;
   }
 
+  /** Prove we hold the private key for our public key by signing the server's nonce. */
+  private async answerChallenge(msg: Extract<ServerMessage, { type: 'challenge' }>): Promise<void> {
+    if (!this.signer) {
+      this.setState({
+        status: 'rejected',
+        rejectReason: 'unauthorized',
+        error: {
+          code: 'rejected:unauthorized',
+          message: 'this player has no signing key for that seat',
+          at: this.now(),
+        },
+      });
+      return;
+    }
+    let signature: string;
+    try {
+      const bytes = challengeBytes({
+        matchId: msg.matchId,
+        profileId: this.profile.id,
+        nonce: msg.nonce,
+      });
+      signature = bytesToBase64Url(await this.signer(bytes));
+    } catch (e) {
+      this.setState({
+        status: 'rejected',
+        rejectReason: 'unauthorized',
+        error: { code: 'rejected:unauthorized', message: (e as Error).message, at: this.now() },
+      });
+      return;
+    }
+    if (this.closed) return;
+    this.send({ type: 'auth', signature });
+  }
+
   private onTransportClosed(reason?: string): void {
     this.stopPing();
     this.cancelPreview();
@@ -228,6 +270,9 @@ export class GameClient implements GameClientApi {
     if (this.closed || !isServerMessage(raw)) return;
     const msg = raw as ServerMessage;
     switch (msg.type) {
+      case 'challenge':
+        void this.answerChallenge(msg);
+        return;
       case 'welcome': {
         const draft = this.syncDraft(msg.snapshot, msg.seat);
         this.setState({

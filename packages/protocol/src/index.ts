@@ -3,3 +3,4 @@ export * from './memory.js';
 export * from './broadcast.js';
 export * from './messages.js';
 export * from './codes.js';
+export * from './identity.js';

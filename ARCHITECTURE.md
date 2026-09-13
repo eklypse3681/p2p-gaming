@@ -74,6 +74,40 @@ The web app's hand-off link is a join link with `?import=<identity code>` inside
 showing a form and continues to the join, so the second device takes a second connection on the
 same seat.
 
+## Identity and seat authentication
+
+Each player owns an ECDSA P-256 key pair (`packages/protocol/src/identity.ts`; WebCrypto, keys
+base64url: raw public point, PKCS#8 private key). `PlayerProfile.publicKey` is the only key
+material that ever goes on the wire.
+
+```
+client ─hello{profile with publicKey, snapshot?}─▶ server
+client ◀─challenge{nonce, matchId}────────────── server
+client ─auth{signature over challengeBytes({matchId, profileId, nonce})}─▶ server   (ECDSA/SHA-256)
+client ◀─welcome{seat, snapshot}──────────────── server   (or rejected{reason:'unauthorized'})
+```
+
+Binding is **trust on first use**: the first hello that takes a seat stores its public key in
+`snapshot.players[seat]`. A later hello for that id must present the same key and sign for it;
+a different or missing key is refused with `unauthorized`. Legacy records without a key accept
+an unkeyed hello and are upgraded by the first keyed one. The snapshot-adoption merge
+(`maybeAdopt`) keeps the host copy's roster, so a peer's copy can never replace a bound key.
+Unanswered challenges are dropped after `CHALLENGE_TIMEOUT_MS`.
+
+In the web app the private key lives in the profile record (`privateKey`) or, for a
+password-locked player, inside `secrets`:
+
+```
+secrets: { alg: 'pbkdf2-aes-gcm', salt, iterations: 600000, iv, ciphertext }
+   ciphertext = AES-256-GCM( JSON({ privateKey, syncKey }) ), key = PBKDF2-SHA-256(password, salt)
+```
+
+Unlocking keeps the plain secrets in `sessionStorage['p2p:unlocked:<slug>']` for that tab only.
+`publicProfile()` in `session/session.ts` is the boundary that strips everything but id, name,
+avatar and public key before a profile reaches a `GameClient`. Exports, transfer codes and
+hand-off codes carry the private key (locked exports carry the encrypted block instead); an
+import that brings a different key for an id already stored is refused unless the user confirms.
+
 ## Profile sync (device to device)
 
 `apps/web/src/session/sync/` keeps one player's devices in sync without any match server.

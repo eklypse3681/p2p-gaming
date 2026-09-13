@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryPair, PROTOCOL_VERSION } from '@bgf/protocol';
 import { GameClient } from '../../src/index.js';
-import { GUEST, HOST, STRANGER, flush, makeHarness } from './harness.js';
+import { GUEST, HOST, STRANGER, flush, keyedProfile, makeHarness, signerOf } from './harness.js';
 
 describe('handshake', () => {
   it('welcomes host and guest into their seats', async () => {
@@ -11,8 +11,8 @@ describe('handshake', () => {
     expect(h.guest.getState().status).toBe('joined');
     expect(h.guest.getState().seat).toBe('black');
     const snap = h.host.getState().snapshot!;
-    expect(snap.players.white).toEqual(HOST);
-    expect(snap.players.black).toEqual(GUEST);
+    expect(snap.players.white).toMatchObject(HOST);
+    expect(snap.players.black).toMatchObject(GUEST);
     expect(snap.code).toBe('TEST42');
     expect(snap.hostSeat).toBe('white');
     expect(h.server.connectedSeats().sort()).toEqual(['black', 'white']);
@@ -132,7 +132,12 @@ describe('handshake', () => {
     h.server.close();
     const [serverEnd, clientEnd] = createMemoryPair();
     h.server.accept(serverEnd);
-    const client = new GameClient({ transport: clientEnd, profile: GUEST, pingIntervalMs: 0 });
+    const client = new GameClient({
+      transport: clientEnd,
+      profile: keyedProfile(GUEST),
+      signer: signerOf(GUEST),
+      pingIntervalMs: 0,
+    });
     await flush();
     expect(client.getState().status).toBe('disconnected');
     expect(h.host.getState().status).toBe('disconnected');

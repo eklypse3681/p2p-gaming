@@ -5,12 +5,16 @@ import { getMatchStore } from './matchStore';
 import {
   createProfile,
   getProfilesIndex,
+  getSecrets,
+  isLocked,
   pickAvatar,
   sanitizeName,
-  setProfileSyncKey,
+  setProfileSecrets,
   touchProfile,
   updateProfile,
 } from './profiles';
+import type { EncryptedSecrets } from './secrets';
+import { SecretsError, decryptSecrets, isEncryptedSecrets, rememberUnlocked } from './secrets';
 
 export { sanitizeSettings };
 import type { GameId } from '../games/ids';
@@ -47,6 +51,12 @@ export interface ExportedIdentity {
   createdAt: number;
   /** Device-sync secret; present in your own exports/codes, never shown to opponents. */
   syncKey?: string;
+  /** base64url ECDSA public key (public; also bound to the player's seats). */
+  publicKey?: string;
+  /** base64url private key; present in your own codes/exports of an unlocked player. */
+  privateKey?: string;
+  /** Password-encrypted private key + sync key, for exports of a locked player. */
+  secrets?: EncryptedSecrets;
 }
 
 export interface ProfileExport {
@@ -69,7 +79,14 @@ export interface ImportResult {
 
 export class TransferError extends Error {
   constructor(
-    public readonly code: 'bad-code' | 'bad-file' | 'unknown-player',
+    public readonly code:
+      | 'bad-code'
+      | 'bad-file'
+      | 'unknown-player'
+      | 'locked'
+      | 'password-required'
+      | 'wrong-password'
+      | 'key-mismatch',
     message: string,
   ) {
     super(message);
@@ -81,16 +98,34 @@ export class TransferError extends Error {
 // Export
 // ---------------------------------------------------------------------------------------------
 
-function identityOf(slug: string): ExportedIdentity {
+/**
+ * The identity to put in an export. `plain: true` (transfer/hand-off codes) needs the secrets in
+ * this tab and throws `locked` otherwise; an export file of a locked player carries the encrypted
+ * block instead, so it can be made without the password.
+ */
+function identityOf(slug: string, opts: { plain?: boolean } = {}): ExportedIdentity {
   const record = getProfilesIndex()[slug];
   if (!record) throw new TransferError('unknown-player', `no player "${slug}" in this browser`);
-  return {
+  const base: ExportedIdentity = {
     id: record.id,
     name: record.name,
     avatar: record.avatar,
     createdAt: record.createdAt,
-    ...(record.syncKey ? { syncKey: record.syncKey } : {}),
+    ...(record.publicKey ? { publicKey: record.publicKey } : {}),
   };
+  const secrets = getSecrets(slug);
+  if (secrets) {
+    if (secrets.syncKey) base.syncKey = secrets.syncKey;
+    if (secrets.privateKey) base.privateKey = secrets.privateKey;
+    return base;
+  }
+  if (isLocked(record)) {
+    if (opts.plain) {
+      throw new TransferError('locked', 'unlock this player first to make a code for it');
+    }
+    return { ...base, secrets: record.secrets };
+  }
+  return base;
 }
 
 /** Identity, settings and every saved match of `slug`, across all games. */
@@ -144,9 +179,9 @@ export function encodeTransferCode(profile: ExportedIdentity, settings?: Setting
   return TRANSFER_PREFIX + toBase64Url(JSON.stringify(payload));
 }
 
-/** Transfer code for a player stored in this browser. */
+/** Transfer code for a player stored in this browser (needs the secrets: unlocked tab). */
 export function transferCodeFor(slug: string): string {
-  return encodeTransferCode(identityOf(slug), getSettings(slug));
+  return encodeTransferCode(identityOf(slug, { plain: true }), getSettings(slug));
 }
 
 /**
@@ -158,17 +193,21 @@ export function encodeIdentityCode(profile: {
   name: string;
   avatar?: string;
   syncKey?: string;
+  publicKey?: string;
+  privateKey?: string;
 }): string {
   const payload: Record<string, string> = { i: profile.id, n: profile.name };
   if (profile.avatar) payload.a = profile.avatar;
   if (profile.syncKey) payload.k = profile.syncKey;
+  if (profile.publicKey) payload.p = profile.publicKey;
+  if (profile.privateKey) payload.s = profile.privateKey;
   return IDENTITY_PREFIX + toBase64Url(JSON.stringify(payload));
 }
 
-/** Identity code for a player stored in this browser (includes the sync key). */
+/** Identity code for a player stored in this browser (includes the keys; unlocked tab only). */
 export function identityCodeFor(slug: string): string {
-  const { id, name, avatar, syncKey } = identityOf(slug);
-  return encodeIdentityCode({ id, name, avatar, syncKey });
+  const { id, name, avatar, syncKey, publicKey, privateKey } = identityOf(slug, { plain: true });
+  return encodeIdentityCode({ id, name, avatar, syncKey, publicKey, privateKey });
 }
 
 export function decodeTransferCode(code: string): {
@@ -194,8 +233,13 @@ export function decodeTransferCode(code: string): {
     throw new TransferError('bad-code', 'that transfer code is damaged');
   }
   if (identityOnly) {
-    const { i, n, a, k } = parsed as { i?: unknown; n?: unknown; a?: unknown; k?: unknown };
-    return { profile: parseIdentity({ id: i, name: n, avatar: a, syncKey: k }, 'bad-code') };
+    const { i, n, a, k, p, s } = parsed as Record<string, unknown>;
+    return {
+      profile: parseIdentity(
+        { id: i, name: n, avatar: a, syncKey: k, publicKey: p, privateKey: s },
+        'bad-code',
+      ),
+    };
   }
   const { p, s } = parsed as { p?: unknown; s?: unknown };
   const profile = parseIdentity(p, 'bad-code');
@@ -230,13 +274,24 @@ function parseIdentity(value: unknown, code: TransferError['code']): ExportedIde
   }
   const name = sanitizeName(typeof v.name === 'string' ? v.name : '');
   if (!name) throw new TransferError(code, 'the player identity has no name');
-  return {
+  const out: ExportedIdentity = {
     id: v.id,
     name,
     avatar: typeof v.avatar === 'string' && v.avatar ? v.avatar : pickAvatar(v.id),
     createdAt: typeof v.createdAt === 'number' ? v.createdAt : Date.now(),
-    ...(typeof v.syncKey === 'string' && v.syncKey.trim() ? { syncKey: v.syncKey.trim() } : {}),
   };
+  if (typeof v.syncKey === 'string' && v.syncKey.trim()) out.syncKey = v.syncKey.trim();
+  if (typeof v.publicKey === 'string' && v.publicKey.trim()) out.publicKey = v.publicKey.trim();
+  if (typeof v.privateKey === 'string' && v.privateKey.trim()) {
+    out.privateKey = v.privateKey.trim();
+  }
+  if (v.secrets !== undefined) {
+    if (!isEncryptedSecrets(v.secrets)) {
+      throw new TransferError(code, 'the encrypted secrets in that export are malformed');
+    }
+    out.secrets = v.secrets;
+  }
+  return out;
 }
 
 function isSnapshotLike(v: unknown): v is MatchSnapshot {
@@ -304,6 +359,16 @@ export interface ImportOptions {
    */
   replaceSettings?: boolean;
   now?: number;
+  /**
+   * Needed to open an export of a locked player, and to write new secrets into a player that is
+   * locked in this browser (it must be that player's password here).
+   */
+  password?: string;
+  /**
+   * The import carries a different key than the player already stored here. Only one of them
+   * is really that player: replace the local key only when the user has confirmed.
+   */
+  replaceKey?: boolean;
 }
 
 function slugForId(id: string): string | null {
@@ -323,23 +388,83 @@ export async function importProfile(
   opts: ImportOptions = {},
 ): Promise<ImportResult> {
   const now = opts.now ?? Date.now();
-  const existingSlug = slugForId(data.profile.id);
+  const incoming = data.profile;
+
+  // Secrets carried by the import: plain, or unlocked from an encrypted block with the password.
+  let plain: { privateKey?: string; syncKey?: string } = {};
+  if (incoming.privateKey) plain.privateKey = incoming.privateKey;
+  if (incoming.syncKey) plain.syncKey = incoming.syncKey;
+  if (incoming.secrets) {
+    if (!opts.password) {
+      throw new TransferError(
+        'password-required',
+        `${incoming.name} is protected by a password; enter it to import`,
+      );
+    }
+    try {
+      plain = { ...plain, ...(await decryptSecrets(incoming.secrets, opts.password)) };
+    } catch (e) {
+      if (e instanceof SecretsError && e.code === 'wrong-password') {
+        throw new TransferError('wrong-password', 'that password does not open this export');
+      }
+      throw new TransferError('bad-file', 'the encrypted secrets in that export are damaged');
+    }
+  }
+
+  const existingSlug = slugForId(incoming.id);
   let slug: string;
   let created: boolean;
   if (existingSlug) {
     slug = existingSlug;
     created = false;
-    updateProfile(slug, { name: data.profile.name, avatar: data.profile.avatar });
+    const record = getProfilesIndex()[slug]!;
+    if (record.publicKey && incoming.publicKey && record.publicKey !== incoming.publicKey) {
+      if (!opts.replaceKey) {
+        throw new TransferError(
+          'key-mismatch',
+          `${incoming.name} is already here with a different key; only one of them is really that player`,
+        );
+      }
+    }
+    updateProfile(slug, { name: incoming.name, avatar: incoming.avatar });
+    const keyPatch: Parameters<typeof setProfileSecrets>[1] = {};
+    if (incoming.publicKey && (opts.replaceKey || !record.publicKey)) {
+      keyPatch.publicKey = incoming.publicKey;
+      if (plain.privateKey) keyPatch.privateKey = plain.privateKey;
+    } else if (plain.privateKey && record.publicKey === incoming.publicKey) {
+      keyPatch.privateKey = plain.privateKey;
+    }
     // Your own code: adopting its sync key joins this browser to that player's devices.
-    if (data.profile.syncKey) setProfileSyncKey(slug, data.profile.syncKey);
+    if (plain.syncKey) keyPatch.syncKey = plain.syncKey;
+    if (Object.keys(keyPatch).length > 0) {
+      if (isLocked(record) && !opts.password) {
+        throw new TransferError(
+          'password-required',
+          `${record.name} is locked in this browser; enter its password to update it`,
+        );
+      }
+      try {
+        await setProfileSecrets(slug, keyPatch, { password: opts.password });
+      } catch (e) {
+        if (e instanceof SecretsError && e.code === 'wrong-password') {
+          throw new TransferError('wrong-password', "that is not this player's password here");
+        }
+        throw e;
+      }
+    }
   } else {
-    slug = createProfile(data.profile.name, {
-      id: data.profile.id,
-      avatar: data.profile.avatar,
+    slug = createProfile(incoming.name, {
+      id: incoming.id,
+      avatar: incoming.avatar,
       now,
-      syncKey: data.profile.syncKey,
+      publicKey: incoming.publicKey,
+      privateKey: plain.privateKey,
+      syncKey: plain.syncKey,
+      // An export of a locked player stays locked here; this tab holds the unlocked copy.
+      secrets: incoming.secrets,
     }).slug;
     created = true;
+    if (incoming.secrets) rememberUnlocked(slug, plain);
   }
   if (opts.replaceSettings ?? created) updateSettings(slug, data.settings);
 

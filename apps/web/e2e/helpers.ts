@@ -1,9 +1,54 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
+import { webcrypto } from 'node:crypto';
 
 export interface TestProfile {
   id: string;
   name: string;
+}
+
+export interface TestKeys {
+  publicKey: string;
+  privateKey: string;
+}
+
+function b64url(buf: ArrayBuffer): string {
+  return Buffer.from(buf)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+const keyCache = new Map<string, Promise<TestKeys>>();
+
+/**
+ * Every test player owns an ECDSA P-256 key pair (the app binds it to the player's seats).
+ * Generated once per worker in Node's WebCrypto and seeded into the browser profile record.
+ */
+export function keysFor(profile: TestProfile): Promise<TestKeys> {
+  let p = keyCache.get(profile.id);
+  if (!p) {
+    p = (async () => {
+      const pair = await webcrypto.subtle.generateKey(
+        { name: 'ECDSA', namedCurve: 'P-256' },
+        true,
+        ['sign', 'verify'],
+      );
+      const [pub, priv] = await Promise.all([
+        webcrypto.subtle.exportKey('raw', pair.publicKey),
+        webcrypto.subtle.exportKey('pkcs8', pair.privateKey),
+      ]);
+      return { publicKey: b64url(pub), privateKey: b64url(priv) };
+    })();
+    keyCache.set(profile.id, p);
+  }
+  return p;
+}
+
+/** A fresh, uncached key pair (for impostor tests). */
+export async function freshKeys(): Promise<TestKeys> {
+  return keysFor({ id: `fresh-${Math.random()}`, name: 'x' });
 }
 
 export const HOST: TestProfile = { id: 'e2e-host-0001', name: 'Alice' };
@@ -37,10 +82,12 @@ export async function seedProfile(
   page: Page,
   slug: string,
   profile: TestProfile,
-  opts: { syncKey?: string; sync?: boolean } = {},
+  opts: { syncKey?: string; sync?: boolean; keys?: TestKeys | null } = {},
 ): Promise<void> {
+  // `keys: null` seeds a legacy (unkeyed) player; otherwise the player's cached key pair is used.
+  const keys = opts.keys === null ? null : (opts.keys ?? (await keysFor(profile)));
   await page.addInitScript(
-    ({ slug, profile, opts }) => {
+    ({ slug, profile, opts, keys }) => {
       const key = 'bgf:profiles';
       const index = JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, unknown>;
       if (!index[slug]) {
@@ -51,6 +98,7 @@ export async function seedProfile(
           lastUsedAt: Date.now(),
           updatedAt: Date.now(),
           ...(opts.syncKey ? { syncKey: opts.syncKey } : {}),
+          ...(keys ? { publicKey: keys.publicKey, privateKey: keys.privateKey } : {}),
         };
         localStorage.setItem(key, JSON.stringify(index));
       }
@@ -68,7 +116,7 @@ export async function seedProfile(
         }),
       );
     },
-    { slug, profile, opts },
+    { slug, profile, opts, keys },
   );
 }
 

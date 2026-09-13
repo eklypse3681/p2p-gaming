@@ -9,7 +9,17 @@ import {
   lastFreeDice,
   phaseSummary,
 } from '../../src/index.js';
-import { GUEST, HOST, clientFor, currentGame, flush, makeHarness } from './harness.js';
+import {
+  GUEST,
+  HOST,
+  clientFor,
+  currentGame,
+  flush,
+  keyedProfile,
+  makeHarness,
+  rawHello,
+  signerOf,
+} from './harness.js';
 
 async function freeHarness(config: Record<string, unknown> = {}) {
   const h = await makeHarness({
@@ -112,7 +122,7 @@ describe('free board over the wire', () => {
     h.server.accept(serverEnd);
     const errors: unknown[] = [];
     clientEnd.onMessage((m) => errors.push(m));
-    clientEnd.send({ type: 'hello', protocol: 1, profile: GUEST });
+    rawHello(clientEnd, GUEST);
     await flush();
     clientEnd.send({ type: 'free-move', checker: 'purple', from: 1, to: 2 });
     clientEnd.send({ type: 'free-move', checker: 'white', from: 99, to: 2 });
@@ -210,20 +220,26 @@ describe('free board over the wire', () => {
     // The guest resumes as host from its own copy.
     const server = new GameServer({
       code: saved.code,
-      host: GUEST,
+      host: keyedProfile(GUEST),
       snapshot: saved,
       dice: scriptedDice([4, 4]),
     });
     const guestAsHost = new GameClient({
       transport: server.connectLocal(),
-      profile: GUEST,
+      profile: keyedProfile(GUEST),
+      signer: signerOf(GUEST),
       store: new MemoryMatchStore(),
       pingIntervalMs: 0,
     });
     const { createMemoryPair } = await import('@bgf/protocol');
     const [serverEnd, clientEnd] = createMemoryPair('resume');
     server.accept(serverEnd);
-    const original = new GameClient({ transport: clientEnd, profile: HOST, pingIntervalMs: 0 });
+    const original = new GameClient({
+      transport: clientEnd,
+      profile: keyedProfile(HOST),
+      signer: signerOf(HOST),
+      pingIntervalMs: 0,
+    });
     await flush();
     expect(guestAsHost.getState().seat).toBe('black');
     expect(original.getState().seat).toBe('white');

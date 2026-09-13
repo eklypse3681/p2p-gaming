@@ -1,3 +1,4 @@
+import type { Signer } from '@bgf/protocol';
 import type { MatchConfig, Player } from '@bgf/engine';
 import type { GameClientApi, MatchStore } from '@bgf/client';
 import { GameClient } from '@bgf/client';
@@ -58,12 +59,14 @@ function requireName(profile: PlayerProfile): void {
 }
 
 /**
- * What opponents may see: id, name, avatar — nothing else. Profile records carry a device-sync
- * secret; this is the boundary that keeps it out of every `hello` and snapshot.
+ * What opponents may see: id, name, avatar and the public key — nothing else. Profile records
+ * carry secrets (private key, device-sync key); this is the boundary that keeps them out of
+ * every `hello` and snapshot.
  */
 export function publicProfile(profile: PlayerProfile): PlayerProfile {
   const out: PlayerProfile = { id: profile.id, name: profile.name };
   if (profile.avatar) out.avatar = profile.avatar;
+  if (profile.publicKey) out.publicKey = profile.publicKey;
   return out;
 }
 
@@ -105,6 +108,8 @@ function rejectMessage(reason: string | null): string {
       return 'The host is running a different version of the game';
     case 'wrong-match':
       return 'Your saved match does not belong to that host';
+    case 'unauthorized':
+      return 'That seat belongs to a different key: this browser cannot prove it is that player';
     default:
       return 'The host declined the connection';
   }
@@ -170,6 +175,7 @@ async function hostWithServer(
   code: string,
   profile: PlayerProfile,
   deps: SessionDeps,
+  signer?: Signer,
 ): Promise<Session> {
   const createClient = deps.createClient ?? ((o) => new GameClient(o));
   let listener: Listener;
@@ -181,7 +187,7 @@ async function hostWithServer(
   }
   const unsub = listener.onConnection((t) => server.accept(t));
   const local = server.connectLocal();
-  const client = createClient({ transport: local, profile, store: deps.store });
+  const client = createClient({ transport: local, profile, signer, store: deps.store });
   const dispose = makeDisposer({ client, server, listener, unsub });
   try {
     await awaitJoined(client, deps.joinTimeoutMs ?? DEFAULT_JOIN_TIMEOUT);
@@ -203,6 +209,8 @@ async function hostWithServer(
 
 export interface HostOptions {
   profile: PlayerProfile;
+  /** Signs the seat challenge with the player's private key (see `useProfile().ready`). */
+  signer?: Signer;
   config: Partial<MatchConfig>;
   hostSeat?: Player;
   /** Table layout: side of the home boards as seen from the host. Default 'left'. */
@@ -222,12 +230,13 @@ export async function hostNewMatch(rawOpts: HostOptions, deps: SessionDeps): Pro
     hostSeat: opts.hostSeat ?? 'white',
     homeSide: opts.homeSide ?? 'left',
   });
-  return hostWithServer(server, code, opts.profile, deps);
+  return hostWithServer(server, code, opts.profile, deps, opts.signer);
 }
 
 export interface JoinOptions {
   code: string;
   profile: PlayerProfile;
+  signer?: Signer;
   /** Sent in the hello so the host can adopt our copy if it is newer. */
   resumeSnapshot?: MatchSnapshot;
 }
@@ -255,6 +264,7 @@ export async function joinMatch(rawOpts: JoinOptions, deps: SessionDeps): Promis
   const client = createClient({
     transport,
     profile: opts.profile,
+    signer: opts.signer,
     store: deps.store,
     resumeSnapshot,
   });
@@ -279,6 +289,7 @@ export async function joinMatch(rawOpts: JoinOptions, deps: SessionDeps): Promis
 export interface ResumeOptions {
   snapshot: MatchSnapshot;
   profile: PlayerProfile;
+  signer?: Signer;
 }
 
 /**
@@ -292,9 +303,12 @@ export async function resumeMatch(rawOpts: ResumeOptions, deps: SessionDeps): Pr
   const { snapshot, profile } = opts;
   const server = createServer({ snapshot, code: snapshot.code, host: profile });
   try {
-    return await hostWithServer(server, snapshot.code, profile, deps);
+    return await hostWithServer(server, snapshot.code, profile, deps, opts.signer);
   } catch (e) {
     if (!(e instanceof SessionError) || e.code !== 'address-taken') throw e;
   }
-  return joinMatch({ code: snapshot.code, profile, resumeSnapshot: snapshot }, deps);
+  return joinMatch(
+    { code: snapshot.code, profile, signer: opts.signer, resumeSnapshot: snapshot },
+    deps,
+  );
 }

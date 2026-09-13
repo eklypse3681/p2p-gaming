@@ -29,8 +29,8 @@ describe('one player on several devices', () => {
     expect(h.server.connectionCount('black')).toBe(1);
     expect(h.server.connectedSeats().sort()).toEqual(['black', 'white']);
     // The roster is unchanged: no twin, no "(2)".
-    expect(h.host.getState().snapshot!.players.white).toEqual(HOST);
-    expect(h.host.getState().snapshot!.players.black).toEqual(GUEST);
+    expect(h.host.getState().snapshot!.players.white).toMatchObject(HOST);
+    expect(h.host.getState().snapshot!.players.black).toMatchObject(GUEST);
     h.expectConverged();
     phone.close();
     h.close();

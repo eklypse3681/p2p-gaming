@@ -1,8 +1,19 @@
 import { useSyncExternalStore } from 'react';
 import type { PlayerProfile } from '@bgf/protocol';
-import { generateId } from '@bgf/protocol';
+import { generateId, generateKeyPair } from '@bgf/protocol';
 import { allKeys, createStore, readJson, removeKey, writeJson } from './storage';
 import { GAME_IDS } from '../games/ids';
+import type { EncryptedSecrets, PlainSecrets } from './secrets';
+import {
+  SecretsError,
+  checkPassword,
+  decryptSecrets,
+  encryptSecrets,
+  forgetUnlocked,
+  isEncryptedSecrets,
+  readUnlocked,
+  rememberUnlocked,
+} from './secrets';
 
 /**
  * Players known to this browser, keyed by URL slug. The slug is the identity a tab plays as:
@@ -37,13 +48,29 @@ export interface ProfileRecord {
   createdAt: number;
   lastUsedAt: number;
   /**
+   * base64url ECDSA P-256 public key. Opponents' servers bind it to a seat the first time the
+   * player sits down; only the matching private key can take that seat afterwards.
+   */
+  publicKey?: string;
+  /** base64url PKCS#8 private key. Absent while the player is password-locked (see `secrets`). */
+  privateKey?: string;
+  /**
    * Secret shared only between this player's own devices (it travels in exports, transfer codes
    * and hand-off links, never to opponents). Devices holding the same key find each other and
    * sync settings and saved matches over WebRTC. Rotating it cuts every other device off.
+   * Absent while the player is password-locked.
    */
-  syncKey: string;
+  syncKey?: string;
+  /** Password-encrypted `privateKey` + `syncKey`; when present the plain fields are removed. */
+  secrets?: EncryptedSecrets;
   /** Last change to name/avatar; used for last-write-wins between devices. */
   updatedAt: number;
+}
+
+export type { PlainSecrets };
+
+export function isLocked(record: Pick<ProfileRecord, 'secrets'>): boolean {
+  return isEncryptedSecrets(record.secrets);
 }
 
 export type ProfilesIndex = Record<string, ProfileRecord>;
@@ -158,7 +185,7 @@ export function completeRecords(index: ProfilesIndex): { index: ProfilesIndex; c
   for (const [slug, record] of Object.entries(index)) {
     if (!record || typeof record !== 'object') continue;
     const next: ProfileRecord = { ...record };
-    if (typeof next.syncKey !== 'string' || !next.syncKey) {
+    if (!isLocked(next) && (typeof next.syncKey !== 'string' || !next.syncKey)) {
       next.syncKey = generateId();
       changed = true;
     }
@@ -209,8 +236,161 @@ export function getProfile(slug: string): ProfileRecord | null {
   return store.get()[slug] ?? null;
 }
 
+/** What the server (and opponents) see: id, name, avatar and the public key. Never secrets. */
 export function toPlayerProfile(record: ProfileRecord): PlayerProfile {
-  return { id: record.id, name: record.name, avatar: record.avatar };
+  const out: PlayerProfile = { id: record.id, name: record.name, avatar: record.avatar };
+  if (record.publicKey) out.publicKey = record.publicKey;
+  return out;
+}
+
+/**
+ * This tab's view of a player's secrets: the plain fields for an unlocked player, the
+ * session copy for a locked player that was unlocked in this tab, or null while locked.
+ */
+export function getSecrets(slug: string): PlainSecrets | null {
+  const record = store.get()[slug];
+  if (!record) return null;
+  if (isLocked(record)) return readUnlocked(slug);
+  const out: PlainSecrets = {};
+  if (record.privateKey) out.privateKey = record.privateKey;
+  if (record.syncKey) out.syncKey = record.syncKey;
+  return out;
+}
+
+/** True when this tab may use the player's secrets (not locked, or unlocked here). */
+export function isUnlocked(slug: string): boolean {
+  return getSecrets(slug) !== null;
+}
+
+/** Notify subscribers without changing the index (e.g. after the session unlock state changed). */
+function bump(): void {
+  store.set({ ...store.get() });
+}
+
+/**
+ * Make sure the player owns a key pair. Legacy players get one on first use (their id does not
+ * change; their seats are bound on the next keyed hello). No-op for locked players (they were
+ * keyed before they could be locked).
+ */
+export async function ensureKeys(slug: string): Promise<ProfileRecord | null> {
+  const record = store.get()[slug];
+  if (!record) return null;
+  if (record.publicKey || isLocked(record)) return record;
+  const keys = await generateKeyPair();
+  const index = store.get();
+  const current = index[slug];
+  if (!current) return null;
+  if (current.publicKey) return current; // raced with another call
+  const next: ProfileRecord = {
+    ...current,
+    publicKey: keys.publicKey,
+    privateKey: keys.privateKey,
+  };
+  commit({ ...index, [slug]: next });
+  return next;
+}
+
+/** Write new secrets for a player; a locked player needs its password to re-encrypt them. */
+export async function setProfileSecrets(
+  slug: string,
+  patch: Partial<PlainSecrets> & { publicKey?: string },
+  opts: { password?: string; iterations?: number } = {},
+): Promise<void> {
+  const index = store.get();
+  const record = index[slug];
+  if (!record) return;
+  const next: ProfileRecord = { ...record };
+  if (patch.publicKey) next.publicKey = patch.publicKey;
+  if (isLocked(record)) {
+    if (!opts.password) throw new SecretsError('wrong-password', 'password required');
+    const current = await decryptSecrets(record.secrets!, opts.password);
+    const merged: PlainSecrets = { ...current };
+    if (patch.privateKey) merged.privateKey = patch.privateKey;
+    if (patch.syncKey) merged.syncKey = patch.syncKey;
+    next.secrets = await encryptSecrets(merged, opts.password, opts.iterations);
+    delete next.privateKey;
+    delete next.syncKey;
+    commit({ ...index, [slug]: next });
+    if (readUnlocked(slug)) rememberUnlocked(slug, merged);
+    return;
+  }
+  if (patch.privateKey) next.privateKey = patch.privateKey;
+  if (patch.syncKey) next.syncKey = patch.syncKey;
+  commit({ ...index, [slug]: next });
+}
+
+// ---- password lock ---------------------------------------------------------------------------
+
+/** Protect the player's secrets with a password. This tab stays unlocked. */
+export async function lockProfile(
+  slug: string,
+  password: string,
+  opts: { iterations?: number } = {},
+): Promise<void> {
+  checkPassword(password);
+  const index = store.get();
+  const record = index[slug];
+  if (!record) throw new Error(`no player "${slug}"`);
+  if (isLocked(record)) throw new SecretsError('bad-secrets', 'already locked');
+  const plain: PlainSecrets = {};
+  if (record.privateKey) plain.privateKey = record.privateKey;
+  if (record.syncKey) plain.syncKey = record.syncKey;
+  const secrets = await encryptSecrets(plain, password, opts.iterations);
+  const next: ProfileRecord = { ...record, secrets };
+  delete next.privateKey;
+  delete next.syncKey;
+  commit({ ...index, [slug]: next });
+  rememberUnlocked(slug, plain);
+}
+
+/** Try a password; on success this tab holds the secrets until `lockNow` or the tab closes. */
+export async function unlockProfile(slug: string, password: string): Promise<boolean> {
+  const record = store.get()[slug];
+  if (!record) return false;
+  if (!isLocked(record)) return true;
+  try {
+    const plain = await decryptSecrets(record.secrets!, password);
+    rememberUnlocked(slug, plain);
+    bump();
+    return true;
+  } catch (e) {
+    if (e instanceof SecretsError && e.code === 'wrong-password') return false;
+    throw e;
+  }
+}
+
+export async function changePassword(
+  slug: string,
+  oldPassword: string,
+  newPassword: string,
+  opts: { iterations?: number } = {},
+): Promise<void> {
+  checkPassword(newPassword);
+  const index = store.get();
+  const record = index[slug];
+  if (!record || !isLocked(record)) throw new SecretsError('bad-secrets', 'not locked');
+  const plain = await decryptSecrets(record.secrets!, oldPassword);
+  const secrets = await encryptSecrets(plain, newPassword, opts.iterations);
+  commit({ ...index, [slug]: { ...record, secrets } });
+  rememberUnlocked(slug, plain);
+}
+
+/** Store the secrets in the clear again. */
+export async function removePassword(slug: string, password: string): Promise<void> {
+  const index = store.get();
+  const record = index[slug];
+  if (!record || !isLocked(record)) return;
+  const plain = await decryptSecrets(record.secrets!, password);
+  const next: ProfileRecord = { ...record, ...plain };
+  delete next.secrets;
+  commit({ ...index, [slug]: next });
+  forgetUnlocked(slug);
+}
+
+/** Forget the unlocked secrets in this tab; the next visit asks for the password again. */
+export function lockNow(slug: string): void {
+  forgetUnlocked(slug);
+  bump();
 }
 
 /** Create a player from a display name; the slug is derived and made unique. */
@@ -223,6 +403,10 @@ export function createProfile(
     now?: number;
     syncKey?: string;
     updatedAt?: number;
+    publicKey?: string;
+    privateKey?: string;
+    /** Import of a locked player: keep its encrypted block (no plain secrets are stored). */
+    secrets?: EncryptedSecrets;
   } = {},
 ): ProfileEntry {
   const clean = sanitizeName(name);
@@ -239,9 +423,15 @@ export function createProfile(
     avatar: opts.avatar ?? pickAvatar(id),
     createdAt: now,
     lastUsedAt: now,
-    syncKey: opts.syncKey ?? generateId(),
     updatedAt: opts.updatedAt ?? now,
   };
+  if (opts.publicKey) record.publicKey = opts.publicKey;
+  if (opts.secrets && isEncryptedSecrets(opts.secrets)) {
+    record.secrets = opts.secrets;
+  } else {
+    record.syncKey = opts.syncKey ?? generateId();
+    if (opts.privateKey) record.privateKey = opts.privateKey;
+  }
   commit({ ...index, [slug]: record });
   return { slug, ...record };
 }
@@ -279,18 +469,28 @@ export function updateProfile(
   return true;
 }
 
-/** Adopt a sync key (e.g. from an import) so this device joins that player's sync group. */
-export function setProfileSyncKey(slug: string, syncKey: string): void {
-  const index = store.get();
-  const record = index[slug];
-  if (!record || !syncKey || record.syncKey === syncKey) return;
-  commit({ ...index, [slug]: { ...record, syncKey } });
+/**
+ * Adopt a sync key (e.g. from an import) so this device joins that player's sync group. A locked
+ * player needs its password.
+ */
+export async function setProfileSyncKey(
+  slug: string,
+  syncKey: string,
+  opts: { password?: string } = {},
+): Promise<void> {
+  const record = store.get()[slug];
+  if (!record || !syncKey) return;
+  if (!isLocked(record) && record.syncKey === syncKey) return;
+  await setProfileSecrets(slug, { syncKey }, opts);
 }
 
 /** New secret: every other device stops syncing until it imports a fresh code. */
-export function rotateSyncKey(slug: string): string {
+export async function rotateSyncKey(
+  slug: string,
+  opts: { password?: string } = {},
+): Promise<string> {
   const key = generateId();
-  setProfileSyncKey(slug, key);
+  await setProfileSyncKey(slug, key, opts);
   return key;
 }
 
@@ -307,6 +507,7 @@ export function deleteProfile(slug: string): void {
   delete index[slug];
   commit(index);
   removeKey(`bgf:settings:${slug}`);
+  forgetUnlocked(slug);
 }
 
 export function subscribeProfiles(listener: () => void): () => void {

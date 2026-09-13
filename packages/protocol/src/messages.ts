@@ -38,6 +38,11 @@ export interface PlayerProfile {
   name: string;
   /** Optional emoji or short token used for the avatar. */
   avatar?: string;
+  /**
+   * base64url ECDSA P-256 public key. Bound to the seat on first use; later claims of the seat
+   * must be signed with the matching private key. Absent only for legacy, unkeyed players.
+   */
+  publicKey?: string;
 }
 
 export interface ChatMessage {
@@ -83,6 +88,8 @@ export type ClientMessage =
       /** When resuming, the guest offers its own copy so the newest one wins. */
       snapshot?: MatchSnapshot;
     }
+  /** Answer to a `challenge`: base64url signature over `challengeBytes({ matchId, profileId, nonce })`. */
+  | { type: 'auth'; signature: string }
   | { type: 'start-game' }
   | { type: 'opening-roll' }
   | { type: 'roll' }
@@ -105,9 +112,11 @@ export type ClientMessage =
   | { type: 'ping'; t: number }
   | { type: 'bye' };
 
-export type RejectReason = 'full' | 'protocol' | 'wrong-match' | 'bad-hello';
+export type RejectReason = 'full' | 'protocol' | 'wrong-match' | 'bad-hello' | 'unauthorized';
 
 export type ServerMessage =
+  /** Prove you hold the key for this seat: sign `challengeBytes({ matchId, profileId, nonce })`. */
+  | { type: 'challenge'; nonce: string; matchId: string }
   | { type: 'welcome'; seat: Player; snapshot: MatchSnapshot }
   | { type: 'rejected'; reason: RejectReason; message: string }
   /** Full snapshot after every change; `action` says what caused it (for animation). */

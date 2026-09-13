@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { isValidRoomCode, normalizeRoomCode } from '@bgf/protocol';
-import { createProfile, listProfiles, touchProfile, useProfilesIndex } from '../session/profiles';
+import {
+  createProfile,
+  isLocked,
+  isUnlocked,
+  listProfiles,
+  touchProfile,
+  useProfilesIndex,
+} from '../session/profiles';
+import { UnlockPrompt } from '../session/UnlockPrompt';
 import { profilePath } from '../session/ProfileProvider';
 import { relativeTime } from '../session/time';
 import { gamePath } from '../games/GameProvider';
@@ -39,6 +47,13 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
   const [importError, setImportError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  // Follow-ups an import may need before it can finish.
+  const [importPassword, setImportPassword] = useState('');
+  const [needPassword, setNeedPassword] = useState(false);
+  const [keyMismatch, setKeyMismatch] = useState(false);
+  const [pendingImport, setPendingImport] = useState<string | null>(null);
+  // A locked player that was chosen: unlock inline, then continue.
+  const [unlocking, setUnlocking] = useState<string | null>(null);
 
   // A hand-off link (`?import=<identity code>`) names the player: import them and go straight on.
   const autoCode = joining ? identityFromSearch(location.search) : null;
@@ -52,9 +67,18 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
   }, [autoCode]);
   const autoStarted = useRef<string | null>(null);
 
-  const choose = (slug: string) => {
+  const go = (slug: string) => {
     touchProfile(slug);
     navigate(joining ? gamePath(slug, gameId, `/join/${joining}`) : profilePath(slug, '/'));
+  };
+
+  const choose = (slug: string) => {
+    const record = index[slug];
+    if (record && isLocked(record) && !isUnlocked(slug)) {
+      setUnlocking(slug);
+      return;
+    }
+    go(slug);
   };
 
   const create = (e: FormEvent) => {
@@ -71,16 +95,32 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
     }
   };
 
-  const runImport = async (text: string) => {
+  const runImport = async (
+    text: string,
+    extra: { password?: string; replaceKey?: boolean } = {},
+  ) => {
     setImporting(true);
     setImportError(null);
     setImportResult(null);
     try {
-      const result = await importFromText(text);
+      const result = await importFromText(text, extra);
       const entry = listProfiles().find((p) => p.slug === result.slug);
       setImportResult(describeImport(result, entry?.name ?? result.slug));
-      choose(result.slug);
+      setNeedPassword(false);
+      setKeyMismatch(false);
+      setPendingImport(null);
+      setImportPassword('');
+      go(result.slug);
     } catch (e) {
+      if (e instanceof TransferError && e.code === 'password-required') {
+        setPendingImport(text);
+        setNeedPassword(true);
+        setImportOpen(true);
+      } else if (e instanceof TransferError && e.code === 'key-mismatch') {
+        setPendingImport(text);
+        setKeyMismatch(true);
+        setImportOpen(true);
+      }
       setImportError(e instanceof TransferError ? e.message : 'Could not import that player');
     } finally {
       setImporting(false);
@@ -141,17 +181,61 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
         }}
         data-testid="import-profile-code"
       />
+      {needPassword && (
+        <label className="field">
+          <span className="label">Password for this player</span>
+          <input
+            className="input"
+            type="password"
+            autoComplete="current-password"
+            value={importPassword}
+            onChange={(e) => setImportPassword(e.target.value)}
+            data-testid="import-password"
+          />
+        </label>
+      )}
       <div className={styles.newRow}>
         <button
           className="btn btn-primary"
           type="button"
-          disabled={importing || !importText.trim()}
-          onClick={() => runImport(importText)}
+          disabled={
+            importing || (needPassword ? !importPassword : !(pendingImport ?? importText).trim())
+          }
+          onClick={() =>
+            runImport(pendingImport ?? importText, {
+              ...(needPassword ? { password: importPassword } : {}),
+            })
+          }
           data-testid="import-profile-button"
         >
           {joining ? 'Import and join' : 'Import'}
         </button>
-        <button className="btn btn-ghost" type="button" onClick={() => setImportOpen(false)}>
+        {keyMismatch && pendingImport && (
+          <button
+            className="btn btn-danger"
+            type="button"
+            disabled={importing}
+            onClick={() =>
+              runImport(pendingImport, {
+                replaceKey: true,
+                ...(importPassword ? { password: importPassword } : {}),
+              })
+            }
+            data-testid="import-replace-key"
+          >
+            Replace the key stored here
+          </button>
+        )}
+        <button
+          className="btn btn-ghost"
+          type="button"
+          onClick={() => {
+            setImportOpen(false);
+            setNeedPassword(false);
+            setKeyMismatch(false);
+            setPendingImport(null);
+          }}
+        >
           Cancel
         </button>
       </div>
@@ -227,6 +311,20 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
           )}
         </div>
 
+        {unlocking && index[unlocking] && (
+          <UnlockPrompt
+            slug={unlocking}
+            name={index[unlocking]!.name}
+            avatar={index[unlocking]!.avatar}
+            onUnlocked={() => {
+              const slug = unlocking;
+              setUnlocking(null);
+              go(slug);
+            }}
+            onCancel={() => setUnlocking(null)}
+          />
+        )}
+
         {profiles.length === 0 && form}
 
         {profiles.length > 0 && (
@@ -243,7 +341,19 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
                   {p.avatar}
                 </span>
                 <span className={styles.body}>
-                  <span className={styles.name}>{p.name}</span>
+                  <span className={styles.name}>
+                    {p.name}
+                    {isLocked(p) && (
+                      <span
+                        className="badge"
+                        data-testid="profile-locked"
+                        title="Password protected"
+                      >
+                        {' '}
+                        🔒
+                      </span>
+                    )}
+                  </span>
                   <span className={styles.meta}>
                     <code>#/{p.slug}/</code> · {relativeTime(p.lastUsedAt)}
                   </span>

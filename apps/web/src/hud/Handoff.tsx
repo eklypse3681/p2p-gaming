@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { handoffLink } from '../session/links';
 import { useProfile } from '../session/ProfileProvider';
+import { getSecrets } from '../session/profiles';
 import { useOptionalGame } from '../games/GameProvider';
 import styles from './Handoff.module.css';
 
@@ -12,13 +13,21 @@ import styles from './Handoff.module.css';
  * every state until one of them leaves.
  */
 export function Handoff({ code }: { code: string }) {
-  const { profile, record } = useProfile();
+  const { profile, slug, record } = useProfile();
   const game = useOptionalGame();
-  // Your own QR carries the sync key too, so the phone joins your device sync group as well.
+  // Your own QR carries your private key and sync key: the phone becomes you and joins your
+  // device sync group. (Only possible from an unlocked tab.)
+  const secrets = getSecrets(slug);
   const link = useMemo(
-    () => handoffLink(code, { ...profile, syncKey: record.syncKey }, game?.id),
-    [code, profile, record.syncKey, game?.id],
+    () =>
+      handoffLink(
+        code,
+        { ...profile, syncKey: secrets?.syncKey, privateKey: secrets?.privateKey },
+        game?.id,
+      ),
+    [code, profile, secrets?.syncKey, secrets?.privateKey, game?.id],
   );
+  const lockedNote = record.secrets ? ' Your password is not included.' : '';
   const [svg, setSvg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -60,6 +69,9 @@ export function Handoff({ code }: { code: string }) {
       <p className="muted small">
         Scan with your phone to keep playing there. Both devices stay in the game until you close
         one.
+      </p>
+      <p className="muted small" data-testid="handoff-warning" role="note">
+        Treat this code like a password: whoever scans it becomes {profile.name}.{lockedNote}
       </p>
       <div className={styles.linkRow}>
         <input

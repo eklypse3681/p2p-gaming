@@ -246,10 +246,18 @@ describe('session factories', () => {
 });
 
 describe('the sync key never reaches a match', () => {
-  it('publicProfile keeps id/name/avatar only and the factories apply it', async () => {
-    const leaky = { id: 'me', name: 'Me', avatar: '🦊', syncKey: 'secret' } as PlayerProfile;
-    expect(publicProfile(leaky)).toEqual({ id: 'me', name: 'Me', avatar: '🦊' });
+  it('publicProfile keeps id/name/avatar/publicKey only and the factories apply it', async () => {
+    const leaky = {
+      id: 'me',
+      name: 'Me',
+      avatar: '🦊',
+      syncKey: 'secret',
+      publicKey: 'PUB',
+      privateKey: 'PRIV',
+    } as PlayerProfile;
+    expect(publicProfile(leaky)).toEqual({ id: 'me', name: 'Me', avatar: '🦊', publicKey: 'PUB' });
     expect('syncKey' in publicProfile(leaky)).toBe(false);
+    expect('privateKey' in publicProfile(leaky)).toBe(false);
 
     const { provider } = fakeProvider();
     const server = fakeServer();
@@ -259,7 +267,7 @@ describe('the sync key never reaches a match', () => {
       { provider, createServer: () => server as never, createClient: hosted.factory as never },
     );
     const hostOpts = hosted.created[0]!.opts as { profile: Record<string, unknown> };
-    expect(hostOpts.profile).toEqual({ id: 'me', name: 'Me', avatar: '🦊' });
+    expect(hostOpts.profile).toEqual({ id: 'me', name: 'Me', avatar: '🦊', publicKey: 'PUB' });
     s1.dispose();
 
     const joined = fakeClientFactory();
@@ -268,7 +276,43 @@ describe('the sync key never reaches a match', () => {
       { provider, createClient: joined.factory as never },
     );
     const joinOpts = joined.created[0]!.opts as { profile: Record<string, unknown> };
-    expect(joinOpts.profile).toEqual({ id: 'me', name: 'Me', avatar: '🦊' });
+    expect(joinOpts.profile).toEqual({ id: 'me', name: 'Me', avatar: '🦊', publicKey: 'PUB' });
     s2.dispose();
+  });
+});
+
+describe('seat signer', () => {
+  it('the signer given to the factories reaches the client for the seat challenge', async () => {
+    const signer = async (bytes: Uint8Array) => bytes;
+    const { provider } = fakeProvider();
+    const hosted = fakeClientFactory();
+    const s1 = await hostNewMatch(
+      { profile, signer, config: { length: 1 } },
+      {
+        provider,
+        createServer: () => fakeServer() as never,
+        createClient: hosted.factory as never,
+      },
+    );
+    expect((hosted.created[0]!.opts as { signer?: unknown }).signer).toBe(signer);
+    s1.dispose();
+    const joined = fakeClientFactory();
+    const s2 = await joinMatch(
+      { code: 'ROOM42', profile, signer },
+      { provider, createClient: joined.factory as never },
+    );
+    expect((joined.created[0]!.opts as { signer?: unknown }).signer).toBe(signer);
+    s2.dispose();
+    const resumed = fakeClientFactory();
+    const s3 = await resumeMatch(
+      { snapshot: snapshot(), profile, signer },
+      {
+        provider,
+        createServer: () => fakeServer() as never,
+        createClient: resumed.factory as never,
+      },
+    );
+    expect((resumed.created[0]!.opts as { signer?: unknown }).signer).toBe(signer);
+    s3.dispose();
   });
 });

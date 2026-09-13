@@ -14,7 +14,7 @@ export function JoinScreen() {
   const { code: codeParam } = useParams();
   const navigate = useNavigate();
   const registry = useSessionRegistry();
-  const { profile, slug } = useProfile();
+  const { profile, slug, ready } = useProfile();
   const { path, id: gameId } = useGame();
   const autoCode =
     codeParam && isValidRoomCode(normalizeRoomCode(codeParam))
@@ -28,8 +28,9 @@ export function JoinScreen() {
 
   const runJoin = async (c: string) => {
     try {
+      const { profile, signer } = await ready();
       const session = await joinMatch(
-        { code: c, profile },
+        { code: c, profile, signer: signer ?? undefined },
         { provider: getProvider(slug, gameId), store: getMatchStore(slug, gameId) },
       );
       registry.add(slug, gameId, session);

@@ -1,6 +1,6 @@
 import type { MatchSnapshot } from '@bgf/protocol';
 import type { SyncChange, SyncProfile, SyncSettings, SyncStore } from './protocol';
-import { getProfile, subscribeProfiles, updateProfile } from '../profiles';
+import { getProfile, getSecrets, subscribeProfiles, updateProfile } from '../profiles';
 import { getSettings, getSettingsUpdatedAt, replaceSettings, subscribeSettings } from '../settings';
 import { getMatchStore, matchStoreBus } from '../matchStore';
 import type { GameId } from '../../games/ids';
@@ -19,8 +19,9 @@ export class LocalSyncStore implements SyncStore {
     return this.record().id;
   }
 
+  /** Empty while the player is password-locked in this tab (sync cannot run then). */
   get syncKey(): string {
-    return this.record().syncKey;
+    return getSecrets(this.slug)?.syncKey ?? '';
   }
 
   profile(): SyncProfile {

@@ -16,7 +16,7 @@ const LENGTHS = [1, 3, 5, 7, 11, 0] as const;
 export function HostScreen() {
   const navigate = useNavigate();
   const registry = useSessionRegistry();
-  const { profile, slug } = useProfile();
+  const { profile, slug, ready } = useProfile();
   const { path, id: gameId } = useGame();
   const [length, setLength] = useState<number>(5);
   const [crawford, setCrawford] = useState(true);
@@ -35,9 +35,11 @@ export function HostScreen() {
     setBusy(true);
     setError(null);
     try {
+      const { profile, signer } = await ready();
       const session = await hostNewMatch(
         {
           profile,
+          signer: signer ?? undefined,
           // The cube is set by hand on a free board, so Crawford has nothing to enforce.
           config: { length, crawford: crawford && !free, jacoby, rules },
           hostSeat: seat,

@@ -4,7 +4,7 @@ import type { SyncStatus } from './SyncManager';
 import { LocalSyncStore } from './store';
 import { getDevice } from './device';
 import { hasWebCrypto } from './crypto';
-import { getProfile, subscribeProfiles } from '../profiles';
+import { getProfile, getSecrets, subscribeProfiles } from '../profiles';
 import { getSettings, subscribeSettings } from '../settings';
 import { getProvider, getTransportName } from '../providers';
 
@@ -42,7 +42,7 @@ function createEntry(slug: string): Entry | null {
     provider: getProvider(slug, 'sync'),
     device: getDevice(),
   });
-  return { manager, refs: 0, syncKey: record.syncKey, cleanup: [] };
+  return { manager, refs: 0, syncKey: getSecrets(slug)?.syncKey ?? '', cleanup: [] };
 }
 
 function apply(slug: string, entry: Entry): void {
@@ -58,9 +58,14 @@ function apply(slug: string, entry: Entry): void {
     entry.manager.stop(support.reason);
     return;
   }
-  if (record.syncKey !== entry.syncKey) {
-    // Rotated: the old group is gone; meet the new one.
-    entry.syncKey = record.syncKey;
+  const syncKey = getSecrets(slug)?.syncKey ?? '';
+  if (!syncKey) {
+    entry.manager.stop('This player is locked: unlock it to sync');
+    return;
+  }
+  if (syncKey !== entry.syncKey) {
+    // Rotated (or just unlocked): the old group is gone; meet the new one.
+    entry.syncKey = syncKey;
     entry.manager.stop('sync key changed');
   }
   entry.manager.start();

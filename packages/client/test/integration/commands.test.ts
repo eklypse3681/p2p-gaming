@@ -5,11 +5,15 @@ import { createMemoryPair, PROTOCOL_VERSION } from '@bgf/protocol';
 import { GameClient } from '../../src/index.js';
 import {
   GUEST,
+  HOST,
   autoPlay,
   clientFor,
   currentGame,
   flush,
+  keyedProfile,
   makeHarness,
+  rawHello,
+  signerOf,
   startAndOpen,
 } from './harness.js';
 
@@ -48,11 +52,7 @@ describe('commands', () => {
     const got: { type: string; code?: string }[] = [];
     raw.onMessage((m) => got.push(m as { type: string }));
     // Reconnect as the host profile on a raw transport so we can send a hand-built illegal play.
-    raw.send({
-      type: 'hello',
-      protocol: PROTOCOL_VERSION,
-      profile: { id: 'host-id', name: 'Alice' },
-    });
+    rawHello(raw, HOST);
     await flush();
     raw.send({ type: 'play', play: [{ from: 24, to: 19, die: 5, hit: false }] });
     await flush();
@@ -154,7 +154,8 @@ describe('commands', () => {
     });
     const guest = new GameClient({
       transport: spied,
-      profile: GUEST,
+      profile: keyedProfile(GUEST),
+      signer: signerOf(GUEST),
       pingIntervalMs: 0,
       previewThrottleMs: 40,
     });
@@ -193,12 +194,23 @@ describe('commands', () => {
 
   it('answers pings and the client records latency', async () => {
     const h = await makeHarness({ withGuest: false });
-    vi.useFakeTimers();
+    // Leave setImmediate real so WebCrypto (which completes on the event loop) can finish the
+    // seat challenge while timers are faked.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
     try {
       const [serverEnd, clientEnd] = createMemoryPair();
       h.server.accept(serverEnd);
-      const guest = new GameClient({ transport: clientEnd, profile: GUEST, pingIntervalMs: 50 });
-      await vi.advanceTimersByTimeAsync(10);
+      const guest = new GameClient({
+        transport: clientEnd,
+        profile: keyedProfile(GUEST),
+        signer: signerOf(GUEST),
+        pingIntervalMs: 50,
+      });
+      const realTick = (globalThis as unknown as { setImmediate: (fn: () => void) => void })
+        .setImmediate;
+      for (let i = 0; i < 20 && guest.getState().status !== 'joined'; i++) {
+        await new Promise<void>((r) => realTick(r));
+      }
       expect(guest.getState().status).toBe('joined');
       expect(guest.getState().latencyMs).toBeNull();
       await vi.advanceTimersByTimeAsync(60);

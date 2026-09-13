@@ -10,7 +10,9 @@ import {
   clientFor,
   currentGame,
   flush,
+  keyedProfile,
   makeHarness,
+  signerOf,
   startAndOpen,
 } from './harness.js';
 
@@ -44,7 +46,7 @@ describe('resume', () => {
     const stale = olderSnapshot(latest, 2);
     const server = new GameServer({
       code: latest.code,
-      host: HOST,
+      host: keyedProfile(HOST),
       snapshot: stale,
       dice: seededDice(1),
     });
@@ -52,7 +54,8 @@ describe('resume', () => {
     const hostStore = new MemoryMatchStore();
     const host = new GameClient({
       transport: server.connectLocal(),
-      profile: HOST,
+      profile: keyedProfile(HOST),
+      signer: signerOf(HOST),
       resumeSnapshot: stale,
       store: hostStore,
       pingIntervalMs: 0,
@@ -68,7 +71,10 @@ describe('resume', () => {
     expect(host.getState().snapshot!.match).toEqual(latest.match);
     expect(host.getState().chat.map((c) => c.text)).toEqual(['brb']);
     expect(hostStore.peek(latest.id)!.seq).toBe(latest.seq);
-    expect(server.getSnapshot().players).toEqual({ white: HOST, black: GUEST });
+    expect(server.getSnapshot().players).toEqual({
+      white: keyedProfile(HOST),
+      black: keyedProfile(GUEST),
+    });
     // Play continues from the adopted state.
     const g = currentGame(host);
     if (g.phase.kind === 'to-roll') (g.phase.player === 'white' ? host : guest).roll();
@@ -86,10 +92,15 @@ describe('resume', () => {
     const latest = h.server.getSnapshot();
     h.close();
     const stale = olderSnapshot(latest, 3);
-    const server = new GameServer({ code: latest.code, host: HOST, snapshot: latest });
+    const server = new GameServer({
+      code: latest.code,
+      host: keyedProfile(HOST),
+      snapshot: latest,
+    });
     const host = new GameClient({
       transport: server.connectLocal(),
-      profile: HOST,
+      profile: keyedProfile(HOST),
+      signer: signerOf(HOST),
       resumeSnapshot: latest,
       pingIntervalMs: 0,
     });
@@ -107,10 +118,15 @@ describe('resume', () => {
     const h = await playSomeTurns(4);
     const latest = h.guestStore.peek(h.server.getSnapshot().id)!;
     h.close();
-    const server = new GameServer({ code: latest.code, host: GUEST, snapshot: latest });
+    const server = new GameServer({
+      code: latest.code,
+      host: keyedProfile(GUEST),
+      snapshot: latest,
+    });
     const bob = new GameClient({
       transport: server.connectLocal(),
-      profile: GUEST,
+      profile: keyedProfile(GUEST),
+      signer: signerOf(GUEST),
       resumeSnapshot: latest,
       pingIntervalMs: 0,
     });
@@ -143,10 +159,15 @@ describe('resume', () => {
         { type: 'take', player: 'white' },
       ],
     };
-    const server = new GameServer({ code: latest.code, host: HOST, snapshot: latest });
+    const server = new GameServer({
+      code: latest.code,
+      host: keyedProfile(HOST),
+      snapshot: latest,
+    });
     const host = new GameClient({
       transport: server.connectLocal(),
-      profile: HOST,
+      profile: keyedProfile(HOST),
+      signer: signerOf(HOST),
       pingIntervalMs: 0,
     });
     const { client: guest } = await makeGuest(server, forged);
@@ -164,7 +185,11 @@ describe('resume', () => {
     const h = await playSomeTurns(2);
     const latest = h.server.getSnapshot();
     h.close();
-    const server = new GameServer({ code: latest.code, host: HOST, snapshot: latest });
+    const server = new GameServer({
+      code: latest.code,
+      host: keyedProfile(HOST),
+      snapshot: latest,
+    });
     const { client: guest } = await makeGuest(server, { ...latest, id: 'some-other-match' });
     await flush();
     expect(guest.getState().status).toBe('rejected');
@@ -180,13 +205,19 @@ describe('resume', () => {
       ...latest,
       actions: [{ type: 'roll', player: 'white', dice: [1, 1] }],
     };
-    expect(() => new GameServer({ code: 'X', host: HOST, snapshot: corrupt })).toThrow();
+    expect(
+      () => new GameServer({ code: 'X', host: keyedProfile(HOST), snapshot: corrupt }),
+    ).toThrow();
     // A trusted-but-stale cached `match` is ignored in favour of the replayed log.
     const withBogusMatch: MatchSnapshot = {
       ...latest,
       match: { ...latest.match, score: { white: 99, black: 99 } },
     };
-    const server = new GameServer({ code: 'X', host: HOST, snapshot: withBogusMatch });
+    const server = new GameServer({
+      code: 'X',
+      host: keyedProfile(HOST),
+      snapshot: withBogusMatch,
+    });
     expect(server.getSnapshot().match.score).toEqual(latest.match.score);
     server.close();
   });
@@ -198,7 +229,8 @@ async function makeGuest(server: GameServer, resumeSnapshot: MatchSnapshot, prof
   server.accept(serverEnd);
   const client = new GameClient({
     transport: clientEnd,
-    profile,
+    profile: keyedProfile(profile),
+    signer: signerOf(profile),
     resumeSnapshot,
     pingIntervalMs: 0,
   });
@@ -215,14 +247,15 @@ describe('resume keeps the table layout', () => {
     const stale: MatchSnapshot = { ...olderSnapshot(latest, 2), homeSide: 'right' };
     const server = new GameServer({
       code: latest.code,
-      host: HOST,
+      host: keyedProfile(HOST),
       snapshot: stale,
       dice: seededDice(1),
     });
     expect(server.getSnapshot().homeSide).toBe('right');
     const host = new GameClient({
       transport: server.connectLocal(),
-      profile: HOST,
+      profile: keyedProfile(HOST),
+      signer: signerOf(HOST),
       resumeSnapshot: stale,
       pingIntervalMs: 0,
     });

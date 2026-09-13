@@ -22,8 +22,12 @@ import {
   DEFAULT_HOME_SIDE,
   Emitter,
   PROTOCOL_VERSION,
+  base64UrlToBytes,
+  challengeBytes,
   createMemoryPair,
   generateId,
+  randomNonce,
+  verify,
 } from '@bgf/protocol';
 import { validateClientMessage } from './validate.js';
 
@@ -55,7 +59,22 @@ interface Connection {
   seat: Player | null;
   closed: boolean;
   unsubscribe: Unsubscribe[];
+  /** A hello waiting for its signed answer to our challenge. */
+  pending?: PendingAuth;
 }
+
+interface PendingAuth {
+  seat: Player;
+  profile: PlayerProfile;
+  publicKey: string;
+  nonce: string;
+  snapshot?: MatchSnapshot;
+  timer: ReturnType<typeof setTimeout>;
+  verifying: boolean;
+}
+
+/** How long a client has to answer a challenge before the connection is dropped. */
+export const CHALLENGE_TIMEOUT_MS = 30_000;
 
 export const MAX_CHAT_HISTORY = 200;
 /** How many devices one player may have connected at once; the oldest is dropped beyond this. */
@@ -213,6 +232,10 @@ export class GameServer {
 
   private detach(conn: Connection, announce: boolean): void {
     conn.closed = true;
+    if (conn.pending) {
+      clearTimeout(conn.pending.timer);
+      conn.pending = undefined;
+    }
     for (const u of conn.unsubscribe) u();
     conn.unsubscribe = [];
     this.connections.delete(conn);
@@ -252,6 +275,14 @@ export class GameServer {
     }
     const msg = result.message;
     if (conn.seat === null) {
+      if (conn.pending) {
+        if (msg.type !== 'auth') {
+          this.reject(conn, 'unauthorized', 'answer the seat challenge first');
+          return;
+        }
+        void this.handleAuth(conn, msg);
+        return;
+      }
       if (msg.type !== 'hello') {
         this.reject(conn, 'bad-hello', 'first message must be hello');
         return;
@@ -259,7 +290,7 @@ export class GameServer {
       this.handleHello(conn, msg);
       return;
     }
-    if (msg.type === 'hello') {
+    if (msg.type === 'hello' || msg.type === 'auth') {
       this.send(conn, { type: 'error', code: 'already-joined', message: 'hello already received' });
       return;
     }
@@ -275,32 +306,121 @@ export class GameServer {
       );
       return;
     }
-    if (msg.snapshot) {
-      if (msg.snapshot.id !== this.snapshot.id) {
-        this.reject(conn, 'wrong-match', 'that snapshot belongs to a different match');
-        return;
-      }
-      this.maybeAdopt(conn, msg.snapshot);
+    if (msg.snapshot && msg.snapshot.id !== this.snapshot.id) {
+      this.reject(conn, 'wrong-match', 'that snapshot belongs to a different match');
+      return;
     }
-
-    const seat = this.resolveSeat(msg.profile);
+    const profile = msg.profile;
+    const seat = this.resolveSeat(profile);
     if (!seat) {
       this.reject(conn, 'full', 'both seats are taken');
       return;
     }
-    const profile = msg.profile;
+    const bound = this.snapshot.players[seat]?.publicKey;
+    if (bound) {
+      // The seat is bound to a key: only its holder may sit here, from any device.
+      if (profile.publicKey !== bound) {
+        this.reject(conn, 'unauthorized', 'that seat belongs to a different key');
+        return;
+      }
+      this.challenge(conn, seat, profile, bound, msg.snapshot);
+      return;
+    }
+    if (profile.publicKey) {
+      // Unbound seat (free, or a legacy record): bind this key on a successful answer.
+      this.challenge(conn, seat, profile, profile.publicKey, msg.snapshot);
+      return;
+    }
+    // Legacy: an unkeyed client taking an unkeyed seat needs no proof.
+    this.seatConnection(conn, seat, profile, msg.snapshot);
+  }
 
-    // Record the freshest profile (name/avatar may have changed) and tell the other seat.
+  private challenge(
+    conn: Connection,
+    seat: Player,
+    profile: PlayerProfile,
+    publicKey: string,
+    snapshot: MatchSnapshot | undefined,
+  ): void {
+    const nonce = randomNonce();
+    const timer = setTimeout(() => {
+      if (!conn.closed && conn.seat === null) {
+        this.reject(conn, 'unauthorized', 'no answer to the seat challenge');
+      }
+    }, CHALLENGE_TIMEOUT_MS);
+    conn.pending = { seat, profile, publicKey, nonce, snapshot, timer, verifying: false };
+    this.send(conn, { type: 'challenge', nonce, matchId: this.snapshot.id });
+  }
+
+  private async handleAuth(
+    conn: Connection,
+    msg: Extract<ClientMessage, { type: 'auth' }>,
+  ): Promise<void> {
+    const pending = conn.pending;
+    if (!pending || pending.verifying) return;
+    pending.verifying = true;
+    let ok = false;
+    try {
+      const signature = base64UrlToBytes(msg.signature);
+      ok = await verify(
+        pending.publicKey,
+        challengeBytes({
+          matchId: this.snapshot.id,
+          profileId: pending.profile.id,
+          nonce: pending.nonce,
+        }),
+        signature,
+      );
+    } catch {
+      ok = false;
+    }
+    if (conn.closed || this.closed) return;
+    clearTimeout(pending.timer);
+    conn.pending = undefined;
+    if (!ok) {
+      this.reject(conn, 'unauthorized', 'the seat challenge was not signed with the right key');
+      return;
+    }
+    // The roster may have moved on while we waited: re-check the seat and its bound key.
+    const seat = this.resolveSeat(pending.profile);
+    if (seat !== pending.seat) {
+      this.reject(conn, seat ? 'unauthorized' : 'full', 'the seat changed while authenticating');
+      return;
+    }
+    const bound = this.snapshot.players[seat]?.publicKey;
+    if (bound && bound !== pending.publicKey) {
+      this.reject(conn, 'unauthorized', 'that seat belongs to a different key');
+      return;
+    }
+    const profile: PlayerProfile = { ...pending.profile, publicKey: pending.publicKey };
+    this.seatConnection(conn, seat, profile, pending.snapshot);
+  }
+
+  /** Seat an authenticated (or legacy unkeyed) connection and announce it. */
+  private seatConnection(
+    conn: Connection,
+    seat: Player,
+    profile: PlayerProfile,
+    offered: MatchSnapshot | undefined,
+  ): void {
+    if (offered) this.maybeAdopt(conn, offered);
+
+    // Record the freshest profile (name/avatar may have changed, a key may be bound) and tell
+    // the other seat.
     const known = this.snapshot.players[seat];
     const rosterChanged =
       !known ||
       known.id !== profile.id ||
       known.name !== profile.name ||
-      known.avatar !== profile.avatar;
+      known.avatar !== profile.avatar ||
+      known.publicKey !== profile.publicKey;
     if (rosterChanged) {
+      // A bound key is never replaced here (handleHello/handleAuth already enforced it).
+      const stored: PlayerProfile = { ...profile };
+      if (known?.publicKey) stored.publicKey = known.publicKey;
       this.snapshot = {
         ...this.snapshot,
-        players: { ...this.snapshot.players, [seat]: profile },
+        players: { ...this.snapshot.players, [seat]: stored },
       };
       this.broadcast({ type: 'state', snapshot: this.snapshot }, conn);
     }
@@ -352,6 +472,8 @@ export class GameServer {
       });
       return;
     }
+    // Our roster wins where we have one: in particular a key bound here can never be replaced
+    // by a peer's copy of the match.
     const players = {
       white: this.snapshot.players.white ?? verified.players.white,
       black: this.snapshot.players.black ?? verified.players.black,
@@ -371,6 +493,7 @@ export class GameServer {
   private handleCommand(conn: Connection, seat: Player, msg: ClientMessage): void {
     switch (msg.type) {
       case 'hello':
+      case 'auth':
         return; // handled above
       case 'start-game':
         this.apply(conn, seat, { type: 'start-game' });

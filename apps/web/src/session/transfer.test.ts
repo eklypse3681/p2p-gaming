@@ -354,3 +354,103 @@ describe('sync key travels only in your own codes', () => {
     expect(getProfile(merged.slug)?.syncKey).toBe('rotated');
   });
 });
+
+describe('keys and password-locked players', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    resetSettingsCacheForTests();
+    resetProfilesForTests();
+    setMatchStoreForTests();
+  });
+
+  it('codes carry the key pair; an export of a locked player carries the encrypted block instead', async () => {
+    const { ensureKeys, lockProfile, getSecrets } = await import('./profiles');
+    createProfile('Alice', { id: 'alice-id', syncKey: 'sk' });
+    const keys = (await ensureKeys('alice'))!;
+    const decoded = decodeTransferCode(identityCodeFor('alice')).profile;
+    expect(decoded.publicKey).toBe(keys.publicKey);
+    expect(decoded.privateKey).toBe(keys.privateKey);
+    expect(decodeTransferCode(transferCodeFor('alice')).profile.privateKey).toBe(keys.privateKey);
+
+    await lockProfile('alice', 'open-sesame', { iterations: 1000 });
+    // Still unlocked in this tab: codes work and stay plain.
+    expect(decodeTransferCode(identityCodeFor('alice')).profile.privateKey).toBe(keys.privateKey);
+    const exported = await exportProfile('alice');
+    expect(exported.profile.privateKey).toBe(keys.privateKey);
+    expect(exported.profile.secrets).toBeUndefined();
+    // Locked in this tab: only the encrypted block can leave.
+    const { lockNow } = await import('./profiles');
+    lockNow('alice');
+    expect(getSecrets('alice')).toBeNull();
+    expect(() => identityCodeFor('alice')).toThrow(TransferError);
+    expect(() => transferCodeFor('alice')).toThrow(/unlock/i);
+    const lockedExport = await exportProfile('alice');
+    expect(lockedExport.profile.privateKey).toBeUndefined();
+    expect(lockedExport.profile.syncKey).toBeUndefined();
+    expect(lockedExport.profile.secrets?.alg).toBe('pbkdf2-aes-gcm');
+
+    // Importing that export elsewhere needs the password, and the player arrives locked but
+    // usable in this tab.
+    resetProfilesForTests();
+    sessionStorage.clear();
+    await expect(importProfile(lockedExport)).rejects.toMatchObject({ code: 'password-required' });
+    await expect(importProfile(lockedExport, { password: 'nope' })).rejects.toMatchObject({
+      code: 'wrong-password',
+    });
+    const result = await importProfile(lockedExport, { password: 'open-sesame' });
+    expect(result.created).toBe(true);
+    const record = getProfile(result.slug)!;
+    expect(record.secrets?.alg).toBe('pbkdf2-aes-gcm');
+    expect(record.publicKey).toBe(keys.publicKey);
+    expect(record.privateKey).toBeUndefined();
+    expect(getSecrets(result.slug)).toEqual({ privateKey: keys.privateKey, syncKey: 'sk' });
+  });
+
+  it('refuses to merge a different key for the same id unless the user confirms', async () => {
+    const { ensureKeys, getSecrets } = await import('./profiles');
+    createProfile('Alice', { id: 'alice-id', syncKey: 'sk' });
+    const local = (await ensureKeys('alice'))!;
+    const other = encodeIdentityCode({
+      id: 'alice-id',
+      name: 'Alice',
+      publicKey: 'A'.repeat(87),
+      privateKey: 'B'.repeat(40),
+      syncKey: 'other-sk',
+    });
+    await expect(importFromText(other)).rejects.toMatchObject({ code: 'key-mismatch' });
+    expect(getProfile('alice')!.publicKey).toBe(local.publicKey);
+    expect(getSecrets('alice')!.syncKey).toBe('sk');
+    const merged = await importFromText(other, { replaceKey: true });
+    expect(merged.created).toBe(false);
+    expect(getProfile('alice')!.publicKey).toBe('A'.repeat(87));
+    expect(getSecrets('alice')).toEqual({ privateKey: 'B'.repeat(40), syncKey: 'other-sk' });
+    // The same key again is not a mismatch.
+    await expect(importFromText(other)).resolves.toMatchObject({ created: false });
+  });
+
+  it('updating a locked player from a code needs its password here', async () => {
+    const { ensureKeys, lockProfile, lockNow, getSecrets } = await import('./profiles');
+    createProfile('Alice', { id: 'alice-id', syncKey: 'sk' });
+    const keys = (await ensureKeys('alice'))!;
+    await lockProfile('alice', 'open-sesame', { iterations: 1000 });
+    lockNow('alice');
+    const code = encodeIdentityCode({
+      id: 'alice-id',
+      name: 'Alice',
+      publicKey: keys.publicKey,
+      privateKey: keys.privateKey,
+      syncKey: 'rotated',
+    });
+    await expect(importFromText(code)).rejects.toMatchObject({ code: 'password-required' });
+    await expect(importFromText(code, { password: 'nope' })).rejects.toMatchObject({
+      code: 'wrong-password',
+    });
+    await importFromText(code, { password: 'open-sesame' });
+    expect(getProfile('alice')!.secrets?.alg).toBe('pbkdf2-aes-gcm');
+    expect(getSecrets('alice')).toBeNull(); // still locked in this tab
+    const { unlockProfile } = await import('./profiles');
+    expect(await unlockProfile('alice', 'open-sesame')).toBe(true);
+    expect(getSecrets('alice')!.syncKey).toBe('rotated');
+  });
+});
