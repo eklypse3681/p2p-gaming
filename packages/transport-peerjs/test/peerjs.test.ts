@@ -93,11 +93,11 @@ describe('host', () => {
     vi.useFakeTimers();
     try {
       const provider = peerJsProvider({ timeoutMs: 5_000 });
-      const pending = provider.host('ABCD');
+      const pending = provider.host('ABCD').catch((e: unknown) => e);
       await vi.advanceTimersByTimeAsync(10);
       const peer = fakeNet.last();
       await vi.advanceTimersByTimeAsync(5_100);
-      const error = await pending.catch((e: unknown) => e);
+      const error = await pending;
       expect(error).toBeInstanceOf(TransportError);
       expect((error as TransportError).code).toBe('timeout');
       expect(peer.destroyed).toBe(true);
@@ -108,11 +108,11 @@ describe('host', () => {
 
   it('rejects with address-taken when the id is already registered', async () => {
     const provider = peerJsProvider();
-    const pending = provider.host('ABCD');
+    const pending = provider.host('ABCD').catch((e: unknown) => e);
     await tick();
     const peer = fakeNet.last();
     peer.emitError('unavailable-id', 'ID "bgf-abcd-v1" is taken');
-    const error = await pending.catch((e: unknown) => e);
+    const error = await pending;
     expect(error).toBeInstanceOf(TransportError);
     expect((error as TransportError).code).toBe('address-taken');
     expect(peer.destroyed).toBe(true);
@@ -120,10 +120,10 @@ describe('host', () => {
 
   it('rejects with network for signalling failures', async () => {
     const provider = peerJsProvider();
-    const pending = provider.host('ABCD');
+    const pending = provider.host('ABCD').catch((e: unknown) => e);
     await tick();
     fakeNet.last().emitError('network', 'lost connection to the server');
-    const error = await pending.catch((e: unknown) => e);
+    const error = await pending;
     expect((error as TransportError).code).toBe('network');
   });
 
@@ -205,12 +205,12 @@ describe('join', () => {
 
   it('rejects with not-found when the host id is unknown', async () => {
     const provider = peerJsProvider();
-    const pending = provider.join('ZZZZ');
+    const pending = provider.join('ZZZZ').catch((e: unknown) => e);
     await tick();
     const peer = fakeNet.last();
     peer.markOpen();
     peer.emitError('peer-unavailable', 'Could not connect to peer bgf-zzzz-v1');
-    const error = await pending.catch((e: unknown) => e);
+    const error = await pending;
     expect(error).toBeInstanceOf(TransportError);
     expect((error as TransportError).code).toBe('not-found');
     expect(peer.destroyed).toBe(true);
@@ -218,11 +218,11 @@ describe('join', () => {
 
   it('times out when the data connection never opens', async () => {
     const provider = peerJsProvider();
-    const pending = provider.join('ABCD', { timeoutMs: 20 });
+    const pending = provider.join('ABCD', { timeoutMs: 20 }).catch((e: unknown) => e);
     await tick();
     const peer = fakeNet.last();
     peer.markOpen();
-    const error = await pending.catch((e: unknown) => e);
+    const error = await pending;
     expect(error).toBeInstanceOf(TransportError);
     expect((error as TransportError).code).toBe('timeout');
     expect(peer.destroyed).toBe(true);
