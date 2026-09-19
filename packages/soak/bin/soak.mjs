@@ -18,8 +18,13 @@ for (const [flag, command] of [
 ]) {
   if (!process.argv.includes(flag)) continue;
   const { spawnSync } = await import('node:child_process');
-  const platformBin = join(pkg, '..', 'platform', 'bin', 'platform.mjs');
-  if (!existsSync(platformBin)) {
+  // Either laid out beside us in one workspace, or above us when this repository is checked
+  // out as a submodule of the one that holds the platform.
+  const platformBin = [
+    join(pkg, '..', 'platform', 'bin', 'platform.mjs'),
+    join(pkg, '..', '..', '..', 'packages', 'platform', 'bin', 'platform.mjs'),
+  ].find((p) => existsSync(p));
+  if (!platformBin) {
     console.error(
       `${flag} soaks a hosted club, which needs the platform runtime.\n` +
         'It is not part of this repository. Run this from a workspace that also has the\n' +
