@@ -209,9 +209,14 @@ describe('commands', () => {
         signer: signerOf(GUEST),
         pingIntervalMs: 50,
       });
+      // The seat challenge is signed and verified with WebCrypto, which resolves on the event
+      // loop rather than on a timer. Yield real event-loop turns until it lands, bounded by
+      // real elapsed time: a fixed number of turns is enough on a fast machine and not on a
+      // slow one, which is how this passed locally and failed in CI.
       const realTick = (globalThis as unknown as { setImmediate: (fn: () => void) => void })
         .setImmediate;
-      for (let i = 0; i < 20 && guest.getState().status !== 'joined'; i++) {
+      const deadline = Date.now() + 10_000;
+      while (guest.getState().status !== 'joined' && Date.now() < deadline) {
         await new Promise<void>((r) => realTick(r));
       }
       expect(guest.getState().status).toBe('joined');
