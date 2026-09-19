@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useSettings, resetSettings, DEFAULT_SETTINGS } from '../session/settings';
+import { RandomnessControls } from '../hud/RandomnessControls';
+import { randomnessFromSettings } from '../session/entropy';
 import type { HomeSidePreference, ReducedMotionSetting } from '../session/settings';
 import { useProfile } from '../session/ProfileProvider';
 import { changePassword, lockProfile, removePassword } from '../session/profiles';
@@ -883,6 +885,26 @@ export function SettingsScreen() {
         </section>
 
         <DevicesSection slug={slug} />
+
+        <section className={`card ${styles.section}`} data-testid="randomness-section">
+          <h2>Randomness</h2>
+          <p className="muted small">
+            Defaults for the tables you host: where dice and shuffles come from, and how each draw
+            is tied to the action so every seat can check it later. The host screen lets you change
+            them for one table. Guests see the table’s choice in the Fairness panel.
+          </p>
+          <RandomnessControls
+            value={randomnessFromSettings(settings)}
+            onChange={(c) =>
+              update({
+                entropySource: c.source,
+                randomnessMode: c.mode,
+                randomOrgKey: c.randomOrgKey,
+                entropyFallback: c.fallback,
+              })
+            }
+          />
+        </section>
 
         <section className={`card ${styles.section}`}>
           <h2>Networking</h2>

@@ -28,6 +28,7 @@ function fakeClient() {
     setCube: vi.fn(),
     resetBoard: vi.fn(),
     recordResult: vi.fn(),
+    ready: vi.fn(),
   };
 }
 

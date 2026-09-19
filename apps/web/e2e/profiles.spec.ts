@@ -8,6 +8,7 @@ import {
   joinMatch,
   profileUrl,
   seedProfile,
+  startGameIfNeeded,
 } from './helpers';
 
 const online = (page: Page) =>
@@ -77,7 +78,7 @@ test.describe('players are route segments', () => {
     await expect(host.getByTestId('player-name-white')).toContainText(HOST.name);
     await expect(host.getByTestId('player-name-black')).toContainText(GUEST.name);
     await expect(guest.getByTestId('game-screen')).toHaveAttribute('data-seat', 'black');
-    await host.getByTestId('start-game-button').click();
+    await startGameIfNeeded(host);
     await completeOpening(host, guest);
     expect(host.url()).toContain('#/alice/backgammon/game/');
     expect(guest.url()).toContain('#/bob/backgammon/game/');

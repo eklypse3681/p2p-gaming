@@ -8,6 +8,7 @@ import {
   joinMatch,
   seedProfile,
   step,
+  startGameIfNeeded,
 } from './helpers';
 
 test('a match survives the host leaving: the guest resumes as host and the original host rejoins', async ({
@@ -20,7 +21,7 @@ test('a match survives the host leaving: the guest resumes as host and the origi
 
   const code = await hostMatch(host, 'alice', { length: 3 });
   await joinMatch(guest, 'bob', code);
-  await host.getByTestId('start-game-button').click();
+  await startGameIfNeeded(host);
   await completeOpening(host, guest);
 
   // Play a couple of actions so there is real state to preserve.

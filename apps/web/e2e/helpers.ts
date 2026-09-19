@@ -150,26 +150,35 @@ export async function statusOf(page: Page): Promise<string> {
 }
 
 /**
- * Stage exactly one sub-move: click a source; if the board auto-staged it (single destination)
- * we are done, otherwise click the first highlighted target.
+ * Stage exactly one sub-move. Clicking a source either auto-stages it (single destination) or
+ * selects it; in the latter case the first highlighted target is clicked. Progress is read from
+ * `data-staged` on the game screen, so the helper is immune to render timing under load.
  */
 export async function stageOne(page: Page): Promise<void> {
+  const screen = page.getByTestId('game-screen');
+  const stagedBefore = Number((await screen.getAttribute('data-staged')) ?? '0');
   const source = page.locator('[data-source="true"]').first();
   await expect(source).toBeVisible({ timeout: 10_000 });
   await source.click();
   const selected = page.locator('[data-selected="true"]');
-  let picked = false;
-  try {
-    await expect(selected).toHaveCount(1, { timeout: 800 });
-    picked = true;
-  } catch {
-    picked = false; // auto-staged
+  const deadline = Date.now() + 6_000;
+  while (Date.now() < deadline) {
+    const staged = Number((await screen.getAttribute('data-staged')) ?? '0');
+    if (staged > stagedBefore) return; // auto-staged
+    if ((await selected.count()) === 1) {
+      const target = page.locator('[data-target="true"]').first();
+      await expect(target).toBeVisible({ timeout: 5_000 });
+      await target.click();
+      await expect
+        .poll(async () => Number((await screen.getAttribute('data-staged')) ?? '0'), {
+          timeout: 5_000,
+        })
+        .toBeGreaterThan(stagedBefore);
+      return;
+    }
+    await page.waitForTimeout(40);
   }
-  if (picked) {
-    const target = page.locator('[data-target="true"]').first();
-    await expect(target).toBeVisible({ timeout: 5_000 });
-    await target.click();
-  }
+  throw new Error('stageOne: clicking a source neither staged a move nor selected it');
 }
 
 /** Click through one complete move for the page whose turn it is. */
@@ -307,4 +316,37 @@ export async function touchTap(page: Page, testId: string): Promise<void> {
   } finally {
     await cdp.detach();
   }
+}
+
+/**
+ * Tables run unattended by default: the first game starts as soon as both players are here and
+ * the next one when both are ready. Click "Start game" when a manual table still shows it;
+ * otherwise press Ready wherever it is offered (this page and `others`) and wait for the game to
+ * begin (an opening roll, a roll, or the free-board prompt).
+ */
+export async function startGameIfNeeded(page: Page, others: Page[] = []): Promise<void> {
+  const start = page.getByTestId('start-game-button');
+  if (
+    await start
+      .first()
+      .isVisible()
+      .catch(() => false)
+  ) {
+    await start.first().click();
+    return;
+  }
+  for (const p of [page, ...others]) {
+    const ready = p.getByTestId('ready-button');
+    if (
+      await ready
+        .first()
+        .isVisible()
+        .catch(() => false)
+    )
+      await ready.first().click();
+  }
+  await expect(page.getByTestId('status-text').first()).toHaveText(
+    /free board|roll|your move|is moving|opening/i,
+    { timeout: 20_000 },
+  );
 }

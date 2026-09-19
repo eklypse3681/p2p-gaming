@@ -5,6 +5,14 @@ import { opponent } from '@bgf/engine';
 import type { ClientState, GameClientApi } from '@bgf/client';
 import type { Session } from '../../session/session';
 import { resumeMatch, SessionError } from '../../session/session';
+import type { FlowProgress } from '../../session/retry';
+import { getSettings } from '../../session/settings';
+import { randomnessFromSettings } from '../../session/entropy';
+import { FairnessPanel } from '../../hud/FairnessPanel';
+import { TrustBadge } from '../../hud/TrustBadge';
+import { describeTrust } from '@bgf/table';
+import { backgammonDefinition } from '@bgf/server';
+import { progressText } from '../ofc/GameScreen';
 import { useSession, useSessionRegistry } from '../../session/SessionRegistry';
 import { useClientState } from '../../session/useClientState';
 import { useProfile } from '../../session/ProfileProvider';
@@ -23,6 +31,7 @@ import { MatchPanel } from '../../hud/MatchPanel';
 import { Chat } from '../../hud/Chat';
 import { RoomCode } from '../../hud/RoomCode';
 import { Handoff } from '../../hud/Handoff';
+import { ClubChip } from '../../clubs/ClubChip';
 import { GameOverOverlay } from '../../hud/GameOverOverlay';
 import { ConnectionBadge } from '../../hud/ConnectionBadge';
 import { useToasts } from '../../hud/Toast';
@@ -43,10 +52,25 @@ import {
   pips,
   playerName,
   homeSideFor,
+  isAutopilot,
+  canStartGame,
 } from '../../hud/derive';
 import styles from './GameScreen.module.css';
 
-const inflightResumes = new Map<string, Promise<Session | null>>();
+interface Inflight {
+  promise: Promise<Session | null>;
+  controller: AbortController;
+  onProgress: ((p: FlowProgress) => void) | null;
+  observers: number;
+}
+const inflightResumes = new Map<string, Inflight>();
+
+function abortInflight(key: string): void {
+  const entry = inflightResumes.get(key);
+  if (!entry) return;
+  inflightResumes.delete(key);
+  entry.controller.abort();
+}
 
 export function GameScreen() {
   const { matchId } = useParams();
@@ -71,46 +95,90 @@ export function GameScreen() {
   const [resume, setResume] = useState<Resume>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
+  const [progress, setProgress] = useState<FlowProgress | null>(null);
+  const key = `${slug}:${gameId}:${matchId ?? ''}`;
+
+  // A live session supersedes any attempt still in flight: a late-completing join must never
+  // replace the match being played on (the registry refuses that too).
+  useEffect(() => {
+    if (session) abortInflight(key);
+  }, [session, key]);
+
   // Page refresh / deep link: rebuild the session from the saved snapshot. In-flight resumes are
-  // deduplicated per match so StrictMode's double effects (and quick re-mounts) never race.
+  // deduplicated per match so StrictMode's double effects (and quick re-mounts) never race, and
+  // they are aborted when this screen goes away for good.
   useEffect(() => {
     if (session || !matchId || leaving.current) return;
-    const key = `${slug}:${gameId}:${matchId}`;
-    let p = inflightResumes.get(key);
-    if (!p) {
-      p = (async () => {
+    let entry = inflightResumes.get(key);
+    if (!entry) {
+      const controller = new AbortController();
+      const promise = (async () => {
         const snapshot = await getMatchStore(slug, gameId).get(matchId);
         if (!snapshot) return null;
         const { profile, signer } = await ready();
         return resumeMatch(
-          { snapshot, profile, signer: signer ?? undefined },
-          { provider: getProvider(slug, gameId), store: getMatchStore(slug, gameId) },
+          {
+            snapshot,
+            profile,
+            signer: signer ?? undefined,
+            randomness: randomnessFromSettings(getSettings(slug)),
+          },
+          {
+            provider: getProvider(slug, gameId),
+            store: getMatchStore(slug, gameId),
+            existingSession: (code) => registry.liveByCode(code) as Session | undefined,
+          },
+          {
+            signal: controller.signal,
+            onProgress: (p) => inflightResumes.get(key)?.onProgress?.(p),
+          },
         );
-      })().finally(() => inflightResumes.delete(key));
-      inflightResumes.set(key, p);
+      })().finally(() => {
+        if (inflightResumes.get(key)?.controller === controller) inflightResumes.delete(key);
+      });
+      entry = { promise, controller, onProgress: null, observers: 0 };
+      inflightResumes.set(key, entry);
     }
+    const mine = entry;
+    mine.observers += 1;
+    mine.onProgress = setProgress;
     let active = true;
-    p.then(
+    mine.promise.then(
       (s) => {
-        if (s)
-          registry.add(slug, gameId, s); // the registry outlives this screen; add even if we navigated away
-        else if (active) setResume({ status: 'missing' });
+        if (s && !mine.controller.signal.aborted) registry.add(slug, gameId, s);
+        else if (!s && active) setResume({ status: 'missing' });
       },
       (e) => {
-        if (active) {
-          setResume({
-            status: 'error',
-            error: e instanceof SessionError ? e.message : 'Could not resume the match',
-          });
-        }
+        if (!active) return;
+        if (e instanceof SessionError && e.code === 'cancelled') return;
+        setResume({
+          status: 'error',
+          error: e instanceof SessionError ? e.message : 'Could not resume the match',
+        });
       },
     );
     return () => {
       active = false;
+      mine.observers -= 1;
+      if (mine.onProgress === setProgress) mine.onProgress = null;
+      setTimeout(() => {
+        if (mine.observers <= 0 && inflightResumes.get(key) === mine) abortInflight(key);
+      }, 0);
     };
-  }, [session, matchId, slug, gameId, ready, registry, attempt]);
+  }, [session, matchId, slug, gameId, ready, registry, attempt, key]);
 
   const resumeState: Resume = resume;
+  const retry = () => {
+    abortInflight(key);
+    setProgress(null);
+    setResume({ status: 'loading' });
+    setAttempt((n) => n + 1);
+  };
+  const cancel = () => {
+    leaving.current = true;
+    abortInflight(key);
+    navigate(path('/'));
+  };
 
   if (!matchId) return null;
   if (session) {
@@ -139,8 +207,23 @@ export function GameScreen() {
             <span className="pulse" style={{ fontSize: '2rem' }}>
               🎲
             </span>
-            <h2>Reopening the table…</h2>
-            <p className="muted">Looking for your opponent under the saved room code.</p>
+            <h2>{progress?.phase === 'waiting' ? 'Host is away' : 'Reopening the table…'}</h2>
+            <p className="muted" data-testid="resume-progress" data-phase={progress?.phase ?? ''}>
+              {progressText(progress)}
+            </p>
+            {progress?.phase === 'waiting' && (
+              <p className="muted" data-testid="host-offline">
+                {progress.lastError} — this page keeps trying.
+              </p>
+            )}
+            <div className="row" style={{ justifyContent: 'center' }}>
+              <button className="btn btn-sm" onClick={retry} data-testid="retry-resume">
+                Retry now
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={cancel} data-testid="cancel-resume">
+                Cancel
+              </button>
+            </div>
           </>
         )}
         {resumeState.status === 'missing' && (
@@ -159,18 +242,12 @@ export function GameScreen() {
               {resumeState.error}
             </p>
             <div className="row" style={{ justifyContent: 'center' }}>
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setResume({ status: 'loading' });
-                  setAttempt((n) => n + 1);
-                }}
-              >
+              <button className="btn btn-primary" onClick={retry} data-testid="retry-resume">
                 Try again
               </button>
-              <Link to={path('/')} className="btn">
+              <button className="btn" onClick={cancel} data-testid="cancel-resume">
                 Back home
-              </Link>
+              </button>
             </div>
           </>
         )}
@@ -190,6 +267,7 @@ function RailContent({
   onTab,
   unread,
   showHint,
+  onFairness,
 }: {
   state: ClientState;
   client: GameClientApi;
@@ -198,8 +276,15 @@ function RailContent({
   onTab: (t: RailTab) => void;
   unread: number;
   showHint: boolean;
+  onFairness: () => void;
 }) {
-  const present = opponentPresent(state);
+  const isDealer = (state.role ?? 'seat') === 'dealer';
+  const dealerInfo =
+    state.dealer ??
+    (state.snapshot?.dealer ? { profile: state.snapshot.dealer, connected: isDealer } : null);
+  const present = isDealer
+    ? !!state.snapshot?.players.white && !!state.snapshot?.players.black
+    : opponentPresent(state);
   return (
     <>
       <div className={styles.railTabs} role="tablist">
@@ -223,13 +308,35 @@ function RailContent({
         </button>
       </div>
       <div className={`card ${styles.railCard} ${tab !== 'match' ? styles.railHidden : ''}`}>
+        <ClubChip />
         <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
           <ConnectionBadge state={state} role={session.role} />
           <span className="badge" title="Room code">
             {session.code}
           </span>
         </div>
+        {dealerInfo && (
+          <p className="small" data-testid="dealer-badge" data-connected={dealerInfo.connected}>
+            🎩 Dealt by <strong>{dealerInfo.profile.name}</strong>
+            {isDealer ? ' (you)' : dealerInfo.connected ? '' : ' · away'}
+          </p>
+        )}
+        {state.snapshot && (
+          <p className="small" data-testid="trust-line">
+            <TrustBadge
+              trust={describeTrust(backgammonDefinition, {
+                hostSeat: state.snapshot.dealer ? null : 0,
+                randomness: state.snapshot.randomness,
+              })}
+            />
+          </p>
+        )}
         <MatchPanel state={state} />
+        <div className="row" style={{ marginTop: 10 }}>
+          <button className="btn btn-sm" onClick={onFairness} data-testid="fairness-button">
+            Fairness
+          </button>
+        </div>
         {!present && (
           <>
             <hr className="divider" />
@@ -271,6 +378,8 @@ function LiveGame({
   const [railTab, setRailTab] = useState<RailTab>('match');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [overlayDismissedFor, setOverlayDismissedFor] = useState<number | null>(null);
+  const [fairnessOpen, setFairnessOpen] = useState(false);
+  const isDealer = (state.role ?? 'seat') === 'dealer';
 
   const seat = state.seat;
   const perspective: Player = settings.flipBoard ? opponent(seat ?? 'white') : (seat ?? 'white');
@@ -298,12 +407,16 @@ function LiveGame({
     }
   }, [state.error, toasts]);
 
-  // Presence toasts.
-  const present = opponentPresent(state);
-  const connected = opponentConnected(state);
+  // Presence toasts (for a seat; the dealer sees both seats' presence on their cards).
+  const present = isDealer
+    ? !!state.snapshot?.players.white && !!state.snapshot?.players.black
+    : opponentPresent(state);
+  const connected = isDealer
+    ? state.presence.white && state.presence.black
+    : opponentConnected(state);
   const prevConnected = useRef<boolean | null>(null);
   useEffect(() => {
-    if (!present) return;
+    if (!present || isDealer) return;
     if (prevConnected.current === null) {
       prevConnected.current = connected;
       if (connected)
@@ -373,8 +486,8 @@ function LiveGame({
       name={playerName(state, s)}
       avatar={state.snapshot?.players[s]?.avatar}
       isMe={s === seat}
-      present={s === seat || present}
-      connected={s === seat ? state.status === 'joined' : connected}
+      present={isDealer ? !!state.snapshot?.players[s] : s === seat || present}
+      connected={isDealer ? state.presence[s] : s === seat ? state.status === 'joined' : connected}
       score={match?.score[s] ?? 0}
       pips={pc[s]}
       onTurn={onTurn(s)}
@@ -393,6 +506,7 @@ function LiveGame({
       onTab={openTab}
       unread={unread}
       showHint={!landscape}
+      onFairness={() => setFairnessOpen(true)}
     />
   );
 
@@ -400,10 +514,11 @@ function LiveGame({
     <div
       className={styles.screen}
       data-testid="game-screen"
-      data-role={session.role}
+      data-role={isDealer ? 'dealer' : session.role}
       data-seat={seat ?? ''}
       data-layout={landscape ? 'landscape' : 'default'}
       data-rules={free ? 'free' : 'enforced'}
+      data-staged={state.draft.played.length}
     >
       {(state.status === 'disconnected' || state.status === 'rejected') && (
         <div className={styles.banner} role="alert" data-testid="disconnected-banner">
@@ -452,7 +567,7 @@ function LiveGame({
         {showOverlay && (
           <GameOverOverlay
             state={state}
-            onNextGame={() => client.startGame()}
+            onNextGame={() => (isAutopilot(state) ? client.ready(true) : client.startGame())}
             onLeave={onLeave}
             onDismiss={() => setOverlayDismissedFor(gamesFinished)}
           />
@@ -461,16 +576,65 @@ function LiveGame({
 
       <div className={styles.mySlot}>{cardFor(bottomSeat)}</div>
 
-      <div className={styles.actions}>
-        <ActionBar
-          state={state}
-          client={client}
-          onLeave={onLeave}
-          compact={landscape}
-          layout={landscape ? 'column' : 'row'}
-          showStatus={!landscape}
-          onMore={landscape ? () => setSheetOpen(true) : undefined}
-        />
+      <div className={styles.actions} data-testid={isDealer ? 'dealer-bar' : undefined}>
+        {isDealer ? (
+          <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            {!landscape && (
+              <span className="muted small" data-testid="status-text">
+                {!present
+                  ? 'Waiting for both players to sit down'
+                  : isAutopilot(state) && state.snapshot?.match.game?.phase.kind === 'over'
+                    ? `Game over — next game when both are ready (${[state.ready?.white, state.ready?.black].filter(Boolean).length}/2)`
+                    : `Dealing for ${playerName(state, 'white')} and ${playerName(state, 'black')}`}
+              </span>
+            )}
+            <span className="row">
+              {isAutopilot(state) && (
+                <details className={styles.advanced} data-testid="dealer-advanced">
+                  <summary className="btn btn-ghost btn-sm">Advanced</summary>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => client.startGame()}
+                    disabled={!canStartGame(state)}
+                    data-testid="start-game-button"
+                    title="The table starts games by itself; this forces it now"
+                  >
+                    Start now
+                  </button>
+                </details>
+              )}
+              <button
+                className="btn btn-sm"
+                onClick={() => setFairnessOpen(true)}
+                data-testid="fairness-button-bar"
+              >
+                Fairness
+              </button>
+              {landscape && (
+                <button
+                  className="btn btn-sm"
+                  onClick={() => setSheetOpen(true)}
+                  data-testid="more-button"
+                >
+                  More
+                </button>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={onLeave} data-testid="leave-button">
+                Leave (resume later)
+              </button>
+            </span>
+          </div>
+        ) : (
+          <ActionBar
+            state={state}
+            client={client}
+            onLeave={onLeave}
+            compact={landscape}
+            layout={landscape ? 'column' : 'row'}
+            showStatus={!landscape}
+            onMore={landscape ? () => setSheetOpen(true) : undefined}
+          />
+        )}
         {!landscape && state.opponentPreview && state.opponentPreview.length > 0 && (
           <div className={styles.opponentPreview} data-testid="opponent-preview">
             {playerName(state, opponent(seat ?? 'white'))} is arranging a move…
@@ -482,6 +646,17 @@ function LiveGame({
         <aside className={styles.rail} data-testid="rail">
           {rail}
         </aside>
+      )}
+
+      {fairnessOpen && state.snapshot && (
+        <FairnessPanel
+          source={state.snapshot}
+          gameId="backgammon"
+          actions={state.snapshot.actions}
+          seat={isDealer ? -1 : seat === 'white' ? 0 : seat === 'black' ? 1 : null}
+          exportName={`backgammon-${session.code}-audit`}
+          onClose={() => setFairnessOpen(false)}
+        />
       )}
 
       {landscape && sheetOpen && (

@@ -14,6 +14,10 @@ import { GameProvider } from '../games/GameProvider';
 import type { GameDefinition } from '../games/GameProvider';
 import { GAMES } from '../games/registry';
 import { DEFAULT_GAME } from '../games/ids';
+import { ClubRegistryProvider } from '../clubs/ClubRegistry';
+import { ClubsScreen } from '../clubs/ClubsScreen';
+import { ClubJoinScreen } from '../clubs/ClubJoinScreen';
+import { LobbyScreen } from '../clubs/LobbyScreen';
 
 /** Routes with no player in scope: the picker, invite links, game demos. */
 function GlobalShell() {
@@ -113,10 +117,15 @@ export function AppRoutes() {
             : [];
         })}
         <Route path="demo" element={<Navigate to={`/${DEFAULT_GAME}/demo`} replace />} />
+        {/* Club invite links: `#/club/join/<token>` → pick a player → join the club. */}
+        <Route path="club/join/:token" element={<PickerScreen club />} />
       </Route>
       <Route path=":profile" element={<ProfileShell />}>
         <Route index element={<HubScreen />} />
         <Route path="settings" element={<SettingsScreen />} />
+        <Route path="clubs" element={<ClubsScreen />} />
+        <Route path="club/join/:token" element={<ClubJoinScreen />} />
+        <Route path="club/:clubId" element={<LobbyScreen />} />
         {GAMES.map((g) => (
           <Route key={g.id} path={g.id} element={<GameShell def={g} />}>
             <Route index element={<g.screens.Home />} />
@@ -145,9 +154,11 @@ export function App() {
   return (
     <ToastProvider>
       <SessionRegistryProvider>
-        <HashRouter>
-          <AppRoutes />
-        </HashRouter>
+        <ClubRegistryProvider>
+          <HashRouter>
+            <AppRoutes />
+          </HashRouter>
+        </ClubRegistryProvider>
       </SessionRegistryProvider>
     </ToastProvider>
   );

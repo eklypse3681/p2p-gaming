@@ -2,9 +2,10 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useProfile } from '../session/ProfileProvider';
 import { useAllSavedMatches } from '../session/matchStore';
-import { summarizeMatch, describeLength } from '../session/history';
 import { relativeTime } from '../session/time';
 import { GAMES, getGame } from '../games/registry';
+import type { SavedSummary } from '../games/GameProvider';
+import { describeSavedMatch } from '../games/backgammon';
 import styles from './HubScreen.module.css';
 
 /**
@@ -19,12 +20,13 @@ export function HubScreen() {
   const inProgress = useMemo(
     () =>
       byGame
-        .flatMap(({ game, matches }) =>
-          matches
-            .map((m) => summarizeMatch(m, profile.id))
-            .filter((r) => r !== null && r.outcome === 'in-progress')
-            .map((r) => ({ game, row: r! })),
-        )
+        .flatMap(({ game, matches }) => {
+          const describe = getGame(game)?.describeSaved ?? describeSavedMatch;
+          return matches
+            .map((m) => describe(m, profile.id))
+            .filter((r): r is SavedSummary => r !== null && r.inProgress)
+            .map((row) => ({ game, row }));
+        })
         .sort((a, b) => b.row.updatedAt - a.row.updatedAt),
     [byGame, profile.id],
   );
@@ -65,6 +67,25 @@ export function HubScreen() {
               </span>
             </button>
           ))}
+          <button
+            type="button"
+            className={`card ${styles.gameCard}`}
+            onClick={() => navigate(`/${slug}/clubs`)}
+            data-testid="clubs-card"
+          >
+            <span className={styles.icon} aria-hidden="true">
+              🏛️
+            </span>
+            <span className={styles.body}>
+              <span className={styles.name}>Clubs</span>
+              <span className={styles.tagline}>
+                Join a club: house chips, rooms of tables, a dealer that never sleeps.
+              </span>
+              <span className={styles.go} aria-hidden="true">
+                Open →
+              </span>
+            </span>
+          </button>
           <div
             className={`card ${styles.gameCard} ${styles.soon}`}
             aria-disabled="true"
@@ -106,12 +127,11 @@ export function HubScreen() {
                     </span>
                     <span className={styles.matchBody}>
                       <span className={styles.matchTitle}>
-                        vs {row.opponentName}
-                        {row.rules === 'free' && <span className="badge">Free</span>}
+                        {row.title}
+                        {row.badge && <span className="badge">{row.badge}</span>}
                       </span>
                       <span className="muted small">
-                        {describeLength(row.length)} · {row.myScore}–{row.theirScore} · code{' '}
-                        <code>{row.code}</code> · {relativeTime(row.updatedAt)}
+                        {row.meta} · code <code>{row.code}</code> · {relativeTime(row.updatedAt)}
                       </span>
                     </span>
                     <button

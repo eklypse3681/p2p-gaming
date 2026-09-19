@@ -295,3 +295,17 @@
     padding: var(--space-3);
   }
 }
+
+/* Dealer overrides on an unattended table live behind a disclosure so they never get in the way. */
+.advanced {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.advanced > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.advanced > summary::-webkit-details-marker {
+  display: none;
+}

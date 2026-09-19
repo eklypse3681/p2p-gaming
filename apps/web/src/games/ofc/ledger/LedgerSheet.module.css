@@ -1,0 +1,117 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--ui-bg) 60%, transparent);
+  backdrop-filter: blur(3px);
+}
+.sheet {
+  width: min(640px, 100%);
+  max-height: calc(100dvh - 2 * var(--space-4));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  animation: fade-up var(--dur) var(--ease);
+}
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.balances {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-2);
+}
+.balance {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  border-left-width: 3px;
+}
+.balanceName {
+  font-weight: 650;
+}
+.balancePoints {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+.up {
+  color: var(--ui-success);
+  border-left-color: var(--ui-success);
+}
+.down {
+  color: var(--ui-danger);
+  border-left-color: var(--ui-danger);
+}
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.planRow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--ui-surface-raised);
+  font-size: 0.92rem;
+}
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 50%, var(--ui-border));
+  background: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-surface));
+}
+.adjust {
+  display: grid;
+  grid-template-columns: 1fr 100px 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+}
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.entry {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  font-size: 0.88rem;
+}
+.entryLabel {
+  min-width: 0;
+}
+.entryDeltas {
+  display: flex;
+  gap: 10px;
+  flex: none;
+}
+@media (max-width: 640px) {
+  .adjust {
+    grid-template-columns: 1fr 1fr;
+  }
+}

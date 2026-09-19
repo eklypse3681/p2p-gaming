@@ -1,0 +1,109 @@
+.strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-2);
+  min-width: 0;
+}
+.compact {
+  grid-template-columns: 1fr;
+}
+.seat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ui-border);
+  background: color-mix(in srgb, var(--ui-surface) 85%, transparent);
+  min-width: 0;
+  transition:
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+.active {
+  border-color: color-mix(in srgb, var(--ui-accent) 60%, var(--ui-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ui-accent) 40%, transparent);
+}
+.me {
+  background: color-mix(in srgb, var(--ui-accent) 8%, var(--ui-surface));
+}
+.avatar {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  background: var(--ui-surface-raised);
+  border: 1px solid var(--ui-border);
+  flex: none;
+}
+.presence {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ui-text-muted);
+  border: 2px solid var(--ui-surface);
+}
+.online {
+  background: var(--ui-success);
+}
+.button {
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  font-size: 0.65rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ui-surface);
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.name {
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--ui-text-muted);
+  flex-wrap: wrap;
+}
+.up {
+  color: var(--ui-success);
+}
+.down {
+  color: var(--ui-danger);
+}
+.fl {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-accent) 20%, transparent);
+  color: var(--ui-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.turn {
+  color: var(--ui-accent);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}

@@ -52,6 +52,12 @@ export interface PeerJsProviderOptions {
    * override anything above (`config`, `token`, `pingInterval`, `referrerPolicy`, …).
    */
   peerOptions?: PeerOptions;
+  /**
+   * Node support. `'auto'` (default) installs the `node-datachannel` WebRTC polyfill when there
+   * is no `window` and no `RTCPeerConnection`; `true` forces it; `false` never touches globals.
+   * See {@link installNodeWebRtc}.
+   */
+  node?: boolean | 'auto';
 }
 
 /**
@@ -264,11 +270,70 @@ interface LoadedPeerJs {
   defaultIceServers: RTCIceServer[];
 }
 
+const RTC_GLOBALS = [
+  'RTCPeerConnection',
+  'RTCSessionDescription',
+  'RTCIceCandidate',
+  'RTCDataChannel',
+] as const;
+
+let nodeWebRtcInstalled: boolean | null = null;
+
+/**
+ * Make WebRTC available to PeerJS under Node (22+) by installing the classes from the optional
+ * `node-datachannel` package as globals. Synchronous and idempotent so that `host()`/`join()`
+ * construct the `Peer` without an extra async gap. Node builtins are reached through
+ * `process.getBuiltinModule`, never a static import, so browser bundles contain no Node code and
+ * the package name is never a literal import specifier for a bundler to chase.
+ */
+export function installNodeWebRtcSync(): boolean {
+  if (isWebRtcSupported()) return true;
+  if (nodeWebRtcInstalled !== null) return nodeWebRtcInstalled;
+  const g = globalThis as Record<string, unknown>;
+  const proc = g.process as { getBuiltinModule?: (id: string) => unknown } | undefined;
+  const getBuiltin = proc?.getBuiltinModule;
+  if (typeof getBuiltin !== 'function') return (nodeWebRtcInstalled = false);
+  try {
+    const { createRequire } = getBuiltin('node:module') as {
+      createRequire: (from: string) => (id: string) => unknown;
+    };
+    const require = createRequire(import.meta.url);
+    const polyfill = require('node-datachannel/polyfill') as Record<string, unknown>;
+    for (const name of RTC_GLOBALS) {
+      if (typeof g[name] === 'undefined' && typeof polyfill[name] === 'function') {
+        g[name] = polyfill[name];
+      }
+    }
+    nodeWebRtcInstalled = isWebRtcSupported() && typeof g.WebSocket === 'function';
+  } catch {
+    nodeWebRtcInstalled = false;
+  }
+  return nodeWebRtcInstalled;
+}
+
+/** Promise-flavoured {@link installNodeWebRtcSync} for callers that prefer to await it. */
+export function installNodeWebRtc(): Promise<boolean> {
+  return Promise.resolve(installNodeWebRtcSync());
+}
+
+function ensureWebRtc(mode: boolean | 'auto'): void {
+  if (mode === false) return;
+  const inBrowser = typeof window !== 'undefined';
+  if (mode === 'auto' && inBrowser) return;
+  if (!installNodeWebRtcSync() && mode === true) {
+    throw new TransportError(
+      'unsupported',
+      'WebRTC is not available in this Node process: install node-datachannel (Node 22+)',
+    );
+  }
+}
+
 /**
  * Lazily pull in PeerJS. Kept dynamic so this module imports cleanly in Node, and tolerant of
  * both the ESM namespace and the CJS-interop (`default`) shape.
  */
-async function loadPeerJs(): Promise<LoadedPeerJs> {
+async function loadPeerJs(node: boolean | 'auto' = 'auto'): Promise<LoadedPeerJs> {
+  ensureWebRtc(node);
   const mod = (await import('peerjs')) as unknown as Record<string, unknown>;
   const ns = (
     typeof mod.Peer === 'function' ? mod : ((mod.default ?? {}) as Record<string, unknown>)
@@ -352,27 +417,43 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
   const keepaliveMs = options.keepaliveMs ?? DEFAULT_KEEPALIVE_MS;
   const defaultTimeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const node = options.node ?? 'auto';
 
   return {
     name: 'peerjs',
 
     async host(code: string): Promise<Listener> {
-      const { Peer, defaultIceServers } = await loadPeerJs();
+      const { Peer, defaultIceServers } = await loadPeerJs(node);
       const peer = new Peer(
         peerIdFor(code, namespace),
         buildPeerOptions(options, defaultIceServers),
       );
       return new Promise<Listener>((resolve, reject) => {
         let settled = false;
+        // The signalling server occasionally never answers (stale socket after a reload);
+        // without a deadline the whole resume flow would hang silently.
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          peer.destroy();
+          reject(
+            new TransportError(
+              'timeout',
+              `timed out registering ${code} with the signalling server after ${defaultTimeoutMs}ms`,
+            ),
+          );
+        }, defaultTimeoutMs);
         peer.on('open', () => {
           if (settled) return;
           settled = true;
+          clearTimeout(timer);
           resolve(new PeerJsListener(code, peer, keepaliveMs));
         });
         peer.on('error', (err: unknown) => {
           // After the listener exists, errors are per-connection noise; PeerJS keeps the peer.
           if (settled) return;
           settled = true;
+          clearTimeout(timer);
           peer.destroy();
           reject(toTransportError(err, `could not host ${code}`));
         });
@@ -381,7 +462,7 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
 
     async join(code: string, opts?: { timeoutMs?: number }): Promise<Transport> {
       const timeoutMs = opts?.timeoutMs ?? defaultTimeoutMs;
-      const { Peer, defaultIceServers } = await loadPeerJs();
+      const { Peer, defaultIceServers } = await loadPeerJs(node);
       const target = peerIdFor(code, namespace);
       const peer = new Peer(undefined, buildPeerOptions(options, defaultIceServers));
 

@@ -5,8 +5,15 @@ import { gamePath, routesFor } from './GameProvider';
 import { RESERVED_SLUGS } from '../session/profiles';
 
 describe('game registry', () => {
-  it('registers backgammon with screens, a demo and a peer namespace', () => {
-    expect(GAMES.map((g) => g.id)).toEqual(['backgammon']);
+  it('registers backgammon and OFC with screens, demos and peer namespaces', () => {
+    expect(GAMES.map((g) => g.id)).toEqual(['backgammon', 'ofc']);
+    const ofc = requireGame('ofc');
+    expect(ofc.name).toBe('Open Face Chinese Poker');
+    expect(ofc.peerNamespace).toBe('ofc-v1');
+    expect(ofc.screens.Host).toBeTypeOf('function');
+    expect(ofc.Demo).toBeTypeOf('function');
+    expect(ofc.describeSaved).toBeTypeOf('function');
+    expect(routesFor('steve', 'ofc').game('t1')).toBe('/steve/ofc/game/t1');
     const bg = requireGame('backgammon');
     expect(bg.name).toBe('Backgammon');
     expect(bg.peerNamespace).toBe('backgammon-v1');

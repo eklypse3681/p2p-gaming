@@ -124,10 +124,19 @@ describe('free board over the wire', () => {
     clientEnd.onMessage((m) => errors.push(m));
     rawHello(clientEnd, GUEST);
     await flush();
-    clientEnd.send({ type: 'free-move', checker: 'purple', from: 1, to: 2 });
-    clientEnd.send({ type: 'free-move', checker: 'white', from: 99, to: 2 });
-    clientEnd.send({ type: 'free-cube', value: 3, owner: 'white' });
-    clientEnd.send({ type: 'free-result', winner: 'white', kind: 'huge' });
+    clientEnd.send({
+      type: 'command',
+      command: { type: 'free-move', checker: 'purple', from: 1, to: 2 },
+    });
+    clientEnd.send({
+      type: 'command',
+      command: { type: 'free-move', checker: 'white', from: 99, to: 2 },
+    });
+    clientEnd.send({ type: 'command', command: { type: 'free-cube', value: 3, owner: 'white' } });
+    clientEnd.send({
+      type: 'command',
+      command: { type: 'free-result', winner: 'white', kind: 'huge' },
+    });
     await flush();
     const codes = errors
       .filter((m) => (m as { type: string }).type === 'error')

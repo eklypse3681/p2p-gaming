@@ -3,14 +3,36 @@ import { validateClientMessage, validatePlay, validateProfile } from '../src/ind
 
 describe('validateClientMessage', () => {
   it('accepts well-formed messages and normalises text', () => {
-    expect(validateClientMessage({ type: 'roll' })).toEqual({ ok: true, message: { type: 'roll' } });
-    expect(validateClientMessage({ type: 'chat', text: '  hi  ' })).toEqual({ ok: true, message: { type: 'chat', text: 'hi' } });
-    expect(validateClientMessage({ type: 'offer-resign', stakes: 'gammon' })).toEqual({ ok: true, message: { type: 'offer-resign', stakes: 'gammon' } });
-    expect(validateClientMessage({ type: 'ping', t: 5 })).toEqual({ ok: true, message: { type: 'ping', t: 5 } });
+    expect(validateClientMessage({ type: 'roll' })).toEqual({
+      ok: true,
+      message: { type: 'roll' },
+    });
+    expect(validateClientMessage({ type: 'chat', text: '  hi  ' })).toEqual({
+      ok: true,
+      message: { type: 'chat', text: 'hi' },
+    });
+    expect(validateClientMessage({ type: 'offer-resign', stakes: 'gammon' })).toEqual({
+      ok: true,
+      message: { type: 'offer-resign', stakes: 'gammon' },
+    });
+    expect(validateClientMessage({ type: 'ping', t: 5 })).toEqual({
+      ok: true,
+      message: { type: 'ping', t: 5 },
+    });
     const play = [{ from: 8, to: 5, die: 3, hit: 'yes' }];
-    expect(validateClientMessage({ type: 'play', play })).toEqual({ ok: true, message: { type: 'play', play: [{ from: 8, to: 5, die: 3, hit: false }] } });
-    const hello = validateClientMessage({ type: 'hello', protocol: 1, profile: { id: 'x', name: '  Zed  ', avatar: '🎲', extra: 1 } });
-    expect(hello).toEqual({ ok: true, message: { type: 'hello', protocol: 1, profile: { id: 'x', name: 'Zed', avatar: '🎲' } } });
+    expect(validateClientMessage({ type: 'play', play })).toEqual({
+      ok: true,
+      message: { type: 'play', play: [{ from: 8, to: 5, die: 3, hit: false }] },
+    });
+    const hello = validateClientMessage({
+      type: 'hello',
+      protocol: 1,
+      profile: { id: 'x', name: '  Zed  ', avatar: '🎲', extra: 1 },
+    });
+    expect(hello).toEqual({
+      ok: true,
+      message: { type: 'hello', protocol: 1, profile: { id: 'x', name: 'Zed', avatar: '🎲' } },
+    });
   });
 
   it('rejects malformed messages', () => {
@@ -37,7 +59,11 @@ describe('validateClientMessage', () => {
 
   it('caps chat and name length', () => {
     const r = validateClientMessage({ type: 'chat', text: 'x'.repeat(2000) });
-    expect(r.ok && r.message.type === 'chat' && r.message.text.length).toBe(500);
+    expect(
+      r.ok && r.message.type === 'chat'
+        ? (r.message as unknown as { text: string }).text.length
+        : 0,
+    ).toBe(500);
     expect(validateProfile({ id: 'a', name: 'n'.repeat(100) })!.name.length).toBe(40);
     expect(validatePlay([])).toEqual([]);
   });

@@ -6,6 +6,12 @@ settings:
 
 overrides:
   vite: ^8.3.0
+  vitest: ^5.0.0
+  '@vitest/expect': ^5.0.0
+  '@vitest/runner': ^5.0.0
+  '@vitest/snapshot': ^5.0.0
+  '@vitest/spy': ^5.0.0
+  '@vitest/utils': ^5.0.0
 
 importers:
 
@@ -37,22 +43,104 @@ importers:
         version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)
       vitest:
         specifier: ^5.0.0
-        version: 5.0.0(@types/node@22.20.2)(jsdom@30.0.1)(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2))
+        version: 5.0.0(@types/node@22.20.2)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2))
 
-  apps/web:
+  apps/console:
     dependencies:
-      '@bgf/client':
+      '@bgf/ofc-engine':
         specifier: workspace:*
-        version: link:../../packages/client
-      '@bgf/engine':
-        specifier: workspace:*
-        version: link:../../packages/engine
+        version: link:../../packages/ofc-engine
       '@bgf/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
       '@bgf/server':
         specifier: workspace:*
         version: link:../../packages/server
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../../packages/table
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.0(react@19.3.0)
+      react-router:
+        specifier: ^8.3.1
+        version: 8.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+    devDependencies:
+      '@bgf/dealer':
+        specifier: workspace:*
+        version: link:../../packages/dealer
+      '@playwright/test':
+        specifier: ^1.63.0
+        version: 1.63.0
+      '@testing-library/jest-dom':
+        specifier: ^7.0.1
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@5.0.0(@types/node@22.20.2)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)))
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@testing-library/user-event':
+        specifier: ^14.6.7
+        version: 14.6.7(@testing-library/dom@10.4.1)
+      '@types/qrcode':
+        specifier: ^1.5.6
+        version: 1.5.6
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.1
+        version: 6.1.1(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2))
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1(@noble/hashes@2.4.0)
+      vite:
+        specifier: ^8.3.0
+        version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)
+      vitest:
+        specifier: ^5.0.0
+        version: 5.0.0(@types/node@22.20.2)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2))
+
+  apps/web:
+    dependencies:
+      '@bgf/client':
+        specifier: workspace:*
+        version: link:../../packages/client
+      '@bgf/club':
+        specifier: workspace:*
+        version: link:../../packages/club
+      '@bgf/club-spec':
+        specifier: workspace:*
+        version: link:../../packages/club-spec
+      '@bgf/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@bgf/entropy':
+        specifier: workspace:*
+        version: link:../../packages/entropy
+      '@bgf/ofc-engine':
+        specifier: workspace:*
+        version: link:../../packages/ofc-engine
+      '@bgf/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@bgf/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@bgf/soak':
+        specifier: workspace:*
+        version: link:../../packages/soak
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../../packages/table
       '@bgf/transport-peerjs':
         specifier: workspace:*
         version: link:../../packages/transport-peerjs
@@ -80,7 +168,7 @@ importers:
         version: 1.63.0
       '@testing-library/jest-dom':
         specifier: ^7.0.1
-        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@5.0.0(@types/node@22.20.2)(jsdom@30.0.1)(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)))
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@5.0.0(@types/node@22.20.2)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)))
       '@testing-library/react':
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -101,13 +189,13 @@ importers:
         version: 6.1.1(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2))
       jsdom:
         specifier: ^30.0.1
-        version: 30.0.1
+        version: 30.0.1(@noble/hashes@2.4.0)
       vite:
         specifier: ^8.3.0
         version: 8.3.0(@types/node@22.20.2)(esbuild@0.28.2)
       vitest:
         specifier: ^5.0.0
-        version: 5.0.0(@types/node@22.20.2)(jsdom@30.0.1)(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2))
+        version: 5.0.0(@types/node@22.20.2)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2))
 
   packages/client:
     dependencies:
@@ -117,12 +205,116 @@ importers:
       '@bgf/protocol':
         specifier: workspace:*
         version: link:../protocol
-    devDependencies:
       '@bgf/server':
         specifier: workspace:*
         version: link:../server
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../table
+
+  packages/club:
+    dependencies:
+      '@bgf/club-spec':
+        specifier: workspace:*
+        version: link:../club-spec
+      '@bgf/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../table
+
+  packages/club-spec:
+    dependencies:
+      '@bgf/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
+  packages/dealer:
+    dependencies:
+      '@bgf/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@bgf/entropy':
+        specifier: workspace:*
+        version: link:../entropy
+      '@bgf/ofc-engine':
+        specifier: workspace:*
+        version: link:../ofc-engine
+      '@bgf/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@bgf/server':
+        specifier: workspace:*
+        version: link:../server
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../table
+      '@bgf/transport-peerjs':
+        specifier: workspace:*
+        version: link:../transport-peerjs
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      peerjs:
+        specifier: ^1.5.5
+        version: 1.5.5
+    optionalDependencies:
+      node-datachannel:
+        specifier: ^0.33.4
+        version: 0.33.4
 
   packages/engine: {}
+
+  packages/entropy:
+    dependencies:
+      '@bgf/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../table
+
+  packages/gitstore-proto:
+    dependencies:
+      '@bgf/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@bgf/ofc-engine':
+        specifier: workspace:*
+        version: link:../ofc-engine
+      '@bgf/server':
+        specifier: workspace:*
+        version: link:../server
+      '@bgf/soak':
+        specifier: workspace:*
+        version: link:../soak
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../table
+    devDependencies:
+      '@duckdb/node-api':
+        specifier: 1.5.5-r.4
+        version: 1.5.5-r.4
+
+  packages/mp-proto:
+    dependencies:
+      '@noble/curves':
+        specifier: ^2.4.0
+        version: 2.4.0
+      '@noble/hashes':
+        specifier: ^2.4.0
+        version: 2.4.0
+
+  packages/ofc-engine:
+    dependencies:
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../table
+    devDependencies:
+      '@bgf/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/protocol:
     dependencies:
@@ -138,6 +330,46 @@ importers:
       '@bgf/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../table
+    devDependencies:
+      '@bgf/entropy':
+        specifier: workspace:*
+        version: link:../entropy
+
+  packages/soak:
+    dependencies:
+      '@bgf/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@bgf/entropy':
+        specifier: workspace:*
+        version: link:../entropy
+      '@bgf/ofc-engine':
+        specifier: workspace:*
+        version: link:../ofc-engine
+      '@bgf/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@bgf/server':
+        specifier: workspace:*
+        version: link:../server
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../table
+      '@bgf/transport-peerjs':
+        specifier: workspace:*
+        version: link:../transport-peerjs
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+
+  packages/table:
+    dependencies:
+      '@bgf/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/transport-peerjs:
     dependencies:
@@ -147,6 +379,10 @@ importers:
       peerjs:
         specifier: ^1.5.5
         version: 1.5.5
+    optionalDependencies:
+      node-datachannel:
+        specifier: ^0.33.4
+        version: 0.33.4
 
 packages:
 
@@ -277,6 +513,56 @@ packages:
   '@csstools/css-tokenizer@4.0.0':
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
+
+  '@duckdb/node-api@1.5.5-r.4':
+    resolution: {integrity: sha512-8v0CZNo7aM6GQCNUHERGTrZWIfss8xKzZPF3ACNhPdMMrt7UjkNI5nRQ9FTFO7Yx8ghxYxVpdotmBBMQ5vXUOA==}
+
+  '@duckdb/node-bindings-darwin-arm64@1.5.5-r.4':
+    resolution: {integrity: sha512-4OdO3pkoJzAZDnZ2iyehi67XL4+WqHPCGYWbyAsYyhGJS+WscGrAnFhMhHudMM2XF8pIEM2tuOKMmwWnTNN2wQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@duckdb/node-bindings-darwin-x64@1.5.5-r.4':
+    resolution: {integrity: sha512-WHg3E+TupdujG31LGujMMcmtPIdW6rqRHeihlKgJR8EMetHycoYkwYxRud0niitJvS+uV0du/6pdemzs3HG9GQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@duckdb/node-bindings-linux-arm64-musl@1.5.5-r.4':
+    resolution: {integrity: sha512-Tswnf+/XWpOcFJNUUu1fkFIX/su4tMcnNz0ZV0Nru3/CkJKIMwBh+VL4SM9YV4zPK90GC4Lm8gzafjc1qDmfyQ==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@duckdb/node-bindings-linux-arm64@1.5.5-r.4':
+    resolution: {integrity: sha512-VIeHMpYAKpGiWZ4QYsOhODAHDEcXcn089aKty0MFsMEKaEfRJWixKwnwXy/ba2/wwFmnPiSFhKNqygj2BrQbqw==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@duckdb/node-bindings-linux-x64-musl@1.5.5-r.4':
+    resolution: {integrity: sha512-h0ixrgGHtHh+C/Fu1eAL9hX4iCf8yuyJN6Y24Gh8axXXP8UuSh0rQRAQUQTYarQ8pm2qSG/67ZYjyYYydD+J/w==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@duckdb/node-bindings-linux-x64@1.5.5-r.4':
+    resolution: {integrity: sha512-EY+CL/4h8MQZd9MxTBq+98m3U9osmvHBwhE9b5fMWQGt2I6p1j8fvX0SXiwy9KBfQIbjVUOf5XvGdXncI54KSg==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@duckdb/node-bindings-win32-arm64@1.5.5-r.4':
+    resolution: {integrity: sha512-uorAnySIMwWkRDuUhM1yTDxWIislnX8mndhFIw6r4VKhVW61HEOOMX5oAgkSQFII4RNWpC5PCcUAEhSATgNvVQ==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@duckdb/node-bindings-win32-x64@1.5.5-r.4':
+    resolution: {integrity: sha512-X9XGcWQ10P3mvUIaMXXk2bi94Cow7b/ziTPMKxJ0U8U3wQPxsLzEUP7D7C/KrBWINl5am2k+5SkDVyA/THUgPg==}
+    cpu: [x64]
+    os: [win32]
+
+  '@duckdb/node-bindings@1.5.5-r.4':
+    resolution: {integrity: sha512-n+4hEfjp4vny3BuWn5p1Gh5CzHaPRxoI8TzTytxL1GMlIKKrXcg/o6sSAjrsROUXGAM4WQCiWPLKnPsjJJSggg==}
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -522,6 +808,63 @@ packages:
     resolution: {integrity: sha512-h9u4u/jiIRKbq25PM+zymTyW6bhTzELvOoUd+AvYriWOAKpLGnIamaET3pnHYoI5iYphAHBI4ayx0MehR+VVPQ==}
     engines: {node: '>= 10'}
 
+  '@noble/curves@2.4.0':
+    resolution: {integrity: sha512-P4/62zrgfH33CneE3Dn4WhJVA22YUU0eR51wKIan4NVRvwsA0YnPTwWGpNbpuacSujmSFLvyzpyuR30+fbq2Ew==}
+    engines: {node: '>= 20.19.0'}
+
+  '@noble/hashes@2.4.0':
+    resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
+    engines: {node: '>= 20.19.0'}
+
+  '@node-datachannel/android-arm64@0.33.4':
+    resolution: {integrity: sha512-Kd1K+drJlxdGmZYBlzh5HHX2E7les99eTWlt7WldZgvJmcGf2z9L/bnUVn4zbhNm2q/MtNZ2tPX2bd+fGlDDpQ==}
+    cpu: [arm64]
+    os: [android]
+
+  '@node-datachannel/darwin-arm64@0.33.4':
+    resolution: {integrity: sha512-bkIA+IbModz/NUmbVYTSWj8dZvkiab+cU4zOa6rhfKsNcW3EkdD2/DDoJjUrRrw+LbEZ40V7NuAKUlMNFDXFsw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@node-datachannel/darwin-x64@0.33.4':
+    resolution: {integrity: sha512-+dLnwiwC3GdWqW0OQShZcSFYrx3hRx0+7U85swoiP3iiRqtDUARME6AIAmW3glpP0vmus1jv5KhPCy/Q+jAvqw==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@node-datachannel/linux-arm64-gnu@0.33.4':
+    resolution: {integrity: sha512-rR4yjwxpI1miLSrruLGcfR9yfw0Qebw+Twt+u+lKsL9SwmXxTm5pJhUAa9RU+c35oZ98IyAxGFjRwwq85BTbog==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@node-datachannel/linux-arm64-musl@0.33.4':
+    resolution: {integrity: sha512-MR4o1F0aREj/AtbNlXL20YiNx8/pDI8L/5B4Vr9ldiEDottD0IOdCd0khB8fpr5Np2CW7WwU9QG+uto00QGVdw==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@node-datachannel/linux-x64-gnu@0.33.4':
+    resolution: {integrity: sha512-xN0x3lcQ87qwOAmf1dBLVWrYY40LQ7pM4Y9wuNjP+EtN4IwiXqrhPdgupzGAElxna+n2NgBG0gT60dZpgoYU2Q==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@node-datachannel/linux-x64-musl@0.33.4':
+    resolution: {integrity: sha512-FWqJEjL7TqOPmsqdfwmG/BUwOXQN7MfpEU8kzw6ePbglUbwgdc3976Ls9BCBUXyPgEJyLo8YE1LJyWAlbXWyvA==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@node-datachannel/win32-arm64-msvc@0.33.4':
+    resolution: {integrity: sha512-TeDV2tSPm+qAnF6MIPlLFTIlobSYLwOVe3/wQl+8hD/q3cEPTQi7vByFaQQ5lRULKKdnjKRR5iDMsxMilqbtXA==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@node-datachannel/win32-x64-msvc@0.33.4':
+    resolution: {integrity: sha512-eU0w/9ykrNaA5vWs5gjVs3Qxa45jbQ8mYoMyh5OWnRCE5GzXKxHCpfhFUnO+jGqi0KxkyP0hSA6fiwXXkirk6g==}
+    cpu: [x64]
+    os: [win32]
+
   '@oxc-project/types@0.149.0':
     resolution: {integrity: sha512-Efcc+iF0j3Bf67YjEqIqWXbX5XddXoK/Mw4K1/JuXwRCZ8N16VR7iT23nlCc9XrveFVh/E5Rqs2StT0V8v9LdA==}
 
@@ -638,7 +981,7 @@ packages:
     engines: {node: '>=22', npm: '>=6', yarn: '>=1'}
     peerDependencies:
       '@testing-library/dom': '>=10 <11'
-      vitest: '>= 0.32'
+      vitest: ^5.0.0
     peerDependenciesMeta:
       vitest:
         optional: true
@@ -1424,6 +1767,10 @@ packages:
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
+  node-datachannel@0.33.4:
+    resolution: {integrity: sha512-qiUrdh8vY9XhglEnx91HK0N2JEAAu8qTZl0fcR3yQd0fFrdO39NwDeJD/KpG+WKUb9/o4p2UwnP+/HftA/xMbQ==}
+    engines: {node: '>=18.20.0'}
+
   node-releases@2.0.55:
     resolution: {integrity: sha512-mIrE/Cw9y+9Au6dS5vDKDhQza9YvG6w+ZrS6X+ZzA7yFW/soAeaups4Qzn1bL6g5FVy8WtP79+0j82oPIbqRjQ==}
     engines: {node: '>=18'}
@@ -2023,6 +2370,47 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.0': {}
 
+  '@duckdb/node-api@1.5.5-r.4':
+    dependencies:
+      '@duckdb/node-bindings': 1.5.5-r.4
+
+  '@duckdb/node-bindings-darwin-arm64@1.5.5-r.4':
+    optional: true
+
+  '@duckdb/node-bindings-darwin-x64@1.5.5-r.4':
+    optional: true
+
+  '@duckdb/node-bindings-linux-arm64-musl@1.5.5-r.4':
+    optional: true
+
+  '@duckdb/node-bindings-linux-arm64@1.5.5-r.4':
+    optional: true
+
+  '@duckdb/node-bindings-linux-x64-musl@1.5.5-r.4':
+    optional: true
+
+  '@duckdb/node-bindings-linux-x64@1.5.5-r.4':
+    optional: true
+
+  '@duckdb/node-bindings-win32-arm64@1.5.5-r.4':
+    optional: true
+
+  '@duckdb/node-bindings-win32-x64@1.5.5-r.4':
+    optional: true
+
+  '@duckdb/node-bindings@1.5.5-r.4':
+    dependencies:
+      detect-libc: 2.1.2
+    optionalDependencies:
+      '@duckdb/node-bindings-darwin-arm64': 1.5.5-r.4
+      '@duckdb/node-bindings-darwin-x64': 1.5.5-r.4
+      '@duckdb/node-bindings-linux-arm64': 1.5.5-r.4
+      '@duckdb/node-bindings-linux-arm64-musl': 1.5.5-r.4
+      '@duckdb/node-bindings-linux-x64': 1.5.5-r.4
+      '@duckdb/node-bindings-linux-x64-musl': 1.5.5-r.4
+      '@duckdb/node-bindings-win32-arm64': 1.5.5-r.4
+      '@duckdb/node-bindings-win32-x64': 1.5.5-r.4
+
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
 
@@ -2131,7 +2519,9 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@exodus/bytes@1.15.1': {}
+  '@exodus/bytes@1.15.1(@noble/hashes@2.4.0)':
+    optionalDependencies:
+      '@noble/hashes': 2.4.0
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -2177,6 +2567,39 @@ snapshots:
   '@keyv/serialize@1.1.1': {}
 
   '@msgpack/msgpack@2.8.0': {}
+
+  '@noble/curves@2.4.0':
+    dependencies:
+      '@noble/hashes': 2.4.0
+
+  '@noble/hashes@2.4.0': {}
+
+  '@node-datachannel/android-arm64@0.33.4':
+    optional: true
+
+  '@node-datachannel/darwin-arm64@0.33.4':
+    optional: true
+
+  '@node-datachannel/darwin-x64@0.33.4':
+    optional: true
+
+  '@node-datachannel/linux-arm64-gnu@0.33.4':
+    optional: true
+
+  '@node-datachannel/linux-arm64-musl@0.33.4':
+    optional: true
+
+  '@node-datachannel/linux-x64-gnu@0.33.4':
+    optional: true
+
+  '@node-datachannel/linux-x64-musl@0.33.4':
+    optional: true
+
+  '@node-datachannel/win32-arm64-msvc@0.33.4':
+    optional: true
+
+  '@node-datachannel/win32-x64-msvc@0.33.4':
+    optional: true
 
   '@oxc-project/types@0.149.0': {}
 
@@ -2242,7 +2665,7 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.1)(vitest@5.0.0(@types/node@22.20.2)(jsdom@30.0.1)(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)))':
+  '@testing-library/jest-dom@7.0.1(@testing-library/dom@10.4.1)(vitest@5.0.0(@types/node@22.20.2)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)))':
     dependencies:
       '@adobe/css-tools': 4.5.0
       '@testing-library/dom': 10.4.1
@@ -2252,7 +2675,7 @@ snapshots:
       picocolors: 1.1.1
       redent: 3.0.0
     optionalDependencies:
-      vitest: 5.0.0(@types/node@22.20.2)(jsdom@30.0.1)(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2))
+      vitest: 5.0.0(@types/node@22.20.2)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2))
 
   '@testing-library/react@16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
@@ -2564,10 +2987,10 @@ snapshots:
 
   csstype@3.2.3: {}
 
-  data-urls@7.0.0:
+  data-urls@7.0.0(@noble/hashes@2.4.0):
     dependencies:
       whatwg-mimetype: 5.0.0
-      whatwg-url: 16.0.1
+      whatwg-url: 16.0.1(@noble/hashes@2.4.0)
     transitivePeerDependencies:
       - '@noble/hashes'
 
@@ -2627,7 +3050,6 @@ snapshots:
       '@esbuild/win32-arm64': 0.28.2
       '@esbuild/win32-ia32': 0.28.2
       '@esbuild/win32-x64': 0.28.2
-    optional: true
 
   escalade@3.2.0: {}
 
@@ -2782,9 +3204,9 @@ snapshots:
 
   hookified@2.2.0: {}
 
-  html-encoding-sniffer@6.0.0:
+  html-encoding-sniffer@6.0.0(@noble/hashes@2.4.0):
     dependencies:
-      '@exodus/bytes': 1.15.1
+      '@exodus/bytes': 1.15.1(@noble/hashes@2.4.0)
     transitivePeerDependencies:
       - '@noble/hashes'
 
@@ -2812,17 +3234,17 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  jsdom@30.0.1:
+  jsdom@30.0.1(@noble/hashes@2.4.0):
     dependencies:
       '@asamuzakjp/css-color': 6.0.7
       '@asamuzakjp/dom-selector': 8.3.2
       '@bramus/specificity': 2.4.2
       '@csstools/css-syntax-patches-for-csstree': 1.1.13(css-tree@3.2.1)
-      '@exodus/bytes': 1.15.1
+      '@exodus/bytes': 1.15.1(@noble/hashes@2.4.0)
       css-tree: 3.2.1
-      data-urls: 7.0.0
+      data-urls: 7.0.0(@noble/hashes@2.4.0)
       decimal.js: 10.6.0
-      html-encoding-sniffer: 6.0.0
+      html-encoding-sniffer: 6.0.0(@noble/hashes@2.4.0)
       is-potential-custom-element-name: 1.0.1
       lru-cache: 11.5.2
       parse5: 8.0.1
@@ -2833,7 +3255,7 @@ snapshots:
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
-      whatwg-url: 17.1.1
+      whatwg-url: 17.1.1(@noble/hashes@2.4.0)
       xml-name-validator: 5.0.0
     transitivePeerDependencies:
       - '@noble/hashes'
@@ -2951,6 +3373,21 @@ snapshots:
   nanoid@3.3.19: {}
 
   natural-compare@1.4.0: {}
+
+  node-datachannel@0.33.4:
+    dependencies:
+      detect-libc: 2.1.2
+    optionalDependencies:
+      '@node-datachannel/android-arm64': 0.33.4
+      '@node-datachannel/darwin-arm64': 0.33.4
+      '@node-datachannel/darwin-x64': 0.33.4
+      '@node-datachannel/linux-arm64-gnu': 0.33.4
+      '@node-datachannel/linux-arm64-musl': 0.33.4
+      '@node-datachannel/linux-x64-gnu': 0.33.4
+      '@node-datachannel/linux-x64-musl': 0.33.4
+      '@node-datachannel/win32-arm64-msvc': 0.33.4
+      '@node-datachannel/win32-x64-msvc': 0.33.4
+    optional: true
 
   node-releases@2.0.55: {}
 
@@ -3227,7 +3664,7 @@ snapshots:
       esbuild: 0.28.2
       fsevents: 2.3.3
 
-  vitest@5.0.0(@types/node@22.20.2)(jsdom@30.0.1)(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)):
+  vitest@5.0.0(@types/node@22.20.2)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2)):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/mocker': 5.0.0(vite@8.3.0(@types/node@22.20.2)(esbuild@0.28.2))
@@ -3245,7 +3682,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.20.2
-      jsdom: 30.0.1
+      jsdom: 30.0.1(@noble/hashes@2.4.0)
     transitivePeerDependencies:
       - msw
 
@@ -3261,17 +3698,17 @@ snapshots:
 
   whatwg-mimetype@5.0.0: {}
 
-  whatwg-url@16.0.1:
+  whatwg-url@16.0.1(@noble/hashes@2.4.0):
     dependencies:
-      '@exodus/bytes': 1.15.1
+      '@exodus/bytes': 1.15.1(@noble/hashes@2.4.0)
       tr46: 6.0.0
       webidl-conversions: 8.0.1
     transitivePeerDependencies:
       - '@noble/hashes'
 
-  whatwg-url@17.1.1:
+  whatwg-url@17.1.1(@noble/hashes@2.4.0):
     dependencies:
-      '@exodus/bytes': 1.15.1
+      '@exodus/bytes': 1.15.1(@noble/hashes@2.4.0)
       tr46: 6.0.0
       webidl-conversions: 8.0.1
     transitivePeerDependencies:

@@ -5,8 +5,19 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "test": "vitest run", "typecheck": "tsc -b" },
-  "dependencies": { "@bgf/protocol": "workspace:*", "peerjs": "^1.5.5" },
-  "devDependencies": {}
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@bgf/protocol": "workspace:*",
+    "peerjs": "^1.5.5"
+  },
+  "devDependencies": {},
+  "optionalDependencies": {
+    "node-datachannel": "^0.33.4"
+  }
 }

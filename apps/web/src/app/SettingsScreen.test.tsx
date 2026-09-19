@@ -156,3 +156,42 @@ describe('SettingsScreen transfer', () => {
     expect(screen.getByTestId('rotate-note')).toBeInTheDocument();
   });
 });
+
+describe('SettingsScreen: randomness', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetSettingsCacheForTests();
+    resetSettings('alice');
+    resetProfilesForTests();
+    createProfile('Alice');
+  });
+
+  it('persists source, mode, key and fallback per player; beacon needs drand', async () => {
+    renderWithProfile('alice', <SettingsScreen />, { route: '/settings' });
+    const section = screen.getByTestId('randomness-section');
+    expect(section).toBeInTheDocument();
+    expect(screen.getByTestId('source-crypto')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('mode-beacon')).toBeDisabled();
+    await userEvent.click(screen.getByTestId('source-random-org'));
+    await userEvent.type(screen.getByTestId('random-org-key'), 'my-key');
+    await userEvent.click(screen.getByTestId('mode-seeded'));
+    await userEvent.click(screen.getByTestId('fallback-toggle'));
+    const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}');
+    expect(stored).toMatchObject({
+      entropySource: 'random.org',
+      randomnessMode: 'seeded',
+      randomOrgKey: 'my-key',
+      entropyFallback: true,
+    });
+    expect(screen.getByTestId('randomness-safety')).toHaveAttribute('data-safety', 'trusted-host');
+    await userEvent.click(screen.getByTestId('source-drand'));
+    expect(screen.getByTestId('mode-beacon')).not.toBeDisabled();
+    await userEvent.click(screen.getByTestId('mode-beacon'));
+    expect(JSON.parse(localStorage.getItem(KEY) ?? '{}')).toMatchObject({
+      entropySource: 'drand',
+      randomnessMode: 'beacon',
+    });
+    expect(screen.getByTestId('randomness-safety')).toHaveAttribute('data-safety', 'safe');
+    expect(localStorage.getItem(settingsKey('bob'))).toBeNull();
+  });
+});

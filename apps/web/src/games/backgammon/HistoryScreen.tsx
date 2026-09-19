@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useProfile } from '../../session/ProfileProvider';
 import { useGame } from '../GameProvider';
@@ -7,6 +7,7 @@ import { computeStats, describeLength, summarizeMatch } from '../../session/hist
 import type { MatchRow } from '../../session/history';
 import { formatDate, relativeTime } from '../../session/time';
 import { kindLabel } from '../../hud/derive';
+import { FairnessPanel } from '../../hud/FairnessPanel';
 import styles from './HistoryScreen.module.css';
 
 function Stat({ k, v, sub }: { k: string; v: string | number; sub?: string }) {
@@ -29,6 +30,7 @@ export function HistoryScreen() {
   const { matches, loading, remove } = useSavedMatches(gameId);
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
+  const [fairnessOpen, setFairnessOpen] = useState(false);
   const selectedId = params.get('match');
 
   const rows = useMemo(
@@ -210,6 +212,13 @@ export function HistoryScreen() {
                   </button>
                 )}
                 <button
+                  className="btn btn-sm"
+                  onClick={() => setFairnessOpen(true)}
+                  data-testid="history-fairness"
+                >
+                  Fairness
+                </button>
+                <button
                   className="btn btn-danger btn-sm"
                   onClick={() => {
                     if (window.confirm('Delete this match from your history?')) {
@@ -220,6 +229,16 @@ export function HistoryScreen() {
                   Delete
                 </button>
               </div>
+              {fairnessOpen && (
+                <FairnessPanel
+                  source={selected.snapshot}
+                  gameId="backgammon"
+                  actions={selected.snapshot.actions}
+                  seat={selected.mySeat === 'white' ? 0 : 1}
+                  exportName={`backgammon-${selected.code}-audit`}
+                  onClose={() => setFairnessOpen(false)}
+                />
+              )}
             </section>
           )}
         </div>

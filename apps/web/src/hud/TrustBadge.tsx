@@ -1,0 +1,1 @@
+export { TrustBadge } from './TrustPanel';

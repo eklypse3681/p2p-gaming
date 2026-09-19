@@ -4,14 +4,52 @@
     "outDir": "./dist-types",
     "rootDir": ".",
     "jsx": "react-jsx",
-    "types": ["vite/client", "@testing-library/jest-dom", "node"]
+    "types": [
+      "vite/client",
+      "@testing-library/jest-dom",
+      "node"
+    ]
   },
-  "include": ["src", "e2e", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"],
+  "include": [
+    "src",
+    "e2e",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts"
+  ],
   "references": [
-    { "path": "../../packages/engine" },
-    { "path": "../../packages/protocol" },
-    { "path": "../../packages/server" },
-    { "path": "../../packages/client" },
-    { "path": "../../packages/transport-peerjs" }
+    {
+      "path": "../../packages/engine"
+    },
+    {
+      "path": "../../packages/protocol"
+    },
+    {
+      "path": "../../packages/server"
+    },
+    {
+      "path": "../../packages/client"
+    },
+    {
+      "path": "../../packages/transport-peerjs"
+    },
+    {
+      "path": "../../packages/table"
+    },
+    {
+      "path": "../../packages/ofc-engine"
+    },
+    {
+      "path": "../../packages/entropy"
+    },
+    {
+      "path": "../../packages/soak"
+    },
+    {
+      "path": "../../packages/club-spec"
+    },
+    {
+      "path": "../../packages/club"
+    }
   ]
 }

@@ -58,6 +58,31 @@ export function canStartGame(state: ClientState): boolean {
   return m.game === null || m.game.phase.kind === 'over';
 }
 
+/** Readiness for the next game: mine, the opponent's, and whether both are set. */
+export function readyState(state: ClientState): {
+  mine: boolean;
+  opponent: boolean;
+  everyone: boolean;
+} {
+  const ready = state.ready ?? { white: false, black: false };
+  const seat = state.seat;
+  const mine = seat ? ready[seat] : false;
+  const opponent = seat ? ready[opponent_(seat)] : false;
+  return { mine, opponent, everyone: ready.white && ready.black };
+}
+
+function opponent_(seat: Player): Player {
+  return seat === 'white' ? 'black' : 'white';
+}
+
+/** True while the table runs unattended and a "Ready" is the way to the next game. */
+export function isAutopilot(state: ClientState): boolean {
+  const opt = state.snapshot?.autopilot;
+  if (opt === true) return true;
+  if (opt === false) return false;
+  return !!state.snapshot?.dealer;
+}
+
 export function canOpeningRoll(state: ClientState): boolean {
   const g = game(state);
   const seat = state.seat;

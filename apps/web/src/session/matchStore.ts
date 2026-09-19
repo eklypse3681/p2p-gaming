@@ -30,13 +30,21 @@ export const matchStoreBus = {
   },
 };
 
-function isSnapshot(v: unknown): v is MatchSnapshot {
+/** The little every saved snapshot must have, whatever game it belongs to. */
+export interface StoredSnapshot {
+  id: string;
+  code: string;
+  seq: number;
+  updatedAt: number;
+}
+
+function isSnapshot(v: unknown): v is StoredSnapshot {
   return (
     typeof v === 'object' &&
     v !== null &&
-    typeof (v as MatchSnapshot).id === 'string' &&
-    typeof (v as MatchSnapshot).code === 'string' &&
-    typeof (v as MatchSnapshot).seq === 'number'
+    typeof (v as StoredSnapshot).id === 'string' &&
+    typeof (v as StoredSnapshot).code === 'string' &&
+    typeof (v as StoredSnapshot).seq === 'number'
   );
 }
 
@@ -50,7 +58,11 @@ export function legacyMatchDbName(slug: string): string {
 }
 export const MATCH_STORE_NAME = 'matches';
 
-export class IdbMatchStore implements MatchStore {
+/**
+ * One player's saved snapshots of one game in IndexedDB. Game-agnostic: backgammon stores
+ * `MatchSnapshot`s, table games store `TableSnapshot`s.
+ */
+export class IdbSnapshotStore<T extends StoredSnapshot> {
   private readonly store: UseStore;
 
   constructor(
@@ -61,22 +73,22 @@ export class IdbMatchStore implements MatchStore {
     this.store = createIdbStore(dbName, storeName);
   }
 
-  async list(): Promise<MatchSnapshot[]> {
+  async list(): Promise<T[]> {
     const ks = await keys(this.store);
-    const out: MatchSnapshot[] = [];
+    const out: T[] = [];
     for (const k of ks) {
       const v = await get(k, this.store);
-      if (isSnapshot(v)) out.push(v);
+      if (isSnapshot(v)) out.push(v as T);
     }
     return out.sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
-  async get(id: string): Promise<MatchSnapshot | undefined> {
+  async get(id: string): Promise<T | undefined> {
     const v = await get(id, this.store);
-    return isSnapshot(v) ? v : undefined;
+    return isSnapshot(v) ? (v as T) : undefined;
   }
 
-  async put(snapshot: MatchSnapshot): Promise<void> {
+  async put(snapshot: T): Promise<void> {
     await set(snapshot.id, snapshot, this.store);
     matchStoreBus.emit({ ...this.owner, id: snapshot.id, kind: 'put' });
   }
@@ -86,12 +98,14 @@ export class IdbMatchStore implements MatchStore {
     matchStoreBus.emit({ ...this.owner, id, kind: 'delete' });
   }
 
-  /** Find a saved match by its room code (most recently updated wins). */
-  async findByCode(code: string): Promise<MatchSnapshot | undefined> {
+  /** Find a saved snapshot by its room code (most recently updated wins). */
+  async findByCode(code: string): Promise<T | undefined> {
     const all = await this.list();
     return all.find((m) => m.code === code);
   }
 }
+
+export class IdbMatchStore extends IdbSnapshotStore<MatchSnapshot> implements MatchStore {}
 
 const shared = new Map<string, IdbMatchStore>();
 
@@ -104,6 +118,17 @@ export function getMatchStore(slug: string, game: GameId): IdbMatchStore {
     shared.set(key, s);
   }
   return s;
+}
+
+/**
+ * The same store typed for another snapshot shape (table games). Backgammon and table games
+ * never share a game id, so a database only ever holds one shape.
+ */
+export function getSnapshotStore<T extends StoredSnapshot>(
+  slug: string,
+  game: GameId,
+): IdbSnapshotStore<T> {
+  return getMatchStore(slug, game) as unknown as IdbSnapshotStore<T>;
 }
 
 /** For tests: replace the store of a slug+game (or clear all with no arguments). */
@@ -130,7 +155,7 @@ export async function copyLegacyMatches(
       if (!isSnapshot(v)) continue;
       const existing = await target.get(v.id);
       if (existing && existing.seq >= v.seq) continue;
-      await target.put(v);
+      await target.put(v as MatchSnapshot);
       copied++;
     }
   } catch {
@@ -139,23 +164,24 @@ export async function copyLegacyMatches(
   return copied;
 }
 
-export interface SavedMatchesState {
-  matches: MatchSnapshot[];
+export interface SavedSnapshotsState<T> {
+  matches: T[];
   loading: boolean;
   refresh: () => void;
   remove: (id: string) => Promise<void>;
 }
+export type SavedMatchesState = SavedSnapshotsState<MatchSnapshot>;
 
-/** Saved matches of the profile in scope for one game. */
-export function useSavedMatches(game: GameId): SavedMatchesState {
+/** Saved snapshots of the profile in scope for one game, typed for that game. */
+export function useSavedSnapshots<T extends StoredSnapshot>(game: GameId): SavedSnapshotsState<T> {
   const { slug } = useProfile();
   const key = `${slug}/${game}`;
-  const [data, setData] = useState<{ key: string; matches: MatchSnapshot[] } | null>(null);
+  const [data, setData] = useState<{ key: string; matches: T[] } | null>(null);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    getMatchStore(slug, game)
+    getSnapshotStore<T>(slug, game)
       .list()
       .then((list) => {
         if (!cancelled) setData({ key, matches: list });
@@ -179,6 +205,11 @@ export function useSavedMatches(game: GameId): SavedMatchesState {
       await getMatchStore(slug, game).delete(id);
     },
   };
+}
+
+/** Saved matches of the profile in scope for one game. */
+export function useSavedMatches(game: GameId): SavedMatchesState {
+  return useSavedSnapshots<MatchSnapshot>(game);
 }
 
 export interface SavedMatchesByGame {

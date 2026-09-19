@@ -9,6 +9,7 @@ import {
   seedProfile,
   touchDrag,
   touchTap,
+  startGameIfNeeded,
 } from './helpers';
 
 test.use({ hasTouch: true });
@@ -24,7 +25,7 @@ test.describe('free board (no rule enforcement)', () => {
 
     const code = await hostMatch(host, 'alice', { length: 7, rules: 'free' });
     await joinMatch(guest, 'bob', code);
-    await host.getByTestId('start-game-button').click();
+    await startGameIfNeeded(host);
     await expect(host.getByTestId('game-screen')).toHaveAttribute('data-rules', 'free');
     await expect(guest.getByTestId('status-text')).toHaveText(/free board/i);
     await expect(guest.getByTestId('board')).toHaveAttribute('data-interactive', 'true');
@@ -90,8 +91,8 @@ test.describe('free board (no rule enforcement)', () => {
     await expect(guest.getByTestId('score-white')).toHaveText('4');
     await expect(guest.getByTestId('game-over')).toContainText(/Alice wins/);
 
-    // Next game starts a fresh free board.
-    await guest.getByTestId('start-game-button').first().click();
+    // Next game starts a fresh free board once both players are ready.
+    await startGameIfNeeded(guest, [host]);
     await expect(guest.getByTestId('status-text')).toHaveText(/free board/i);
     await expect(checkersAt(host, 'p13')).toHaveCount(5);
   });

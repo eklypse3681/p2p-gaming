@@ -1,0 +1,37 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist-types",
+    "rootDir": ".",
+    "jsx": "react-jsx",
+    "types": [
+      "vite/client",
+      "@testing-library/jest-dom",
+      "node"
+    ]
+  },
+  "include": [
+    "src",
+    "e2e",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/protocol"
+    },
+    {
+      "path": "../../packages/ofc-engine"
+    },
+    {
+      "path": "../../packages/dealer"
+    },
+    {
+      "path": "../../packages/table"
+    },
+    {
+      "path": "../../packages/server"
+    }
+  ]
+}

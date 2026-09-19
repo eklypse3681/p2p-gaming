@@ -1,0 +1,23 @@
+{
+  "name": "@bgf/gitstore-proto",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway prototype: git-backed persistence layouts for the hosted club platform, with benchmarks.",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "bench": "node scripts/run.mjs bench.ts",
+    "bench:sizes": "node scripts/run.mjs bench-sizes.ts"
+  },
+  "dependencies": {
+    "@bgf/engine": "workspace:*",
+    "@bgf/ofc-engine": "workspace:*",
+    "@bgf/server": "workspace:*",
+    "@bgf/soak": "workspace:*",
+    "@bgf/table": "workspace:*"
+  },
+  "devDependencies": {
+    "@duckdb/node-api": "1.5.5-r.4"
+  }
+}

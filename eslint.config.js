@@ -3,11 +3,11 @@ import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/dist-types/**', '**/node_modules/**', '**/playwright-report/**', '**/test-results/**', '**/*.tsbuildinfo'],
+    ignores: ['**/dist/**', '**/dist-types/**', '**/.run/**', '**/node_modules/**', '**/playwright-report/**', '**/test-results/**', 'packages/dealer/console/**', '**/*.tsbuildinfo'],
   },
   ...tseslint.configs.recommended,
   {
-    files: ['apps/web/src/**/*.{ts,tsx}'],
+    files: ['apps/web/src/**/*.{ts,tsx}', 'apps/console/src/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: { ...reactHooks.configs.recommended.rules },
   },

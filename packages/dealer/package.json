@@ -1,0 +1,35 @@
+{
+  "name": "@bgf/dealer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless Node runtime that hosts a table (backgammon, Open Face Chinese Poker) from a terminal over PeerJS.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "dealer": "./bin/dealer.mjs"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "build": "node ./bin/dealer.mjs --build-only"
+  },
+  "dependencies": {
+    "@bgf/engine": "workspace:*",
+    "@bgf/entropy": "workspace:*",
+    "@bgf/ofc-engine": "workspace:*",
+    "@bgf/protocol": "workspace:*",
+    "@bgf/server": "workspace:*",
+    "@bgf/table": "workspace:*",
+    "@bgf/transport-peerjs": "workspace:*",
+    "esbuild": "^0.28.2",
+    "peerjs": "^1.5.5"
+  },
+  "optionalDependencies": {
+    "node-datachannel": "^0.33.4"
+  },
+  "devDependencies": {}
+}

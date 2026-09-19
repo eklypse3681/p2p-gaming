@@ -11,6 +11,7 @@ import {
   seedProfile,
   stageOne,
   statusOf,
+  startGameIfNeeded,
 } from './helpers';
 
 test.describe('two players in one browser (BroadcastChannel transport)', () => {
@@ -39,7 +40,7 @@ test.describe('two players in one browser (BroadcastChannel transport)', () => {
     await expect(guest.getByTestId('board')).toHaveAttribute('data-home-side', 'right');
 
     // Start the game (either side may).
-    await host.getByTestId('start-game-button').click();
+    await startGameIfNeeded(host);
     await expect(host.getByTestId('opening-roll-button')).toBeVisible();
     await expect(guest.getByTestId('opening-roll-button')).toBeVisible();
 

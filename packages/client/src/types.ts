@@ -54,14 +54,22 @@ export interface LastAction {
 export interface ClientState {
   status: ConnectionStatus;
   rejectReason: RejectReason | null;
-  /** Seat this client occupies; null until welcomed. */
+  /** Seat this client occupies; null until welcomed, and null for the dealer. */
   seat: Player | null;
+  /** 'seat' once welcomed into a seat, 'dealer' when this device hosts as the non-playing dealer. */
+  role?: 'seat' | 'dealer' | 'spectator';
+  /** Dealer-hosted matches: the dealer's public profile and whether a dealer device is connected. */
+  dealer?: { profile: PlayerProfile; connected: boolean } | null;
   /** Authoritative match snapshot from the server; null until welcomed. */
   snapshot: MatchSnapshot | null;
   lastAction: LastAction | null;
   /** Provisional sub-moves the opponent is currently building (null when none). */
   opponentPreview: Play | null;
   presence: Record<Player, boolean>;
+  /** Readiness for the next game, by colour (table flow shared with every device). */
+  ready?: Record<Player, boolean>;
+  /** What an unattended table will do next (e.g. "next game" countdown), or null. */
+  autopilot?: { reason: string; at: number } | null;
   chat: ChatMessage[];
   latencyMs: number | null;
   error: ClientError | null;
@@ -76,6 +84,8 @@ export interface GameClientApi {
 
   // ---- match commands (sent to the server; the server validates) ----
   startGame(): void;
+  /** Table flow: I am (not) ready for the next game; an unattended table starts when both are. */
+  ready(ready?: boolean): void;
   openingRoll(): void;
   roll(): void;
   double(): void;

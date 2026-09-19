@@ -2,6 +2,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 import type { RendererId } from '../themes/theme';
 import { DEFAULT_PARTS, parseThemeId } from '../themes';
 import type { HomeSide } from '../board/contract';
+import type { RandomnessMode } from '@bgf/protocol';
 import { createStore, readJson, writeJson } from './storage';
 import { useOptionalProfile } from './ProfileProvider';
 
@@ -36,7 +37,19 @@ export interface Settings {
   iceServers: string;
   /** Sync settings and saved matches with this player's other devices over WebRTC. */
   sync: boolean;
+  /** Default randomness source when hosting: this device, random.org (signed) or the drand beacon. */
+  entropySource: EntropySourceId;
+  /** Default randomness mode when hosting; see ARCHITECTURE "Randomness modes". */
+  randomnessMode: RandomnessMode;
+  /** random.org API key (free tier); stored only in this browser, used only when hosting. */
+  randomOrgKey: string;
+  /** Use this device's generator when the oracle is unreachable (flagged in the audit). */
+  entropyFallback: boolean;
 }
+
+export type EntropySourceId = 'crypto' | 'random.org' | 'drand';
+export const ENTROPY_SOURCES: readonly EntropySourceId[] = ['crypto', 'random.org', 'drand'];
+export const RANDOMNESS_MODES: readonly RandomnessMode[] = ['per-draw', 'seeded', 'beacon'];
 
 /** Settings live per player: `bgf:settings:<slug>`. Outside a profile route (`slug === ''`) the
  *  global key `bgf:settings` is used, e.g. for the theme on the player picker. */
@@ -57,6 +70,10 @@ export const DEFAULT_SETTINGS: Settings = {
   peer: { host: '', port: '', path: '', secure: true, key: '' },
   iceServers: '',
   sync: true,
+  entropySource: 'crypto',
+  randomnessMode: 'per-draw',
+  randomOrgKey: '',
+  entropyFallback: false,
 };
 
 /** What is actually persisted: the settings plus when they last changed (for device sync). */
@@ -127,6 +144,10 @@ export function sanitizeSettings(value: unknown): Settings {
       (out as unknown as Record<string, unknown>)[key] = candidate;
     }
   }
+  if (!ENTROPY_SOURCES.includes(out.entropySource))
+    out.entropySource = DEFAULT_SETTINGS.entropySource;
+  if (!RANDOMNESS_MODES.includes(out.randomnessMode))
+    out.randomnessMode = DEFAULT_SETTINGS.randomnessMode;
   return out;
 }
 

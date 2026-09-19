@@ -54,7 +54,10 @@ describe('commands', () => {
     // Reconnect as the host profile on a raw transport so we can send a hand-built illegal play.
     rawHello(raw, HOST);
     await flush();
-    raw.send({ type: 'play', play: [{ from: 24, to: 19, die: 5, hit: false }] });
+    raw.send({
+      type: 'command',
+      command: { type: 'play', play: [{ from: 24, to: 19, die: 5, hit: false }] },
+    });
     await flush();
     expect(got.at(-1)).toMatchObject({ type: 'error', code: 'illegal-play' });
     expect(h.server.getSnapshot().seq).toBe(seqBefore);

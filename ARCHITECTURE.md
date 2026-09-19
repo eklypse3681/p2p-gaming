@@ -50,6 +50,249 @@ Packages are consumed from source (`main: src/index.ts`); Vite/Vitest resolve th
    memory transport. Playwright e2e runs host + guest in two pages of one browser using the
    BroadcastChannel transport (`?transport=broadcast`).
 
+## Table core (`@bgf/table`)
+
+Every game runs on the same generic, game-agnostic core. `TableServer` (in the host's browser)
+and `TableClient` (identical on every device) handle seats, keyed identity (challenge/auth),
+multi-device seats, presence, chat, previews, persistence and resume. The game supplies a
+`GameDefinition`:
+
+```ts
+interface GameDefinition<State, Action, Command, View = State, Config = unknown> {
+  id: string; // 'backgammon', 'ofc', …
+  minSeats: number;
+  maxSeats: number;
+  hiddenInformation?: boolean; // true → guests receive views, never adopt a guest copy
+  normalizeConfig?(raw: unknown): Config;
+  init(config: Config, ctx: { rng: Rng; seats: number }): State;
+  validateCommand(raw: unknown): Command | null; // shape check; null → `bad-message`
+  validatePreview?(raw: unknown): unknown | null;
+  command(
+    state: State,
+    seat: number,
+    command: Command,
+    ctx: { rng: Rng; now: number; seats: number },
+  ): Action | Action[];
+  reduce(state: State, action: Action): State; // pure
+  view(state: State, seat: number | null): View; // redaction; identity when nothing is hidden
+  viewAction?(action: Action, seat: number | null): Action | null;
+  isOver?(state: State): boolean;
+  summary?(state: State): unknown;
+}
+interface Rng {
+  int(maxExclusive: number): number;
+  shuffle<T>(items: readonly T[]): T[];
+}
+```
+
+Rules of the core:
+
+- **Determinism.** Randomness (dice, shuffles) is drawn from `ctx.rng` inside `command` and
+  embedded in the returned actions; `reduce` is pure. A snapshot is verified by replaying
+  `actions` from its persisted `initialState`; `init` may use the rng because that state is stored.
+- **Seats are indexes** (0..n-1). Games map them to their own labels (backgammon: 0 = white,
+  1 = black). The host takes `hostSeat`; other profile ids fill free seats in order; `full`
+  otherwise. A known profile id always gets its seat back, from any number of devices.
+- **Hidden information.** The host seat's devices receive the full authoritative snapshot; every
+  other seat receives `view(state, seat)` and an action log filtered through `viewAction`,
+  flagged `view: true`. A view is never adopted on resume (`error host-only-resume`), so a
+  hidden-information game can only be resumed from a host-seat copy (or through profile sync
+  between the host's own devices). Games without hidden information (`view` = identity) keep
+  the old behaviour: any device's newer replayable copy wins.
+- **Wire protocol v2** (`packages/protocol/src/table.ts`): `hello`/`challenge`/`auth`, then
+  `command { command }`, `preview { payload }`, `chat`, `ping`, `bye`; the server answers with
+  `welcome { seat, snapshot }`, `state { snapshot, action?, by? }`, `preview { seat, payload }`,
+  `presence { seat, connected }`, `chat`, `error`, `pong`, `rejected`. Command and preview
+  payloads are opaque to the core and validated by the definition.
+- **Snapshot** (`TableSnapshot`): `{ id, code, seq, createdAt, updatedAt, gameId, config, seats[],
+hostSeat, options, initialState, actions, state, chat, view? }`. `options` is a table-level bag
+  the game does not interpret (backgammon keeps `homeSide` there).
+
+Backgammon is the reference implementation: `packages/server` exports `backgammonDefinition`
+plus `GameServer`, a colour-speaking wrapper over `TableServer`, and `packages/client` exports
+`GameClient`, a wrapper over `TableClient` that adds turn drafting. Both convert between the
+generic `TableSnapshot` and the colour-keyed `MatchSnapshot` the web app persists
+(`packages/server/src/snapshot.ts`), so the web app did not change.
+
+**Adding a game to the core**: implement a `GameDefinition` in its own engine package, wrap
+`TableServer`/`TableClient` (or use them directly) in a small package with typed command
+helpers, and register the UI under `apps/web/src/games/<id>/` (see "Adding a game").
+
+## Entropy (`@bgf/entropy`, table core `entropy.ts`)
+
+Randomness enters a table in one of three ways:
+
+| Mode                | Option                                                   | When bytes are fetched                           | Record                      |
+| ------------------- | -------------------------------------------------------- | ------------------------------------------------ | --------------------------- |
+| Plain rng           | `rng: Rng` (default `cryptoRng()`)                       | n/a                                              | none                        |
+| Audited local pool  | `rng: createEntropyPool({ provider: cryptoProvider() })` | ahead of time (local generator only)             | bytes, draws, batch id      |
+| Just-in-time source | `entropy: { source, bytes?, fallback?, purpose? }`       | at command time, one request per drawing command | bytes, draws, inline proofs |
+
+`EntropySource.draw(bytes, { label, tableId, purpose })` returns bytes plus a proof
+(`random.org-signed` = the signed `random` object + signature + serial number + quota left;
+`drand` = round, randomness, signature, chain, derivation context; `none` = fallback).
+
+**Command path.** `TableServer.apply` first runs the command against a _probe rng_ that throws
+on the first draw. Commands that never draw apply synchronously as before. A drawing command
+fetches `def.entropyBytes?(command) ?? 64` bytes, runs `def.command` over a _byte-backed rng_
+(`createByteRng`: each `int(n)` reads four bytes big-endian and rejection-samples; `shuffle` is
+Fisher–Yates over `int`) and, if the command asks for more than was fetched (`EntropyExhausted`),
+doubles the budget, fetches again and re-runs from scratch over the concatenated bytes (commands
+are pure, so re-running is safe). At most four rounds. Everything that arrives while a draw is
+in flight queues in arrival order behind it. Failure → `error entropy-unavailable` to the
+sender and no state change, unless `fallback: true`, in which case this device's generator
+supplies the bytes and the record is flagged `fallback`. Games whose `init` draws (an opening
+shuffle) are built with `await TableServer.create(opts)`; the constructor refuses them with a
+clear message. Pools over external oracles are refused by `createEntropyPool`.
+
+**Snapshot.** `actionMeta[index].entropy` (attributed to the _last_ action a command produced,
+where deals and rolls land), `entropyAudit.init` for `init`, `entropyAudit.batches` for the pool
+path, and `options.randomness.provider`. Views re-key `actionMeta` to their filtered log.
+Reducers and replay never see any of it.
+
+**Verification.** `verifyEntropyRecord(record)` checks the proof with its authority, recomputes
+the attested bytes from the proof (random.org `random.data`; drand HKDF expansion), compares
+them with the consumed bytes, and re-derives the draw values (`drawsMatch`). Mapping draws onto
+the action is game knowledge (backgammon: die = draw + 1). `checkSerials(records)` flags gaps in
+random.org serial numbers between consecutive draws of one table.
+
+**Web app wiring (`apps/web`).** Settings → _Randomness_ (`entropySource`, `randomnessMode`,
+`randomOrgKey`, `entropyFallback` per player, `session/settings.ts`) feeds `randomnessFromSettings`
+(`session/entropy.ts`), which the host screens show as a chip with a per-table override
+(`hud/HostTableOptions.tsx`, `hud/RandomnessControls.tsx`). `hostTable` / `hostNewMatch` turn the
+choice into `options.randomness = { mode, provider }` plus `entropy: { source, fallback }` and go
+through `TableServer.create` / `GameServer.create`; resume re-supplies the source from settings
+(the mode is in the saved table). The _Fairness_ panel (`hud/FairnessPanel.tsx`, model in
+`session/fairness.ts`) lists `actionMeta` draws and seeded segments with per-row _Verify_ /
+_Verify all_ (`verifyEntropyRecord`, `verifySegment`, `verifyBeaconRecord`), shows `checkSerials`
+gaps and random.org quota, and downloads the public audit JSON.
+
+## Randomness modes
+
+`options.randomness.mode` chooses how draws are produced; `entropy.source` chooses where the
+randomness comes from (this device, random.org, drand). Every mode records enough for any seat
+to verify after the fact; they differ in _when_ the host learns a value.
+
+| Mode       | Draws                                                                     | Host knows the future? | Proof unit                 |
+| ---------- | ------------------------------------------------------------------------- | ---------------------- | -------------------------- |
+| `per-draw` | one source request per drawing command, at the moment it happens          | no                     | one request per action     |
+| `seeded`   | one seed per _segment_ (hand / game), committed first, every draw derived | yes, within a segment  | one seed per segment       |
+| `beacon`   | each draw bound to the _next_ drand round before that round exists        | no                     | one drand round per action |
+
+**Seeded (commit and reveal).** The definition marks segments: `segmentBoundary(state,
+command)` (OFC: `start`; backgammon: `start-game`) and `segmentComplete(state)` (OFC: showdown;
+backgammon: game over). When a boundary command arrives — or the first draw happens with no open
+segment — the server fetches a 32-byte seed from the source (its proof is kept for the reveal),
+publishes `commitment = SHA-256(seed ‖ "|" ‖ tableId ‖ "|" ‖ segmentIndex)` in
+`entropyAudit.segments[]` (a `state` broadcast before the command runs), and keeps the seed
+private. Draw `k` of the segment reads its bytes from `HKDF-SHA-256(seed, salt =
+SHA-256(tableId), info = "bgf-seeded/v1|" tableId "|" segment "|" k)` through the same
+`createByteRng` derivation; draws are synchronous once the seed exists. Each action's record
+carries `segment` and `drawIndex` (no inline source proof). When `segmentComplete` becomes true,
+on the next boundary, or on `close()`, the segment is revealed: `seed`, `source` (the request
+that produced it) and `to` are filled in and broadcast. Verification is pure and offline:
+`verifySegment(snapshot, i)` recomputes the commitment and re-derives every attributed draw
+sequence; `segmentRngFor(snapshot, actionIndex)` hands a game the byte rng to re-derive the
+concrete values (dice, dealt cards). Without a configured `entropy.source` the seed comes from
+this device (`provider: crypto`, proof `none`): the commitment still proves nothing changed
+mid-hand, but not where the seed came from. **Caveat:** a _playing_ host knows the seed, hence
+every future card, for the whole segment. Seeded mode is the safe choice for a dealer-hosted
+table (below) and a convenience for a trusted host; otherwise use `per-draw` or `beacon`.
+Sync/HMAC/HKDF are implemented in `packages/table/src/kdf.ts` (FIPS 180-4 / RFC 4231 / RFC 5869
+vectors in its tests).
+
+**Beacon (future drand round).** `entropy.source` must be a `BeaconSource` (`drandProvider`).
+For each drawing command the server computes `round = roundAt(now) + 1` from the chain schedule
+(`/{chain}/info`, or the built-in quicknet schedule), assigns a per-table draw `counter`, and
+publishes the binding in `entropyAudit.beacon.pending` — a `state` broadcast made before the
+round exists anywhere. It then polls `/public/{round}` until the round is published (or
+`entropy.beaconTimeoutMs`, default 30 s, elapses → `entropy-unavailable`, binding withdrawn),
+expands the randomness with `HKDF-SHA-256(randomness, salt = chainHash, info =
+"bgf-beacon/v1|" tableId "|draw:" counter)` and runs the command. The record carries the
+drand proof and `beacon: { counter, chainHash, round, committedAt }`. `verifyBeaconRecord`
+re-fetches the round, re-expands, re-derives, and (given the schedule) reports whether the
+binding was made before the round's publication time. Every draw waits for the next round
+(≈3 s on quicknet), so the mode suits dealing more than rapid dice.
+
+**Per-draw** is documented above (one request per drawing command). All three modes attach
+records to `actionMeta`; `entropyAudit.mode` says which mode the table runs.
+
+## Dealer mode (a non-playing host)
+
+`TableServer` options `hostSeat: null` (or `TableServer.create` with the same) makes the
+hosting device the **dealer**: it takes no seat, holds the authoritative state (it receives the
+full snapshot, as the host seat does otherwise), and every player is a guest with a redacted
+view. `TableSnapshot.hostSeat` is `null` and `snapshot.dealer` carries the dealer's public
+profile; `welcome.seat` is `null` for dealer devices and `TableClientState.role` is
+`'dealer'`. The dealer's profile id is recognised from any device (multi-device works as for a
+seat, cap 4) and is bound to its key on first use like a seat. Seats learn about dealer
+presence through the `dealer { profile, connected }` message (first device connects / last
+device leaves); the dealer receives seat presence and previews.
+
+What a dealer may send: `chat` (as `DEALER_SEAT`, −1), `ping`, `bye`, and the command types the
+definition lists in `dealerCommands` (OFC: `start`, `settle`, `adjust`; backgammon: none).
+Those reach `def.command` with `seat === DEALER_SEAT`; anything else is refused with
+`not-seated`, previews included. Resume follows the hidden-information rule: only a device
+holding the full copy (the dealer's) can re-host; a guest's view is refused (`host-only-resume`
+when offered, `verifySnapshot` throws when tried). A dealer-hosted table is the honest home for
+`seeded` randomness: the only party that knows the seed plays no hand. Combined with the Node
+runtime it becomes a neutral dealer anyone can run.
+
+**Web app wiring.** Host screens: _Host as dealer (I won't play)_ → `hostSeat: null` through
+`hostTable` / `hostNewMatch` (`dealer: true`). `TableClientState.role === 'dealer'` (and the
+backgammon `ClientState.role`/`dealer` projection) switches the game screens to a dealer bar
+(OFC: start hand / settle / adjust; backgammon: none) and a public view of the table; seats see a
+dealer chip / “Dealt by …” badge (`SeatStrip`, rails) and dealer chat as _Name (dealer)_.
+
+**Resilient reopening.** `session/retry.ts` gives `resumeTable` / `resumeMatch` and `joinTable` /
+`joinMatch` a shared loop: a stale `address-taken` is retried three times 1.5 s apart before
+falling back to joining; `timeout` / `network` / `not-found` retry the whole sequence with backoff
+(2 s, 4 s, 8 s, then 10 s) for two minutes, view copies reporting `waiting` and finally
+`host-offline`; every flow takes an `AbortSignal` and reports progress. The game screens abort an
+attempt when the screen unmounts, on _Retry now_ / _Cancel_, and when a session for the key
+becomes live; `SessionRegistry.add` never replaces a live session (a late-completing join is
+disposed instead), and resuming a code this tab already hosts returns the existing session.
+
+## Unattended play (autopilot)
+
+The table core never needs a human to drive it. A `GameDefinition` may implement
+`autopilot(state, ctx)`; the `TableServer` asks it after every applied action, every readiness
+change and every presence change, and does what it says. The answer is an
+`AutopilotDecision { command, afterMs?, reason }` or null:
+
+- **Immediate** decisions apply at once as a dealer command (`by: -1`, recorded like any other
+  action, same entropy path). The game is asked again afterwards, since one command usually enables
+  the next. Decisions must be idempotent: once applied, the same state must yield null.
+- **Delayed** decisions (`afterMs`) are scheduled on one timer, announced to every client as
+  `autopilot { pending }`, and re-checked when the timer fires (the room may have changed). A
+  decision that disappears cancels the timer.
+- Nothing runs while a just-in-time draw is in flight; `drain()` re-evaluates afterwards.
+
+It is on for every dealer-hosted table and for player-hosted tables that opted in
+(`options.autopilot: true`, the web app's default; **Manual dealing** sets it false). `dealerCommands`
+still work as overrides. Decisions and refusals surface through `TableServer.onAutopilot` (the Node
+runtime logs them; the console shows them).
+
+**Readiness** is table flow, not game state: a seat sends `{ type: 'ready', ready }`, the table
+keeps `snapshot.ready[]`, broadcasts it, and clears it when the game says a round began
+(`resetsReadiness(action)`). The autopilot context carries `seatsFilled`, `present`, `ready`,
+`dealerPresent`, `now` and the config.
+
+| Game       | State                                             | Decision                                    |
+| ---------- | ------------------------------------------------- | ------------------------------------------- |
+| OFC        | lobby, all seats taken and present                | `start` (first hand)                        |
+| OFC        | showdown, everyone asked to reset                 | `settle` (records the hands, resets scores) |
+| OFC        | showdown, `nextHand: 'ready'`, all ready          | `start`                                     |
+| OFC        | showdown, `nextHand: 'countdown'`                 | `start` after `nextHandDelayMs`             |
+| OFC        | a hand is being set / table over / someone absent | nothing                                     |
+| Backgammon | no game yet, both seated and present              | `start-game`                                |
+| Backgammon | game over, both ready                             | `start-game`                                |
+| Backgammon | match over / game in progress                     | nothing                                     |
+
+OFC's flow options live in `TableConfig.flow` (`startWhenFull`, `nextHand`, `nextHandDelayMs`,
+`settleOnConsensus`, `pauseWhenAbsent`); a seat's `settle-request` command is engine state
+(`settleRequests[]`, cleared by a settlement), since it is a game concept.
+
 ## Rules modes
 
 `MatchConfig.rules` is `'enforced'` (default) or `'free'`. Enforced games move through the
@@ -206,19 +449,149 @@ Per-player-per-game storage: IndexedDB `p2p-<slug>-<game>` (saved matches); live
 keyed `<slug>:<game>:<matchId>`; PeerJS ids use the namespace `<game>-v1`, so room codes of
 different games never collide.
 
+## Node runtime (`@bgf/dealer`)
+
+The table core and the transports are plain TypeScript, so a table can be hosted outside a
+browser. `packages/dealer` is a library plus a thin CLI:
+
+- `createDealer({ game, config, seats, code?, dataDir, profile, entropy?, transport?, resume? })`
+  loads or creates a keyed profile (`<dataDir>/profile.json`, ECDSA keys from `@bgf/protocol`),
+  picks the game definition (`backgammonDefinition`, `ofcDefinition`), builds a `TableServer`
+  (`TableServer.create` when a just-in-time entropy source is configured), hosts under the room
+  code on a `TransportProvider` (PeerJS by default, namespace `<game>-v1`), persists every
+  snapshot atomically to `<dataDir>/tables/<id>.json`, and emits `hosted | seat | action | saved |
+stopped | error` events. `resume` reloads a saved host copy (views are refused).
+- `bin/dealer.mjs` bundles `src/run.ts` with esbuild on first use (workspace sources are consumed
+  directly; `peerjs` and `node-datachannel` stay external) and runs the CLI: `host`, `resume`,
+  `list`, `status`, `stop` (a marker file the running process polls).
+- PeerJS under Node: `@bgf/transport-peerjs` installs `RTCPeerConnection`, `RTCSessionDescription`,
+  `RTCIceCandidate` and `RTCDataChannel` from the optional `node-datachannel/polyfill` when there
+  is no `window` (`peerJsProvider({ node })`, `installNodeWebRtcSync()`). The polyfill is loaded
+  synchronously through `createRequire` obtained from `process.getBuiltinModule`, so there is no
+  Node import for a browser bundler to see and no async gap before the `Peer` is constructed.
+  Node 22+ supplies `WebSocket` and `navigator`.
+- Seats: the runtime hosts in dealer mode by default (`hostSeat: null`): its profile is recorded
+  as the snapshot's `dealer`, it plays no seat, and every seat is filled by guests.
+  `--dealer=false` makes it occupy seat 0 instead (a headless player host).
+- The same runtime is where the MCP player will live: a `TableClient` with its own identity that
+  joins by code and exposes state/legal-moves/play tools to a model.
+
+## Console (`apps/console` + `packages/dealer/src/{manager,console-server}.ts`)
+
+`dealer serve` runs a `DealerManager` (many tables in one process: persisted registry
+`tables.json`, `settings.json`, named rule sets in `rulesets/`, an event ring buffer, and a
+dealer-side `TableClient` per running table for dealer-only commands) behind a small Node `http`
+server. The React console in `apps/console` is built into `packages/dealer/console/` and served
+from `/`; live updates arrive over server-sent events.
+
+API (JSON, under `/api`):
+
+| Method             | Path                                       | Purpose                                                                                                              |
+| ------------------ | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| GET                | `/status`                                  | Process status, dealer profile, masked settings, whether the console is built                                        |
+| GET / PUT          | `/settings`                                | Dealer settings (the random.org key is masked on the way out; a masked value on the way in keeps the stored key)     |
+| GET                | `/presets?game=`                           | Named starting configurations per game (OFC presets come from `@bgf/ofc-engine`)                                     |
+| GET / PUT / DELETE | `/rulesets[/:name]`                        | Named OFC rule sets, validated with `validateTableConfig`                                                            |
+| GET                | `/events`                                  | SSE stream of manager events (`created`, `resumed`, `stopped`, `removed`, `seat`, `action`, `error`, `settings`)     |
+| GET / POST         | `/tables`                                  | List tables / create one (`game`, `config`, `seats`, `name`, `code`, `entropy`, `randomness`, `fallback`, `options`) |
+| GET                | `/tables/:id`                              | Table info with seats, presence, summary, randomness and recent events                                               |
+| GET                | `/tables/:id/snapshot`                     | `viewSnapshot(def, snapshot, null)` — the spectator view, never hidden state                                         |
+| GET                | `/tables/:id/audit`                        | Public randomness audit (`options.randomness`, `actionMeta`, `entropyAudit`)                                         |
+| GET                | `/tables/:id/ledger`                       | OFC balances, unsettled amounts, settlement plan, ledger entries                                                     |
+| POST               | `/tables/:id/{resume,stop,remove,command}` | Lifecycle and dealer-only commands (`start`, `settle`, `adjust`)                                                     |
+
+Security boundary: the server binds to loopback unless told otherwise, and any non-loopback bind
+requires a bearer token (also accepted as `?token=` for the SSE stream and the audit download).
+Only public views leave the process; the dealer's private key and the random.org key never do.
+The OFC rules helpers (`RULES_PRESETS`, `validateTableConfig`, `describeRules`) live in
+`packages/ofc-engine/src/rules-presets.ts` so the web host screen and the console share them.
+
+Tests: `packages/dealer/test/{manager,console-server}.test.ts` drive the manager and the HTTP API
+over the memory transport (including SSE); `apps/console` has component tests with a fake API and
+a Playwright smoke that starts a real `dealer serve` with `P2P_DEALER_TRANSPORT=memory`.
+
 ## Adding a game
 
-`apps/web/src/games/registry.ts` is the only list the router reads. To add a game:
+`apps/web/src/games/registry.ts` is the only list the router reads. Open Face Chinese Poker is
+the worked example (`apps/web/src/games/ofc/`); it took no changes to the router, the picker,
+storage, hand-off, sync or identity.
 
-1. Add its id to `GAME_IDS` in `apps/web/src/games/ids.ts` (this also reserves it as a profile
-   slug).
-2. Create `apps/web/src/games/<id>/` with the screens it needs (`Home`, `Host`, `Join`, `Game`,
-   `History`, optionally `Demo`) and export a `GameDefinition` from `index.ts`. Screens read their
-   game from `useGame()` (`path('/host')`, `routes.game(id)`) and their player from
-   `useProfile()`; they get their saved-match store with `getMatchStore(slug, gameId)` and their
-   transport with `getProvider(slug, gameId)`.
-3. List the definition in `GAMES`. The hub card, the routes, the invite links, storage keys and
-   the PeerJS namespace all follow from the definition.
+1. **Rules**: a workspace package with a pure engine and a `GameDefinition` for the table core
+   (`packages/ofc-engine` exports `ofcDefinition`: `init`, `validateCommand`, `command`,
+   `reduce`, `view`, `viewAction`, `hiddenInformation: true`).
+2. **Id**: add it to `GAME_IDS` in `apps/web/src/games/ids.ts` (this also reserves it as a
+   profile slug).
+3. **Sessions**: `apps/web/src/session/tableSession.ts` hosts, joins and resumes any
+   `GameDefinition` on `TableServer`/`TableClient` — `hostTable(def, …)`, `joinTable`,
+   `resumeTable`. A game wraps them with its own types (`games/ofc/session.ts`) and gets its
+   provider and store with `getProvider(slug, gameId)` / `getSnapshotStore(slug, gameId)`.
+   Sessions live in the `SessionRegistry` keyed `<slug>:<game>:<matchId>`; `useSession<T>()`
+   returns them typed for the game.
+4. **Screens**: `apps/web/src/games/<id>/` with `Home`, `Host`, `Join`, `Game`, `History`,
+   optionally `Demo`, exported as a `GameDefinition` from `index.ts`. Screens read their game from
+   `useGame()` and their player from `useProfile()`. Provide `describeSaved(snapshot, myId)` so the
+   games hub can list the game's saved snapshots without knowing their shape.
+5. **Register** it in `GAMES`. The hub card, routes, invite links, storage keys and the PeerJS
+   namespace all follow from the definition.
 
-Game logic belongs in its own workspace packages (as `@bgf/engine` / `@bgf/server` /
-`@bgf/client` do for backgammon); the transports and the web shell are shared.
+Hidden-information games: the host's devices persist the full snapshot and are the only ones
+that can re-host; other seats persist a `view` and `resumeTable` reports `host-offline` while the
+host is away. The generic ledger model (`apps/web/src/session/ledger.ts`) is shared: a game maps
+its history onto `LedgerLine`s and the `LedgerSheet` shows balances, the settlement plan and a
+CSV export.
+
+## Trust disclosure
+
+Server-in-browser is valid for every game. A `GameDefinition` carries
+`trust: { hiddenInformation, hostCanSee: string[], notes? }` describing what a hosting device
+could read out of its own memory; `describeTrust(def, { hostSeat, randomness })` (`@bgf/table`,
+pure) turns that plus the hosting arrangement (`hostSeat: null` = dealer) and the declared
+randomness mode/provider into `{ level: 'open' | 'host-sees-hidden' | 'dealer', title, details }`.
+`TableServer` writes the description into `TableSnapshot.options.trust` at creation (and fills
+it in when an older snapshot is resumed) so every seat reads the same text. The web app shows
+a `trust-panel` on both host screens (live with the dealer/randomness choices), a `trust-badge`
+on the join screens (definition-level: what a player-hosted table implies) and in the game
+rails (from the snapshot), and the dealer console shows the panel for the dealer case. Nothing
+in the session layer or the core refuses a player host for a hidden-information game.
+
+## The platform runtime (separate repository)
+
+A club has to run somewhere. That runtime — the roster and signed chip ledger, dealer-mode
+tables, the member channel, chip purchases, the operator console API — is **not in this
+repository**. It is where chips are minted and rake is enforced, and those rules are kept by
+distribution rather than by trusting operators, so it ships separately.
+
+What that leaves here is the whole client side of the design, and the specification itself:
+
+| Here                                                             | Not here                                     |
+| ---------------------------------------------------------------- | -------------------------------------------- |
+| `@bgf/club-spec`: what a club is, plus the conformance suite     | The platform's hosting, purchases, operators |
+| `@bgf/club`: the reference implementation and the channel client | The house club and its matchmaking policy    |
+| Engines, table core, transports, web app, Node dealer, soak      | The platform's store and HTTP API            |
+
+The seam is clean by construction, and worth keeping that way: **nothing in this repository
+imports the platform.** The console's platform pages mirror its types rather than importing
+them, so the browser bundle never pulls it in, and `pnpm soak --club` / `--lobby` shell out to
+its binary when a workspace has both checked out and print an explanation when it does not.
+
+Anyone may write their own runtime instead. Implement `ClubApi`, declare capabilities and
+custody honestly, run `runClubConformance` against it, and the browser app talks to it
+unmodified — it reads what a club declares and adapts, down to telling players who holds their
+chips before they join.
+
+## Clubs (web)
+
+The browser side of clubs lives in `apps/web/src/clubs/` and talks the club channel contract in
+`packages/protocol/src/club.ts` over any `Transport` (PeerJS namespace `club-v1`; the club's
+address is its id). `ClubClient` runs the keyed hello → challenge → auth handshake, then the lobby
+protocol (`lobby`, `sit`, `leave`, `statement`, `transfer`, `request-chips`, `chat`). Routes:
+`#/:profile/clubs` (joined clubs, join by invite), `#/:profile/club/join/:token` (decode the invite,
+connect, remember the club), `#/:profile/club/:clubId` (lobby); the profile-less `#/club/join/:token`
+goes through the player picker. Joined clubs are stored per player in `bgf:clubs:<slug>`.
+
+`ClubRegistryProvider` keeps club connections alive across routes (a live session is never replaced
+by a late reconnect, mirroring the table registry). Sitting stores the seat the club hands out and
+navigates to the game's join route with `?club=<id>&table=<id>`; `ClubChip` reads that context on
+join and game screens to show balance, stack and the way back. `FakeClubClient` implements the same
+`ClubClientApi` for component tests and, in development builds only, the `?fakeclub=1` flag so the
+screens can be walked without a club runtime.

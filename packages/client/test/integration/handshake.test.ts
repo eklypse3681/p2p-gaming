@@ -116,7 +116,7 @@ describe('handshake', () => {
     raw.onMessage((m) => got.push(m as { type: string }));
     raw.send({ type: 'hello', protocol: PROTOCOL_VERSION, profile: GUEST });
     await flush();
-    raw.send({ type: 'play', play: 'nope' });
+    raw.send({ type: 'command', command: { type: 'play', play: 'nope' } });
     raw.send({ type: 'wat' });
     raw.send({ type: 'hello', protocol: PROTOCOL_VERSION, profile: GUEST });
     await flush();

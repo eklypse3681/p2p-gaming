@@ -195,6 +195,9 @@ export class FakeClient implements GameClientApi {
     return this.dice.rollDie();
   }
 
+  ready(): void {
+    /* the fake table never runs unattended */
+  }
   startGame(): void {
     this.act({ type: 'start-game' });
   }

@@ -4,6 +4,9 @@ import type { RenderResult } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes, useParams } from 'react-router';
 import { ProfileProvider } from '../session/ProfileProvider';
 import { SessionRegistryProvider } from '../session/SessionRegistry';
+import { ClubRegistryProvider } from '../clubs/ClubRegistry';
+import type { ClubSession } from '../clubs/session';
+import type { BaseSession } from '../session/SessionRegistry';
 import { ThemeProvider } from '../app/ThemeProvider';
 import { ensureProfile } from '../session/profiles';
 import { GameProvider } from '../games/GameProvider';
@@ -44,42 +47,60 @@ function RouteMarker({ id }: { id: string }) {
 export function renderWithProfile(
   slug: string,
   ui: ReactNode,
-  opts: { route?: string; markers?: Record<string, string>; game?: GameId } = {},
+  opts: {
+    route?: string;
+    markers?: Record<string, string>;
+    game?: GameId;
+    /** Mount `ui` at this sub-route pattern (e.g. `game/:matchId`) instead of the catch-all. */
+    uiPath?: string;
+    /** Sessions the registry starts with (`[slug, game, session]`). */
+    sessions?: [string, GameId, BaseSession][];
+    /** Club sessions the club registry starts with (`[slug, session]`). */
+    clubSessions?: [string, ClubSession][];
+  } = {},
 ): RenderResult {
   ensureProfile(slug);
-  const { route = '/', markers = {}, game } = opts;
+  const { route = '/', markers = {}, game, uiPath, sessions, clubSessions } = opts;
   const entry = game ? `/${slug}/${game}${route === '/' ? '/' : route}` : `/${slug}${route}`;
   const markerRoutes = Object.entries(markers).map(([path, id]) => (
     <Route key={path} path={path} element={<RouteMarker id={id} />} />
   ));
+  const uiRoutes = uiPath ? (
+    <Route path={uiPath} element={ui} />
+  ) : (
+    <>
+      <Route path="*" element={ui} />
+      <Route index element={ui} />
+    </>
+  );
   return render(
-    <SessionRegistryProvider>
-      <MemoryRouter initialEntries={[entry]}>
-        <Routes>
-          <Route path="/" element={<RouteMarker id="picker-route" />} />
-          <Route path="/join/:code" element={<RouteMarker id="invite-route" />} />
-          <Route path="/backgammon/join/:code" element={<RouteMarker id="invite-route" />} />
-          <Route path=":profile" element={<Shell />}>
-            {game ? (
-              <>
-                <Route index element={<RouteMarker id="hub-route" />} />
-                <Route path="settings" element={<RouteMarker id="settings-route" />} />
-                <Route path={game} element={<GameShell game={game} />}>
+    <SessionRegistryProvider initialSessions={sessions}>
+      <ClubRegistryProvider initialSessions={clubSessions}>
+        <MemoryRouter initialEntries={[entry]}>
+          <Routes>
+            <Route path="/" element={<RouteMarker id="picker-route" />} />
+            <Route path="/join/:code" element={<RouteMarker id="invite-route" />} />
+            <Route path="/backgammon/join/:code" element={<RouteMarker id="invite-route" />} />
+            <Route path=":profile" element={<Shell />}>
+              {game ? (
+                <>
+                  <Route index element={<RouteMarker id="hub-route" />} />
+                  <Route path="settings" element={<RouteMarker id="settings-route" />} />
+                  <Route path={game} element={<GameShell game={game} />}>
+                    {markerRoutes}
+                    {uiRoutes}
+                  </Route>
+                </>
+              ) : (
+                <>
                   {markerRoutes}
-                  <Route path="*" element={ui} />
-                  <Route index element={ui} />
-                </Route>
-              </>
-            ) : (
-              <>
-                {markerRoutes}
-                <Route path="*" element={ui} />
-                <Route index element={ui} />
-              </>
-            )}
-          </Route>
-        </Routes>
-      </MemoryRouter>
+                  {uiRoutes}
+                </>
+              )}
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </ClubRegistryProvider>
     </SessionRegistryProvider>,
   );
 }

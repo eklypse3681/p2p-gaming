@@ -1,0 +1,123 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--ui-bg) 60%, transparent);
+  backdrop-filter: blur(3px);
+}
+.sheet {
+  width: min(720px, 100%);
+  max-height: calc(100dvh - 2 * var(--space-4));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  animation: fade-up var(--dur) var(--ease);
+}
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  font-size: 0.92rem;
+}
+.k {
+  color: var(--ui-text-muted);
+}
+.v {
+  font-weight: 600;
+}
+.verdict {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  font-weight: 600;
+}
+.segments {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.segment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.row {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr minmax(6rem, 1.2fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ui-border);
+  font-size: 0.88rem;
+}
+.rowIndex {
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-mono);
+}
+.rowLabel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.rowLabel small {
+  color: var(--ui-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rowValues {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-text-muted);
+}
+.rowStatus {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status_ok {
+  color: var(--ui-success);
+}
+.status_fail {
+  color: var(--ui-danger);
+}
+.status_pending,
+.status_checking {
+  color: var(--ui-text-muted);
+}
+.status_unverifiable {
+  color: var(--ui-text-muted);
+  font-weight: 400;
+}
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: 3rem 1fr auto;
+  }
+  .rowValues {
+    display: none;
+  }
+  .rowStatus {
+    grid-column: 2;
+  }
+}

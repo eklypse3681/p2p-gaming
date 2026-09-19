@@ -9,6 +9,11 @@ import { getMatchStore } from '../../session/matchStore';
 import { getProvider, getTransportName } from '../../session/providers';
 import { hostNewMatch, SessionError } from '../../session/session';
 import { useSessionRegistry } from '../../session/SessionRegistry';
+import { HostTableOptions, useHostTableChoice } from '../../hud/HostTableOptions';
+import { randomnessOptions, randomnessProblem } from '../../session/entropy';
+import { describeTrust } from '@bgf/table';
+import { backgammonDefinition } from '@bgf/server';
+import { TrustPanel } from '../../hud/TrustPanel';
 import styles from './HostScreen.module.css';
 
 const LENGTHS = [1, 3, 5, 7, 11, 0] as const;
@@ -24,6 +29,7 @@ export function HostScreen() {
   const [seat, setSeat] = useState<Player>('white');
   const [rules, setRules] = useState<RulesMode>('enforced');
   const [homeSide, setHomeSide] = useState<HomeSide>('left');
+  const [table, setTable] = useHostTableChoice();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const unlimited = length === 0;
@@ -32,6 +38,11 @@ export function HostScreen() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    const problem = randomnessProblem(table.randomness);
+    if (problem) {
+      setError(problem);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -44,6 +55,9 @@ export function HostScreen() {
           config: { length, crawford: crawford && !free, jacoby, rules },
           hostSeat: seat,
           homeSide,
+          dealer: table.dealer,
+          randomness: table.randomness,
+          autopilot: !table.manualDealing,
         },
         { provider: getProvider(slug, gameId), store: getMatchStore(slug, gameId) },
       );
@@ -208,7 +222,19 @@ export function HostScreen() {
           </span>
         </div>
 
-        <div className="field">
+        <HostTableOptions
+          value={table}
+          onChange={setTable}
+          dealerHelp="Both colours are taken by the players who join; this device only runs the table and rolls the dice."
+        />
+        <TrustPanel
+          trust={describeTrust(backgammonDefinition, {
+            hostSeat: table.dealer ? null : 0,
+            randomness: randomnessOptions(table.randomness),
+          })}
+        />
+
+        <div className="field" hidden={table.dealer}>
           <span className="label">You play as</span>
           <div className={styles.seats} role="radiogroup" aria-label="Seat">
             {(['white', 'black'] as const).map((s) => (

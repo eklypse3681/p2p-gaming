@@ -233,7 +233,8 @@ describe('session factories', () => {
     await expect(
       resumeMatch(
         { snapshot: snapshot(), profile },
-        { provider, createServer: () => fakeServer() as never },
+        { provider, createServer: () => fakeServer() as never, sleep: async () => {} },
+        { maxTotalMs: 0 },
       ),
     ).rejects.toMatchObject({ code: 'network' });
   });

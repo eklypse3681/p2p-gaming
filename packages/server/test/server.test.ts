@@ -15,7 +15,10 @@ function rawClient(server: GameServer, profile: PlayerProfile = { id: 'p', name:
   const inbox: ServerMessage[] = [];
   clientEnd.onMessage((m) => inbox.push(m as ServerMessage));
   clientEnd.send({ type: 'hello', protocol: PROTOCOL_VERSION, profile });
-  return { transport: clientEnd, inbox, send: (m: unknown) => clientEnd.send(m) };
+  const send = (m: unknown) => clientEnd.send(m);
+  /** Send a backgammon command inside the table envelope. */
+  const command = (c: unknown) => clientEnd.send({ type: 'command', command: c });
+  return { transport: clientEnd, inbox, send, command };
 }
 
 describe('GameServer (raw transports)', () => {
@@ -41,11 +44,11 @@ describe('GameServer (raw transports)', () => {
     const host = rawClient(server, { id: 'h', name: 'H' });
     const guest = rawClient(server, { id: 'g', name: 'G' });
     await flush();
-    expect(host.inbox[0]).toMatchObject({ type: 'welcome', seat: 'white' });
-    expect(guest.inbox[0]).toMatchObject({ type: 'welcome', seat: 'black' });
-    host.send({ type: 'start-game' });
-    host.send({ type: 'opening-roll' });
-    guest.send({ type: 'opening-roll' });
+    expect(host.inbox[0]).toMatchObject({ type: 'welcome', seat: 0 });
+    expect(guest.inbox[0]).toMatchObject({ type: 'welcome', seat: 1 });
+    host.command({ type: 'start-game' });
+    host.command({ type: 'opening-roll' });
+    guest.command({ type: 'opening-roll' });
     await flush();
     expect(server.getSnapshot().match.game!.phase).toMatchObject({
       kind: 'moving',
@@ -59,9 +62,9 @@ describe('GameServer (raw transports)', () => {
     expect(states.at(-1)).toMatchObject({
       type: 'state',
       action: { type: 'opening-roll', player: 'black', die: 2 },
-      by: 'black',
+      by: 1,
     });
-    host.send({
+    host.command({
       type: 'play',
       play: [
         { from: 13, to: 8, die: 5 },
@@ -93,15 +96,15 @@ describe('GameServer (raw transports)', () => {
     for (const junk of [
       1,
       [],
-      { type: 'play', play: [{}] },
+      { type: 'command', command: { type: 'play', play: [{}] } },
       { type: 'chat' },
-      { type: 'offer-resign', stakes: 1 },
+      { type: 'command', command: { type: 'offer-resign', stakes: 1 } },
     ])
       a.send(junk);
     await flush();
     expect(a.inbox.filter((m) => m.type === 'error').length).toBe(5);
     expect(server.connectedSeats().length).toBe(2);
-    b.send({ type: 'roll' });
+    b.command({ type: 'roll' });
     await flush();
     expect(b.inbox.at(-1)).toMatchObject({ type: 'error', code: 'wrong-phase' });
     server.close();
@@ -127,7 +130,7 @@ describe('seat challenge (raw transports)', () => {
     expect(challenge.matchId).toBe(server.getSnapshot().id);
     expect(challenge.nonce).toMatch(/^[0-9a-f]{32}$/);
     // Anything but `auth` while a challenge is pending ends the connection.
-    guest.send({ type: 'roll' });
+    guest.command({ type: 'roll' });
     await flush();
     expect(guest.inbox.at(-1)).toMatchObject({ type: 'rejected', reason: 'unauthorized' });
     expect(guest.transport.status).toBe('closed');

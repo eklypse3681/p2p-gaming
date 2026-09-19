@@ -3,5 +3,22 @@ packages:
   - apps/*
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  - '@node-datachannel/android-arm64@0.33.4'
+  - '@node-datachannel/darwin-arm64@0.33.4'
+  - '@node-datachannel/darwin-x64@0.33.4'
+  - '@node-datachannel/linux-arm64-gnu@0.33.4'
+  - '@node-datachannel/linux-arm64-musl@0.33.4'
+  - '@node-datachannel/linux-x64-gnu@0.33.4'
+  - '@node-datachannel/linux-x64-musl@0.33.4'
+  - '@node-datachannel/win32-arm64-msvc@0.33.4'
+  - '@node-datachannel/win32-x64-msvc@0.33.4'
+  - node-datachannel@0.33.4
 overrides:
   vite: ^8.3.0
+  vitest: ^5.0.0
+  '@vitest/expect': ^5.0.0
+  '@vitest/runner': ^5.0.0
+  '@vitest/snapshot': ^5.0.0
+  '@vitest/spy': ^5.0.0
+  '@vitest/utils': ^5.0.0

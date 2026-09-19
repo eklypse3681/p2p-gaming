@@ -90,6 +90,9 @@ export function AppBar() {
                 </NavLink>
               </>
             )}
+            <NavLink to={ctx.path('/clubs')} className={cls} data-testid="nav-clubs">
+              Clubs
+            </NavLink>
             <NavLink to={ctx.path('/settings')} className={cls} data-testid="nav-settings">
               Settings
             </NavLink>

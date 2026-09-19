@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": ".",
+    "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src", "test", "bench.ts", "bench-sizes.ts"],
+  "references": [
+    {
+      "path": "../engine"
+    },
+    {
+      "path": "../ofc-engine"
+    },
+    {
+      "path": "../server"
+    },
+    {
+      "path": "../soak"
+    },
+    {
+      "path": "../table"
+    }
+  ]
+}

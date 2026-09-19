@@ -4,15 +4,17 @@ import userEvent from '@testing-library/user-event';
 import { SessionRegistryProvider, useSession, useSessionRegistry } from './SessionRegistry';
 import type { Session } from './session';
 
-function fakeSession(id: string): Session {
-  return {
+function fakeSession(id: string): Session & { status: string } {
+  const s = {
     matchId: id,
     code: 'CODE',
-    role: 'host',
-    client: { getState: () => ({ status: 'joined' }) } as never,
+    role: 'host' as const,
+    status: 'joined',
+    client: { getState: () => ({ status: s.status }) } as never,
     provider: { name: 'fake' } as never,
     dispose: vi.fn(),
   };
+  return s as unknown as Session & { status: string };
 }
 
 function Consumer({ slug, id, a, b }: { slug: string; id: string; a: Session; b: Session }) {
@@ -43,6 +45,13 @@ describe('SessionRegistry', () => {
     await userEvent.click(screen.getByText('add-a'));
     expect(screen.getByTestId('out')).toHaveTextContent('have:a');
     expect(screen.getByTestId('other')).toHaveTextContent('isolated');
+    // A live session is never replaced: the newcomer is disposed instead.
+    await userEvent.click(screen.getByText('add-b'));
+    expect(screen.getByTestId('out')).toHaveTextContent('have:a');
+    expect(b.dispose).toHaveBeenCalledTimes(1);
+    expect(a.dispose).not.toHaveBeenCalled();
+    // Once the old one is dead it can be replaced.
+    a.status = 'disconnected';
     await userEvent.click(screen.getByText('add-b'));
     expect(screen.getByTestId('out')).toHaveTextContent('have:b');
     expect(a.dispose).toHaveBeenCalled();

@@ -74,6 +74,29 @@ export function canRespondToDouble(state: ClientState): boolean {
   return isJoined(state) && !!g && g.phase.kind === 'double-offered' && g.phase.by !== state.seat;
 }
 
+/** Unattended table: games start by themselves; "Ready" is the way to the next one. */
+export function isAutopilot(state: ClientState): boolean {
+  const opt = state.snapshot?.autopilot;
+  if (opt === true) return true;
+  if (opt === false) return false;
+  return !!state.snapshot?.dealer;
+}
+
+/** Readiness for the next game: mine, the opponent's, and whether both are set. */
+export function readyState(state: ClientState): {
+  mine: boolean;
+  opponent: boolean;
+  everyone: boolean;
+} {
+  const ready = state.ready ?? { white: false, black: false };
+  const seat = state.seat;
+  return {
+    mine: seat ? ready[seat] : false,
+    opponent: seat ? ready[opponent(seat)] : false,
+    everyone: ready.white && ready.black,
+  };
+}
+
 export function canStartGame(state: ClientState): boolean {
   const m = currentMatch(state);
   if (!isJoined(state) || !m || m.winner) return false;

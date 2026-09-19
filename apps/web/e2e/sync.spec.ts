@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { GUEST, HOST, seedProfile } from './helpers';
+import { GUEST, HOST, seedProfile, startGameIfNeeded } from './helpers';
 
 /**
  * Device-to-device profile sync over the real network (PeerJS cloud + WebRTC), so it is opt-in:
@@ -43,7 +43,7 @@ test('a match and a setting reach a second device through sync alone', async ({ 
   await opponent.page.goto(`${BASE}#/bob/backgammon/join/${code}`);
   await online(opponent.page);
   await online(laptop.page);
-  await opponent.page.getByTestId('start-game-button').click();
+  await startGameIfNeeded(opponent.page);
   await expect(laptop.page.getByTestId('opening-roll-button')).toBeVisible({ timeout: 20_000 });
 
   // The laptop's own hand-off/transfer code carries the sync key; the phone imports it.

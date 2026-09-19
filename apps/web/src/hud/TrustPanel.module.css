@@ -1,0 +1,72 @@
+.panel {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  background: var(--ui-surface);
+  display: grid;
+  gap: 0.5rem;
+}
+.panel[data-level='host-sees-hidden'] {
+  border-color: color-mix(in srgb, var(--ui-danger) 55%, var(--ui-border));
+}
+.panel[data-level='open'],
+.panel[data-level='dealer'] {
+  border-color: color-mix(in srgb, var(--ui-success) 45%, var(--ui-border));
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.icon {
+  font-size: 1.1rem;
+}
+.title {
+  font-size: 0.95rem;
+}
+.details {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.25rem;
+  color: var(--ui-text-muted);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+.badgeWrap {
+  position: relative;
+  display: inline-flex;
+}
+.badge {
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  font: inherit;
+  font-size: 0.75rem;
+}
+.badge[data-level='host-sees-hidden'] {
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
+}
+.badge[data-level='open'],
+.badge[data-level='dealer'] {
+  border-color: var(--ui-success);
+  color: var(--ui-success);
+}
+.popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 260px;
+  max-width: min(360px, 80vw);
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-raised);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  display: grid;
+  gap: 0.4rem;
+  color: var(--ui-text);
+}

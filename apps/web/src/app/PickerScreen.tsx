@@ -31,8 +31,9 @@ import styles from './PickerScreen.module.css';
  * With `#/<game>/join/:code` (an invite link) the chosen player goes straight to joining that
  * match; the profile-less legacy form `#/join/:code` means backgammon.
  */
-export function PickerScreen({ game }: { game?: GameId } = {}) {
-  const { code } = useParams();
+export function PickerScreen({ game, club }: { game?: GameId; club?: boolean } = {}) {
+  const { code, token } = useParams();
+  const clubToken = club && token ? token : null;
   const navigate = useNavigate();
   const location = useLocation();
   const index = useProfilesIndex();
@@ -69,7 +70,13 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
 
   const go = (slug: string) => {
     touchProfile(slug);
-    navigate(joining ? gamePath(slug, gameId, `/join/${joining}`) : profilePath(slug, '/'));
+    navigate(
+      clubToken
+        ? profilePath(slug, `/club/join/${clubToken}`)
+        : joining
+          ? gamePath(slug, gameId, `/join/${joining}`)
+          : profilePath(slug, '/'),
+    );
   };
 
   const choose = (slug: string) => {
@@ -293,7 +300,12 @@ export function PickerScreen({ game }: { game?: GameId } = {}) {
       <div className="stack">
         <div className={styles.hero}>
           <div className="eyebrow">Peer-to-peer · no accounts · no servers</div>
-          <h1>{joining ? "You're invited" : "Who's playing?"}</h1>
+          <h1>{joining || clubToken ? "You're invited" : "Who's playing?"}</h1>
+          {clubToken && (
+            <p className="muted" data-testid="picker-club-joining">
+              Pick who you are and you'll join the club.
+            </p>
+          )}
           {joining && autoCode && !importError ? (
             <p className="muted" data-testid="import-auto" role="status">
               Continuing as <strong>{autoName ?? 'you'}</strong> in {gameName} match{' '}

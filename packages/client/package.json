@@ -14,9 +14,9 @@
   },
   "dependencies": {
     "@bgf/engine": "workspace:*",
-    "@bgf/protocol": "workspace:*"
-  },
-  "devDependencies": {
+    "@bgf/protocol": "workspace:*",
+    "@bgf/table": "workspace:*",
     "@bgf/server": "workspace:*"
-  }
+  },
+  "devDependencies": {}
 }

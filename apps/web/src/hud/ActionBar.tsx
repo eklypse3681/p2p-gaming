@@ -21,11 +21,13 @@ import {
   currentGame,
   currentMatch,
   gameOver,
+  isAutopilot,
   isFreeBoard,
   isMoving,
   kindLabel,
   phaseSummary,
   playerName,
+  readyState,
 } from './derive';
 
 export type ActionBarLayout = 'row' | 'column';
@@ -35,6 +37,7 @@ export interface ActionBarProps {
   client: Pick<
     GameClientApi,
     | 'startGame'
+    | 'ready'
     | 'openingRoll'
     | 'roll'
     | 'double'
@@ -179,7 +182,12 @@ export function ActionBar({
     client.offerResign(stakes);
   };
 
-  const showStart = canStartGame(state) && !match?.winner;
+  const auto = isAutopilot(state);
+  const readiness = readyState(state);
+  // Unattended table: the first game starts by itself; later games start when both are ready.
+  const showStart = canStartGame(state) && !match?.winner && !auto;
+  const showReady = canStartGame(state) && !match?.winner && auto && game !== null;
+  const waitingToStart = canStartGame(state) && !match?.winner && auto && game === null;
   const moving = isMoving(state);
   const free = isFreeBoard(state);
   const seat = state.seat;
@@ -221,6 +229,34 @@ export function ActionBar({
               over || (match && match.games.length > 0) ? 'Next' : 'Start',
             )}
           />
+        )}
+        {showReady && (
+          <>
+            <button
+              className={btn(readiness.mine ? '' : 'btn-primary')}
+              data-testid="ready-button"
+              data-ready={readiness.mine ? 'true' : 'false'}
+              onClick={() => client.ready(!readiness.mine)}
+              {...lbl(
+                readiness.mine ? 'Not ready' : 'Ready for the next game',
+                readiness.mine ? 'Unready' : 'Ready',
+              )}
+            />
+            <span
+              className="muted small"
+              data-testid="ready-indicator"
+              data-opponent-ready={readiness.opponent ? 'true' : 'false'}
+            >
+              {readiness.opponent
+                ? `${playerName(state, opponent(seat ?? 'white'))} is ready`
+                : `Waiting for ${playerName(state, opponent(seat ?? 'white'))}`}
+            </span>
+          </>
+        )}
+        {waitingToStart && (
+          <span className="muted small" data-testid="auto-start-note">
+            The game starts as soon as both players are here.
+          </span>
         )}
         {canOpeningRoll(state) && (
           <button

@@ -1,9 +1,12 @@
 import type {
+  Action,
   Board,
   CubeOwner,
   Destination,
   DiceRoll,
   GamePhase,
+  MatchConfig,
+  MatchState,
   Player,
   RelPoint,
   ResultKind,
@@ -17,16 +20,17 @@ import {
   emptyBoard,
   turnOptions,
 } from '@bgf/engine';
-import type {
-  ClientMessage,
-  MatchSnapshot,
-  PlayerProfile,
-  ServerMessage,
-  Signer,
-  Transport,
-  Unsubscribe,
-} from '@bgf/protocol';
-import { PROTOCOL_VERSION, bytesToBase64Url, challengeBytes, isServerMessage } from '@bgf/protocol';
+import type { MatchSnapshot, PlayerProfile, Signer, Transport } from '@bgf/protocol';
+import { TableClient } from '@bgf/table';
+import type { TableClientState } from '@bgf/table';
+import {
+  chatFromTable,
+  seatIndex,
+  seatPlayer,
+  toMatchSnapshot,
+  toTableSnapshot,
+} from '@bgf/server';
+import type { BackgammonCommand, BackgammonTableSnapshot } from '@bgf/server';
 import type { MatchStore } from './store.js';
 import type { ClientState, GameClientApi, TurnDraft } from './types.js';
 
@@ -58,7 +62,7 @@ interface TurnBasis {
   turnCount: number;
 }
 
-const MAX_CHAT_HISTORY = 200;
+type TableState = TableClientState<MatchState, Action, MatchConfig>;
 
 function emptyDraft(board: Board): TurnDraft {
   return {
@@ -85,65 +89,45 @@ function movingPhase(phase: GamePhase | undefined): Extract<GamePhase, { kind: '
 }
 
 /**
- * The client half of the protocol. Identical on host and guest: it only ever talks to a
- * `Transport`. Exposes a `useSyncExternalStore`-friendly state and local turn drafting that
- * is validated with the engine before anything is sent.
+ * The backgammon client: a colour-speaking wrapper around the generic `TableClient` that adds
+ * local turn drafting (validated with the engine before anything is sent) and the match
+ * commands. Identical on host and guest.
  */
 export class GameClient implements GameClientApi {
   readonly profile: PlayerProfile;
 
   private state: ClientState;
   private readonly listeners = new Set<() => void>();
-  private readonly transport: Transport;
-  private readonly store: MatchStore | undefined;
-  private readonly resumeSnapshot: MatchSnapshot | undefined;
+  private readonly table: TableClient<MatchState, Action, MatchConfig, MatchState>;
   private readonly previewThrottleMs: number;
-  private readonly pingIntervalMs: number;
   private readonly now: () => number;
-  private readonly onStoreError: (error: unknown) => void;
-  private readonly signer: Signer | undefined;
-  private readonly unsubscribe: Unsubscribe[] = [];
+  private lastTable: TableState;
 
   private basis: TurnBasis | null = null;
   private previewTimer: ReturnType<typeof setTimeout> | null = null;
   private previewDirty = false;
-  private pingTimer: ReturnType<typeof setInterval> | null = null;
-  private helloSent = false;
   private closed = false;
 
   constructor(opts: GameClientOptions) {
     this.profile = opts.profile;
-    this.transport = opts.transport;
-    this.store = opts.store;
-    this.resumeSnapshot = opts.resumeSnapshot;
-    this.signer = opts.signer;
     this.previewThrottleMs = opts.previewThrottleMs ?? 120;
-    this.pingIntervalMs = opts.pingIntervalMs ?? 10_000;
     this.now = opts.now ?? Date.now;
-    this.onStoreError = opts.onStoreError ?? ((e) => console.warn('[GameClient] store error', e));
-    this.state = {
-      status: 'connecting',
-      rejectReason: null,
-      seat: null,
-      snapshot: null,
-      lastAction: null,
-      opponentPreview: null,
-      presence: { white: false, black: false },
-      chat: [],
-      latencyMs: null,
-      error: null,
-      draft: emptyDraft(emptyBoard()),
-    };
-
-    this.unsubscribe.push(this.transport.onMessage((m) => this.handle(m)));
-    this.unsubscribe.push(
-      this.transport.onStatus((status, reason) => {
-        if (status === 'open') this.sendHello();
-        if (status === 'closed') this.onTransportClosed(reason);
-      }),
-    );
-    if (this.transport.status === 'open') this.sendHello();
-    else if (this.transport.status === 'closed') this.onTransportClosed('closed');
+    const store = opts.store;
+    this.table = new TableClient<MatchState, Action, MatchConfig, MatchState>({
+      transport: opts.transport,
+      profile: opts.profile,
+      signer: opts.signer,
+      resumeSnapshot: opts.resumeSnapshot ? toTableSnapshot(opts.resumeSnapshot) : undefined,
+      store: store ? { put: (s) => store.put(toMatchSnapshot(s)) } : undefined,
+      pingIntervalMs: opts.pingIntervalMs,
+      now: opts.now,
+      onStoreError: opts.onStoreError ?? ((e) => console.warn('[GameClient] store error', e)),
+    });
+    this.lastTable = this.table.getState();
+    this.state = this.project(this.lastTable, null, emptyDraft(emptyBoard()));
+    this.table.subscribe(() => this.onTableChange());
+    // The transport may already have moved on (e.g. closed) before we subscribed.
+    if (this.table.getState() !== this.lastTable) this.onTableChange();
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -167,182 +151,85 @@ export class GameClient implements GameClientApi {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // Transport plumbing
+  // Table → backgammon state
   // ---------------------------------------------------------------------------------------------
 
-  private send(message: ClientMessage): boolean {
-    if (this.closed || this.transport.status !== 'open') return false;
-    try {
-      this.transport.send(message);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private sendHello(): void {
-    if (this.helloSent || this.closed) return;
-    const hello: ClientMessage = {
-      type: 'hello',
-      protocol: PROTOCOL_VERSION,
-      profile: this.profile,
+  /** Build the colour-keyed client state from the generic table state. */
+  private project(t: TableState, snapshot: MatchSnapshot | null, draft: TurnDraft): ClientState {
+    const seat = t.seat === null ? null : seatPlayer(t.seat);
+    const opponentSeat = t.seat === null ? null : 1 - t.seat;
+    const preview = opponentSeat === null ? undefined : t.previews[opponentSeat];
+    const opponentPreview =
+      Array.isArray(preview) && preview.length > 0 ? (preview as SubMove[]) : null;
+    return {
+      status: t.status,
+      rejectReason: t.rejectReason,
+      seat,
+      role: t.role,
+      dealer: t.dealer,
+      snapshot,
+      lastAction: t.lastAction
+        ? {
+            action: t.lastAction.action,
+            by: t.lastAction.by === null ? null : seatPlayer(t.lastAction.by),
+            seq: t.lastAction.seq,
+          }
+        : null,
+      opponentPreview,
+      presence: { white: t.presence[0] ?? false, black: t.presence[1] ?? false },
+      ready: { white: t.ready[0] ?? false, black: t.ready[1] ?? false },
+      autopilot: t.autopilot,
+      chat: t.chat.map(chatFromTable),
+      latencyMs: t.latencyMs,
+      error: t.error,
+      draft,
     };
-    if (this.resumeSnapshot) hello.snapshot = this.resumeSnapshot;
-    if (this.send(hello)) this.helloSent = true;
   }
 
-  /** Prove we hold the private key for our public key by signing the server's nonce. */
-  private async answerChallenge(msg: Extract<ServerMessage, { type: 'challenge' }>): Promise<void> {
-    if (!this.signer) {
-      this.setState({
-        status: 'rejected',
-        rejectReason: 'unauthorized',
-        error: {
-          code: 'rejected:unauthorized',
-          message: 'this player has no signing key for that seat',
-          at: this.now(),
-        },
-      });
-      return;
-    }
-    let signature: string;
-    try {
-      const bytes = challengeBytes({
-        matchId: msg.matchId,
-        profileId: this.profile.id,
-        nonce: msg.nonce,
-      });
-      signature = bytesToBase64Url(await this.signer(bytes));
-    } catch (e) {
-      this.setState({
-        status: 'rejected',
-        rejectReason: 'unauthorized',
-        error: { code: 'rejected:unauthorized', message: (e as Error).message, at: this.now() },
-      });
-      return;
-    }
+  private onTableChange(): void {
     if (this.closed) return;
-    this.send({ type: 'auth', signature });
-  }
-
-  private onTransportClosed(reason?: string): void {
-    this.stopPing();
-    this.cancelPreview();
-    if (this.state.status === 'rejected') return;
-    this.setState({
-      status: 'disconnected',
-      presence: { white: false, black: false },
-      error:
-        reason && reason !== 'closed'
-          ? { code: 'disconnected', message: reason, at: this.now() }
-          : this.state.error,
-    });
-  }
-
-  private startPing(): void {
-    if (this.pingIntervalMs <= 0 || this.pingTimer) return;
-    this.pingTimer = setInterval(() => {
-      this.send({ type: 'ping', t: this.now() });
-    }, this.pingIntervalMs);
-  }
-
-  private stopPing(): void {
-    if (this.pingTimer) {
-      clearInterval(this.pingTimer);
-      this.pingTimer = null;
+    const prev = this.lastTable;
+    const next = this.table.getState();
+    this.lastTable = next;
+    const snapshot =
+      next.snapshot === prev.snapshot
+        ? this.state.snapshot
+        : next.snapshot
+          ? toMatchSnapshot(next.snapshot as BackgammonTableSnapshot)
+          : null;
+    let draft = this.state.draft;
+    if (
+      snapshot &&
+      next.seat !== null &&
+      (next.snapshot !== prev.snapshot || next.seat !== prev.seat)
+    ) {
+      draft = this.syncDraft(snapshot, seatPlayer(next.seat));
     }
-  }
-
-  private persist(snapshot: MatchSnapshot): void {
-    if (!this.store) return;
-    try {
-      void this.store.put(snapshot).catch((e: unknown) => this.onStoreError(e));
-    } catch (e) {
-      this.onStoreError(e);
+    if (next.error !== prev.error && next.error && draft.pending) {
+      draft = { ...draft, pending: false };
     }
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  // Inbound messages
-  // ---------------------------------------------------------------------------------------------
-
-  private handle(raw: unknown): void {
-    if (this.closed || !isServerMessage(raw)) return;
-    const msg = raw as ServerMessage;
-    switch (msg.type) {
-      case 'challenge':
-        void this.answerChallenge(msg);
-        return;
-      case 'welcome': {
-        const draft = this.syncDraft(msg.snapshot, msg.seat);
-        this.setState({
-          status: 'joined',
-          rejectReason: null,
-          seat: msg.seat,
-          snapshot: msg.snapshot,
-          chat: msg.snapshot.chat ?? [],
-          presence: { ...this.state.presence, [msg.seat]: true },
-          opponentPreview: null,
-          draft,
-        });
-        this.persist(msg.snapshot);
-        this.startPing();
-        return;
-      }
-      case 'rejected':
-        this.setState({
-          status: 'rejected',
-          rejectReason: msg.reason,
-          error: { code: `rejected:${msg.reason}`, message: msg.message, at: this.now() },
-        });
-        return;
-      case 'state': {
-        const seat = this.state.seat;
-        const draft = seat ? this.syncDraft(msg.snapshot, seat) : this.state.draft;
-        this.setState({
-          snapshot: msg.snapshot,
-          chat: msg.snapshot.chat ?? this.state.chat,
-          lastAction: msg.action
-            ? { action: msg.action, by: msg.by ?? null, seq: msg.snapshot.seq }
-            : this.state.lastAction,
-          opponentPreview: null,
-          draft,
-        });
-        this.persist(msg.snapshot);
-        return;
-      }
-      case 'preview':
-        if (msg.seat !== this.state.seat) {
-          this.setState({ opponentPreview: msg.play.length > 0 ? msg.play : null });
-        }
-        return;
-      case 'presence':
-        this.setState({ presence: { ...this.state.presence, [msg.seat]: msg.connected } });
-        return;
-      case 'chat': {
-        const chat = [...this.state.chat, msg.message].slice(-MAX_CHAT_HISTORY);
-        const snapshot = this.state.snapshot ? { ...this.state.snapshot, chat } : null;
-        this.setState({ chat, snapshot });
-        if (snapshot) this.persist(snapshot);
-        return;
-      }
-      case 'error':
-        this.setState({ error: { code: msg.code, message: msg.message, at: this.now() } });
-        if (this.state.draft.pending)
-          this.setState({ draft: { ...this.state.draft, pending: false } });
-        return;
-      case 'pong':
-        this.setState({ latencyMs: Math.max(0, this.now() - msg.t) });
-        return;
+    if (next.status !== 'joined' && prev.status === 'joined') {
+      this.cancelPreview();
     }
+    this.state = this.project(next, snapshot, draft);
+    for (const l of Array.from(this.listeners)) l();
   }
 
   // ---------------------------------------------------------------------------------------------
   // Match commands
   // ---------------------------------------------------------------------------------------------
 
+  private send(command: BackgammonCommand): void {
+    if (this.closed) return;
+    this.table.send(command);
+  }
+
   startGame(): void {
     this.send({ type: 'start-game' });
+  }
+  ready(ready?: boolean): void {
+    const mine = this.state.seat ? (this.state.ready?.[this.state.seat] ?? false) : false;
+    this.table.setReady(ready ?? !mine);
   }
   openingRoll(): void {
     this.send({ type: 'opening-roll' });
@@ -369,9 +256,8 @@ export class GameClient implements GameClientApi {
     this.send({ type: 'decline-resign' });
   }
   sendChat(text: string): void {
-    const trimmed = text.trim();
-    if (trimmed.length === 0) return;
-    this.send({ type: 'chat', text: trimmed });
+    if (this.closed) return;
+    this.table.sendChat(text);
   }
 
   // ---- free-board mode (the server validates; nothing is drafted locally) ----
@@ -483,7 +369,7 @@ export class GameClient implements GameClientApi {
     const draft = this.state.draft;
     if (!draft.complete) throw new RuleError('incomplete', 'the play is not complete');
     this.cancelPreview();
-    this.send({ type: 'preview', play: [] });
+    this.table.sendPreview([]);
     this.send({ type: 'play', play: draft.played });
     this.setState({ draft: { ...draft, pending: true } });
   }
@@ -515,7 +401,7 @@ export class GameClient implements GameClientApi {
     if (immediate) this.cancelPreview();
     this.previewDirty = false;
     if (this.state.status !== 'joined') return;
-    this.send({ type: 'preview', play: this.state.draft.played });
+    this.table.sendPreview(this.state.draft.played);
   }
 
   private cancelPreview(): void {
@@ -528,18 +414,21 @@ export class GameClient implements GameClientApi {
 
   // ---------------------------------------------------------------------------------------------
 
+  /** The seat index of `player` on the table (0 = white, 1 = black). */
+  static seatOf(player: Player): number {
+    return seatIndex(player);
+  }
+
   close(): void {
     if (this.closed) return;
-    this.send({ type: 'bye' });
-    this.closed = true;
     this.basis = null;
-    this.stopPing();
     this.cancelPreview();
-    for (const u of this.unsubscribe) u();
-    this.transport.close();
-    if (this.state.status !== 'rejected') {
-      this.setState({ status: 'disconnected', presence: { white: false, black: false } });
-    }
+    this.table.close(); // sends bye, closes the transport, flips status → our listener projects it
+    this.closed = true;
+    const t = this.table.getState();
+    this.lastTable = t;
+    this.state = this.project(t, this.state.snapshot, this.state.draft);
+    for (const l of Array.from(this.listeners)) l();
     this.listeners.clear();
   }
 }

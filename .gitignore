@@ -10,3 +10,12 @@ test-results
 !.env.example
 apps/web/e2e/.auth
 dist-types
+# built dealer console (pnpm build:console)
+packages/dealer/console/
+packages/soak/dist
+packages/platform/dist
+# platform data directory (pnpm platform serve --data)
+.p2p-platform/
+
+# Local platform signing key for club chip certificates (never commit)
+packages/club/dev/platform-dev-key.json

@@ -2,5 +2,7 @@ export * from './transport.js';
 export * from './memory.js';
 export * from './broadcast.js';
 export * from './messages.js';
+export * from './table.js';
 export * from './codes.js';
 export * from './identity.js';
+export * from './club.js';

@@ -1,6 +1,15 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { GUEST, HOST, completeOpening, hostMatch, joinMatch, seedProfile, step } from './helpers';
+import {
+  GUEST,
+  HOST,
+  completeOpening,
+  hostMatch,
+  joinMatch,
+  seedProfile,
+  step,
+  startGameIfNeeded,
+} from './helpers';
 
 /**
  * "Move to another device": the hand-off link on the game screen opens the match on another
@@ -30,7 +39,7 @@ test('the host hands the game to a second device; both stay in sync and the seco
   await seedProfile(bob, 'bob', GUEST);
   const code = await hostMatch(laptop, 'alice', { length: 1 });
   await joinMatch(bob, 'bob', code);
-  await laptop.getByTestId('start-game-button').click();
+  await startGameIfNeeded(laptop);
   await expect(laptop.getByTestId('opening-roll-button')).toBeVisible();
 
   // Scan the QR (open its link) on a "phone".
@@ -79,7 +88,7 @@ test('a guest hands the game to a second device without interrupting anyone', as
   await seedProfile(bob, 'bob', GUEST);
   const code = await hostMatch(alice, 'alice', { length: 1 });
   await joinMatch(bob, 'bob', code);
-  await bob.getByTestId('start-game-button').click();
+  await startGameIfNeeded(bob);
 
   const bobPhone = await context.newPage();
   await bobPhone.goto(await handoffLinkOf(bob));

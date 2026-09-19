@@ -1,6 +1,15 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { GUEST, HOST, hostMatch, joinMatch, seedProfile, touchDrag, checkersAt } from './helpers';
+import {
+  GUEST,
+  HOST,
+  hostMatch,
+  joinMatch,
+  seedProfile,
+  touchDrag,
+  checkersAt,
+  startGameIfNeeded,
+} from './helpers';
 
 test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
 
@@ -47,7 +56,7 @@ test('landscape phone: board fills the screen, controls are reachable, nothing s
   await expect(host.getByTestId('status-text')).toBeVisible();
 
   // Start the game from the vertical bar; the roll button is tappable.
-  await host.getByTestId('start-game-button').tap();
+  await startGameIfNeeded(host);
   await expect(host.getByTestId('roll-button')).toBeVisible();
   const roll = await host.getByTestId('roll-button').boundingBox();
   expect(roll!.x + roll!.width).toBeLessThanOrEqual(viewport.width + 1);
@@ -90,6 +99,6 @@ test('portrait phone: board never overflows and the action bar sits under it', a
   expect(board!.x + board!.width).toBeLessThanOrEqual(391);
   const bar = await host.getByTestId('action-bar').boundingBox();
   expect(bar!.y).toBeGreaterThan(board!.y + board!.height - 1);
-  await host.getByTestId('start-game-button').tap();
+  await startGameIfNeeded(host);
   await expect(host.getByTestId('opening-roll-button')).toBeVisible();
 });

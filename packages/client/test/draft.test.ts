@@ -10,9 +10,55 @@ import {
   startingBoard,
 } from '@bgf/engine';
 import type { DiceRoll, GameState, MatchState } from '@bgf/engine';
-import type { ClientMessage, MatchSnapshot, ServerMessage } from '@bgf/protocol';
+import type { MatchSnapshot } from '@bgf/protocol';
+import type { Player } from '@bgf/engine';
 import { PROTOCOL_VERSION, createMemoryPair } from '@bgf/protocol';
+import { seatIndex, seatPlayer, toTableSnapshot } from '@bgf/server';
 import { GameClient, MemoryMatchStore } from '../src/index.js';
+
+/**
+ * The tests describe traffic in backgammon terms (colours, MatchSnapshot); the wire carries the
+ * generic table protocol (seat indexes, TableSnapshot, command envelopes). These two helpers
+ * translate at the fake server's edge so the assertions keep their meaning.
+ */
+type ServerMessage = Record<string, unknown> & { type: string };
+type ClientMessage = Record<string, unknown> & { type: string };
+
+function toWire(m: ServerMessage): unknown {
+  const seat = typeof m.seat === 'string' ? seatIndex(m.seat as Player) : m.seat;
+  switch (m.type) {
+    case 'welcome':
+    case 'state':
+      return {
+        ...m,
+        ...(m.seat !== undefined ? { seat } : {}),
+        snapshot: toTableSnapshot(m.snapshot as MatchSnapshot),
+        ...(typeof m.by === 'string' ? { by: seatIndex(m.by as Player) } : {}),
+      };
+    case 'preview':
+      return { type: 'preview', seat, payload: m.play };
+    case 'presence':
+      return { ...m, seat };
+    case 'chat': {
+      const msg = m.message as { seat: Player; text: string; at: number };
+      return { type: 'chat', message: { ...msg, seat: seatIndex(msg.seat) } };
+    }
+    default:
+      return m;
+  }
+}
+
+function fromWire(raw: unknown): ClientMessage {
+  const m = raw as ClientMessage;
+  if (m.type === 'command') return m.command as ClientMessage;
+  if (m.type === 'preview') return { type: 'preview', play: m.payload };
+  if (m.type === 'hello' && m.snapshot) {
+    const snap = m.snapshot as { seq: number };
+    return { ...m, snapshot: { seq: snap.seq } };
+  }
+  return m;
+}
+void seatPlayer;
 
 const ME = { id: 'me', name: 'Me' };
 const THEM = { id: 'them', name: 'Them' };
@@ -52,7 +98,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 async function setup(opts: { store?: MemoryMatchStore; resumeSnapshot?: MatchSnapshot } = {}) {
   const [serverEnd, clientEnd] = createMemoryPair('draft');
   const received: ClientMessage[] = [];
-  serverEnd.onMessage((m) => received.push(m as ClientMessage));
+  serverEnd.onMessage((m) => received.push(fromWire(m)));
   const client = new GameClient({
     transport: clientEnd,
     profile: ME,
@@ -63,7 +109,7 @@ async function setup(opts: { store?: MemoryMatchStore; resumeSnapshot?: MatchSna
   });
   await tick();
   const push = async (m: ServerMessage) => {
-    serverEnd.send(m);
+    serverEnd.send(toWire(m));
     await tick();
   };
   return { client, received, push, serverEnd };

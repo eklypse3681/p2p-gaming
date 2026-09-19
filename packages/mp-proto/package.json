@@ -1,0 +1,17 @@
+{
+  "name": "@bgf/mp-proto",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway prototype: collaborative-shuffle (mental poker) card dealing, measured for latency and bytes.",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "bench": "node scripts/run.mjs bench.ts",
+    "model": "node scripts/run.mjs model.ts"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0"
+  }
+}

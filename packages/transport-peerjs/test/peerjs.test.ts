@@ -89,6 +89,23 @@ describe('host', () => {
     expect(peer.destroyed).toBe(false);
   });
 
+  it('rejects with timeout when the signalling server never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const provider = peerJsProvider({ timeoutMs: 5_000 });
+      const pending = provider.host('ABCD');
+      await vi.advanceTimersByTimeAsync(10);
+      const peer = fakeNet.last();
+      await vi.advanceTimersByTimeAsync(5_100);
+      const error = await pending.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(TransportError);
+      expect((error as TransportError).code).toBe('timeout');
+      expect(peer.destroyed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rejects with address-taken when the id is already registered', async () => {
     const provider = peerJsProvider();
     const pending = provider.host('ABCD');

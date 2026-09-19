@@ -21,8 +21,8 @@ function peerKey(s: Settings): string {
   return JSON.stringify([s.peer, s.iceServers]);
 }
 
-/** A game, or the device-to-device profile sync channel. */
-export type Channel = GameId | 'sync';
+/** A game, the device-to-device profile sync channel, or the club lobby channel. */
+export type Channel = GameId | 'sync' | 'club';
 
 /** PeerJS id namespace per channel: room codes of different games (and sync) never collide. */
 export function peerNamespaceFor(channel: Channel): string {

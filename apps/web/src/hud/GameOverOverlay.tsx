@@ -1,5 +1,13 @@
 import type { ClientState } from '@bgf/client';
-import { canStartGame, currentMatch, gameOver, kindLabel, playerName } from './derive';
+import {
+  canStartGame,
+  currentMatch,
+  gameOver,
+  isAutopilot,
+  kindLabel,
+  playerName,
+  readyState,
+} from './derive';
 import styles from './GameOverOverlay.module.css';
 
 export interface GameOverOverlayProps {
@@ -62,10 +70,14 @@ export function GameOverOverlay({ state, onNextGame, onLeave, onDismiss }: GameO
             <button
               className="btn btn-primary"
               onClick={onNextGame}
-              disabled={!canStartGame(state)}
-              data-testid="start-game-button"
+              disabled={!canStartGame(state) || (isAutopilot(state) && readyState(state).mine)}
+              data-testid={isAutopilot(state) ? 'overlay-ready-button' : 'start-game-button'}
             >
-              Next game
+              {isAutopilot(state)
+                ? readyState(state).mine
+                  ? 'Waiting for your opponent…'
+                  : 'Ready for the next game'
+                : 'Next game'}
             </button>
           )}
           <button className="btn btn-ghost" onClick={onDismiss} data-testid="game-over-dismiss">

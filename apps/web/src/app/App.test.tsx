@@ -43,6 +43,7 @@ describe('app routes', () => {
     const hub = await screen.findByTestId('games-hub');
     expect(hub).toHaveAttribute('data-profile', 'alice');
     expect(screen.getByTestId('game-card-backgammon')).toHaveTextContent('Backgammon');
+    expect(screen.getByTestId('game-card-ofc')).toHaveTextContent('Open Face Chinese Poker');
     expect(screen.getByTestId('game-card-soon')).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByTestId('app-bar')).toHaveAttribute('data-game', '');
   });
@@ -52,6 +53,15 @@ describe('app routes', () => {
     expect(await screen.findByTestId('home-screen')).toHaveAttribute('data-game', 'backgammon');
     expect(screen.getByTestId('app-bar')).toHaveAttribute('data-game', 'backgammon');
     expect(screen.getByTestId('nav-game')).toHaveTextContent('Backgammon');
+  });
+
+  it('mounts the OFC home and host screens under #/<profile>/ofc/', async () => {
+    renderAt('/alice/ofc/');
+    expect(await screen.findByTestId('home-screen')).toHaveAttribute('data-game', 'ofc');
+    expect(screen.getByTestId('app-bar')).toHaveAttribute('data-game', 'ofc');
+    expect(screen.getByTestId('nav-game')).toHaveTextContent('Open Face Chinese Poker');
+    renderAt('/alice/ofc/host');
+    expect(await screen.findByTestId('rules-editor')).toBeInTheDocument();
   });
 
   it('redirects old profile-level game addresses to backgammon', async () => {

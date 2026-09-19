@@ -92,3 +92,23 @@ describe('HostScreen', () => {
     });
   });
 });
+
+describe('HostScreen trust disclosure', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetProfilesForTests();
+    createProfile('Alice');
+  });
+
+  it('backgammon is open information for a playing host and dealer-hosted when the host deals', async () => {
+    renderHost();
+    const panel = await screen.findByTestId('trust-panel');
+    expect(panel).toHaveAttribute('data-level', 'open');
+    expect(panel).toHaveTextContent('Open information');
+    await userEvent.click(screen.getByTestId('host-as-dealer'));
+    await waitFor(() =>
+      expect(screen.getByTestId('trust-panel')).toHaveAttribute('data-level', 'dealer'),
+    );
+    expect(screen.getByTestId('trust-panel')).toHaveTextContent('takes no seat');
+  });
+});

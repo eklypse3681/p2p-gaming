@@ -1,11 +1,53 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/engine" },
-    { "path": "packages/protocol" },
-    { "path": "packages/server" },
-    { "path": "packages/client" },
-    { "path": "packages/transport-peerjs" },
-    { "path": "apps/web" }
+    {
+      "path": "packages/engine"
+    },
+    {
+      "path": "packages/ofc-engine"
+    },
+    {
+      "path": "packages/table"
+    },
+    {
+      "path": "packages/entropy"
+    },
+    {
+      "path": "packages/protocol"
+    },
+    {
+      "path": "packages/server"
+    },
+    {
+      "path": "packages/client"
+    },
+    {
+      "path": "packages/transport-peerjs"
+    },
+    {
+      "path": "apps/web"
+    },
+    {
+      "path": "packages/dealer"
+    },
+    {
+      "path": "apps/console"
+    },
+    {
+      "path": "packages/club-spec"
+    },
+    {
+      "path": "packages/club"
+    },
+    {
+      "path": "packages/soak"
+    },
+    {
+      "path": "packages/gitstore-proto"
+    },
+    {
+      "path": "packages/mp-proto"
+    }
   ]
 }

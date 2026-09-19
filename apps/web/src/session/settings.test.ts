@@ -155,3 +155,29 @@ describe('device sync fields', () => {
     expect(clean.sync).toBe(false);
   });
 });
+
+describe('settings: randomness keys', () => {
+  it('defaults and sanitises the randomness settings', async () => {
+    const { getSettings, sanitizeSettings, updateSettings } = await loadSettings();
+    expect(getSettings('r')).toMatchObject({
+      entropySource: 'crypto',
+      randomnessMode: 'per-draw',
+      randomOrgKey: '',
+      entropyFallback: false,
+    });
+    updateSettings('r', { entropySource: 'drand', randomnessMode: 'beacon', randomOrgKey: 'k' });
+    expect(JSON.parse(localStorage.getItem('bgf:settings:r')!)).toMatchObject({
+      entropySource: 'drand',
+      randomnessMode: 'beacon',
+      randomOrgKey: 'k',
+    });
+    const cleaned = sanitizeSettings({
+      entropySource: 'bogus',
+      randomnessMode: 'nope',
+      randomOrgKey: 5,
+    });
+    expect(cleaned.entropySource).toBe('crypto');
+    expect(cleaned.randomnessMode).toBe('per-draw');
+    expect(cleaned.randomOrgKey).toBe('');
+  });
+});

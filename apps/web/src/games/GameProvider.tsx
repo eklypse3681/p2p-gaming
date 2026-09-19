@@ -14,6 +14,20 @@ export interface GameRoutes {
   history: string;
 }
 
+/** One saved match/table as a game describes it for lists (hub, home, history). */
+export interface SavedSummary {
+  id: string;
+  code: string;
+  /** e.g. "vs Bob" or "with Bob, Carol". */
+  title: string;
+  /** e.g. "5-point match · 2–1" or "Pineapple · hand 4 · +12". */
+  meta: string;
+  /** Short badge such as "Free" or "2-7". */
+  badge?: string;
+  inProgress: boolean;
+  updatedAt: number;
+}
+
 /** What the router needs to mount a game. Add a game by registering one of these. */
 export interface GameDefinition {
   id: GameId;
@@ -33,6 +47,12 @@ export interface GameDefinition {
   };
   /** Optional profile-less playground mounted at `#/<id>/demo`. */
   Demo?: ComponentType;
+  /**
+   * Describe one of this game's saved snapshots for the player `myId` (null when they are not a
+   * player in it). Lists that span games (the hub) call this instead of knowing every snapshot
+   * shape.
+   */
+  describeSaved?: (snapshot: unknown, myId: string) => SavedSummary | null;
 }
 
 export interface GameContext {

@@ -1,0 +1,38 @@
+{
+  "name": "@bgf/console",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The dealer runtime's web console: set up tables, games and rules from a browser.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@bgf/ofc-engine": "workspace:*",
+    "@bgf/protocol": "workspace:*",
+    "@bgf/server": "workspace:*",
+    "@bgf/table": "workspace:*",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.3.1"
+  },
+  "devDependencies": {
+    "@bgf/dealer": "workspace:*",
+    "@playwright/test": "^1.63.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.0.1",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  }
+}
