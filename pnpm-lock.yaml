@@ -384,6 +384,18 @@ importers:
         specifier: ^0.33.4
         version: 0.33.4
 
+  packages/wallet:
+    dependencies:
+      '@bgf/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@bgf/table':
+        specifier: workspace:*
+        version: link:../table
+      '@noble/curves':
+        specifier: ^2.4.0
+        version: 2.4.0
+
 packages:
 
   '@adobe/css-tools@4.5.0':
