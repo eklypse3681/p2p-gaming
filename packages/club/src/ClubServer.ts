@@ -21,12 +21,11 @@ import type {
 import {
   CLUB_PROTOCOL_VERSION,
   Emitter,
-  base64UrlToBytes,
   clubChallengeBytes,
   generateId,
   randomNonce,
-  verify,
 } from '@bgf/protocol';
+import { verifyDelegated } from '@bgf/wallet';
 import type { ClubErrorCode } from '@bgf/club-spec';
 import type {
   AuthRequest,
@@ -677,7 +676,7 @@ export class ClubServer implements ClubApi {
           this.reject(conn, 'unauthorized', 'answer the challenge first');
           return;
         }
-        await this.handleAuth(conn, msg.signature);
+        await this.handleAuth(conn, msg.signature, msg.grant);
         return;
       }
       if (msg.type === 'call' && msg.method === 'info') {
@@ -757,7 +756,7 @@ export class ClubServer implements ClubApi {
     this.send(conn, { type: 'challenge', nonce: challenge.nonce, clubId: this.state.identity.id });
   }
 
-  private async handleAuth(conn: Connection, signature: string): Promise<void> {
+  private async handleAuth(conn: Connection, signature: string, grant?: string): Promise<void> {
     const pending = conn.pending;
     if (!pending || pending.verifying) return;
     pending.verifying = true;
@@ -769,6 +768,7 @@ export class ClubServer implements ClubApi {
         nonce: pending.challenge.nonce,
       }),
       signature,
+      { ...(grant ? { grant } : {}), scope: 'club', now: this.now() },
     );
     if (conn.closed || this.closed) return;
     cancelChallenge(pending.challenge);
@@ -994,7 +994,7 @@ export class ClubServer implements ClubApi {
       if (pending.expiresAt < this.now()) {
         throw new SpecError('unauthorized', 'the challenge expired');
       }
-      const member = await this.admit(req.profile, req.signature, req.nonce, req.invite);
+      const member = await this.admit(req.profile, req.signature, req.nonce, req.invite, req.grant);
       return this.openSession(member);
     });
   }
@@ -1041,17 +1041,21 @@ export class ClubServer implements ClubApi {
     signature: string,
     nonce: string,
     inviteToken?: string,
+    grant?: string,
   ): Promise<ClubMember> {
     if (!profile.publicKey) throw new SpecError('unauthorized', 'a keyed player is required');
     const known = findMember(this.state, profile.id);
     if (known && known.publicKey !== profile.publicKey) {
       throw new SpecError('unauthorized', 'that member id belongs to a different key');
     }
-    const ok = await verifyDetached(
-      profile.publicKey,
-      clubChallengeBytes({ clubId: this.state.identity.id, profileId: profile.id, nonce }),
-      signature,
-    );
+    const ok = (
+      await verifyDelegated(
+        profile.publicKey,
+        clubChallengeBytes({ clubId: this.state.identity.id, profileId: profile.id, nonce }),
+        { signature, ...(grant ? { grant } : {}) },
+        { now: this.now(), scope: 'club' },
+      ).catch(() => ({ ok: false }))
+    ).ok;
     if (!ok) throw new SpecError('unauthorized', 'the challenge was not signed with the right key');
 
     let invite: ClubInvite | undefined;
@@ -1668,7 +1672,10 @@ export class ClubServer implements ClubApi {
   }
 
   /** Seat a whole group at one fresh table. Returns the table id, or null if nobody sat. */
-  private async seatGroup(group: readonly MatchTicket[], templateId: string): Promise<string | null> {
+  private async seatGroup(
+    group: readonly MatchTicket[],
+    templateId: string,
+  ): Promise<string | null> {
     for (const ticket of group) this.tickets.delete(ticket.id);
     let tableId: string | undefined;
     for (const ticket of group) {
@@ -1907,19 +1914,6 @@ function legacyCode(e: unknown): string {
     return detail?.domainCode ?? e.code;
   }
   return 'internal';
-}
-
-/** Verify a base64url signature over `bytes`, never throwing on malformed input. */
-async function verifyDetached(
-  publicKey: string,
-  bytes: Uint8Array,
-  signature: string,
-): Promise<boolean> {
-  try {
-    return await verify(publicKey, bytes, base64UrlToBytes(signature));
-  } catch {
-    return false;
-  }
 }
 
 export { activeMembers };

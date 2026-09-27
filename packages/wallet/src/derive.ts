@@ -13,8 +13,7 @@
  */
 import { p256 } from '@noble/curves/nist.js';
 import type { KeyPair } from '@bgf/protocol';
-import { bytesToBase64Url } from '@bgf/protocol';
-import { hkdfSha256, utf8Bytes } from '@bgf/table';
+import { bytesToBase64Url, hkdfSha256, utf8Bytes } from '@bgf/protocol';
 import { WalletError, subtle } from './errors.js';
 import { checkSeed } from './seed.js';
 

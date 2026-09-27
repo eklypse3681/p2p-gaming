@@ -893,6 +893,7 @@ export class TableServer<S, A, C, V = S, Cfg = unknown> {
         nonce: pending.nonce,
       }),
       msg.signature,
+      { ...(msg.grant ? { grant: msg.grant } : {}), scope: 'seat', now: this.now() },
     );
     if (conn.closed || this.closed) return;
     cancelChallenge(pending.challenge);

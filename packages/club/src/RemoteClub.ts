@@ -267,7 +267,11 @@ export class RemoteClub implements ClubApi {
       throw new SpecError('unauthorized', 'the challenge was answered on a stale connection');
     }
     const waiting = link.awaitWelcome();
-    link.send({ type: 'auth', signature: req.signature });
+    link.send({
+      type: 'auth',
+      signature: req.signature,
+      ...(req.grant ? { grant: req.grant } : {}),
+    });
     const lobby = await waiting;
     const token = generateId();
     this.byToken.set(token, link);

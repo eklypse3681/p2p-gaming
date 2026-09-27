@@ -54,6 +54,11 @@ export interface AuthRequest {
   profile: PlayerProfile;
   /** Signature over the club's challenge, proving the private key. */
   signature: string;
+  /**
+   * Present when one of the member's devices signed rather than their own key: the `p2pd1.` grant
+   * (`@bgf/wallet`) from the member's key to that device. Membership stays bound to the member's key.
+   */
+  grant?: string;
   nonce: string;
   /** Required where membership is by invite. */
   invite?: string;

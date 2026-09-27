@@ -39,6 +39,8 @@ export interface ClubClientOptions {
   transport: Transport;
   profile: PlayerProfile;
   signer?: Signer;
+  /** Sent with the signature when `signer` is a device's key: the grant from the member's key. */
+  grant?: string;
   invite?: string;
   pingIntervalMs?: number;
   now?: () => number;
@@ -53,6 +55,7 @@ export class ClubClient {
   private readonly listeners = new Set<() => void>();
   private readonly transport: Transport;
   private readonly signer: Signer | undefined;
+  private readonly grant: string | undefined;
   private readonly invite: string | undefined;
   private readonly now: () => number;
   private readonly unsubscribe: Unsubscribe[] = [];
@@ -64,6 +67,7 @@ export class ClubClient {
     this.profile = opts.profile;
     this.transport = opts.transport;
     this.signer = opts.signer;
+    this.grant = opts.grant;
     this.invite = opts.invite;
     this.now = opts.now ?? Date.now;
     this.state = {
@@ -184,7 +188,7 @@ export class ClubClient {
         nonce: msg.nonce,
       });
       const signature = bytesToBase64Url(await this.signer(bytes));
-      this.sendRaw({ type: 'auth', signature });
+      this.sendRaw({ type: 'auth', signature, ...(this.grant ? { grant: this.grant } : {}) });
     } catch (e) {
       this.setState({
         status: 'rejected',

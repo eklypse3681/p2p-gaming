@@ -8,8 +8,7 @@
  * The seed itself never leaves the browser it was made in. Moving to a second device delegates a
  * grant to a key that device generates for itself (see `delegation.ts`); it does not copy this.
  */
-import { bytesToBase64Url, base64UrlToBytes } from '@bgf/protocol';
-import { sha256 } from '@bgf/table';
+import { base64UrlToBytes, bytesToBase64Url, sha256 } from '@bgf/protocol';
 import { WalletError } from './errors.js';
 
 export const SEED_BYTES = 32;

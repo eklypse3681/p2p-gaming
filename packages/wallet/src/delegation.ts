@@ -15,8 +15,7 @@
  * invite and mint certificates.
  */
 import type { KeyPair } from '@bgf/protocol';
-import { base64UrlToBytes, bytesToBase64Url, sign, verify } from '@bgf/protocol';
-import { utf8Bytes } from '@bgf/table';
+import { base64UrlToBytes, bytesToBase64Url, sign, utf8Bytes, verify } from '@bgf/protocol';
 import { WalletError } from './errors.js';
 
 export const GRANT_PREFIX = 'p2pd1.';

@@ -6,3 +6,4 @@ export * from './table.js';
 export * from './codes.js';
 export * from './identity.js';
 export * from './club.js';
+export * from './kdf.js';

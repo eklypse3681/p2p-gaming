@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { LobbyTable, TableTemplate } from '@bgf/protocol';
-import { ClubServer, addRoom, addTemplate, verifyLedger } from '../src/index.js';
+import type { KeyPair, PlayerProfile } from '@bgf/protocol';
+import { createMemoryPair, generateKeyPair, signerFor } from '@bgf/protocol';
+import { issueGrant } from '@bgf/wallet';
+import { ClubClient, ClubServer, addRoom, addTemplate, verifyLedger } from '../src/index.js';
 import type { ClubState } from '../src/index.js';
 import {
   GAMES,
@@ -11,6 +14,18 @@ import {
   issue,
   keyedProfile,
 } from './helpers.js';
+
+function connectDevice(server: ClubServer, profile: PlayerProfile, device: KeyPair, grant: string) {
+  const [serverEnd, clientEnd] = createMemoryPair('club');
+  server.accept(serverEnd);
+  return new ClubClient({
+    transport: clientEnd,
+    profile,
+    signer: signerFor(device.privateKey),
+    grant,
+    pingIntervalMs: 0,
+  });
+}
 
 async function table(opts: { reserve?: number } = {}) {
   const f = await clubFixture({ reserve: opts.reserve ?? 10_000 });
@@ -83,6 +98,41 @@ describe('club server and client', () => {
     await flush();
     expect(fake.getState().rejectReason).toBe('unauthorized');
     for (const x of [a, c2]) x.close();
+    t.server.close();
+  });
+
+  it('lets a member in from a paired device, but only with a club grant', async () => {
+    const t = await table();
+    const alice = await keyedProfile('Alice');
+    const joined = connect(t.server, alice.profile, alice.signer, t.invite);
+    await flush();
+    expect(joined.getState().status).toBe('joined');
+    joined.close();
+
+    const phone = await generateKeyPair();
+    const clubGrant = await issueGrant(alice.keys, {
+      device: phone.publicKey,
+      serial: 1,
+      label: 'phone',
+      scopes: ['club'],
+      issuedAt: 1_000, // this server's clock reads 2_000
+    });
+    const fromPhone = connectDevice(t.server, alice.profile, phone, clubGrant);
+    await flush();
+    expect(fromPhone.getState().status).toBe('joined');
+    expect(fromPhone.getState().lobby?.me.member.id).toBe(alice.profile.id);
+    fromPhone.close();
+
+    const seatOnly = await issueGrant(alice.keys, {
+      device: phone.publicKey,
+      serial: 2,
+      label: 'phone',
+      scopes: ['seat'],
+      issuedAt: 1_000,
+    });
+    const refused = connectDevice(t.server, alice.profile, phone, seatOnly);
+    await flush();
+    expect(refused.getState().rejectReason).toBe('unauthorized');
     t.server.close();
   });
 

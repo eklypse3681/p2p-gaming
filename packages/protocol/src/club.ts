@@ -197,7 +197,8 @@ export type ClubCallMethod =
 
 export type ClubClientMessage =
   | { type: 'hello'; protocol: number; profile: PlayerProfile; invite?: string; spec?: number }
-  | { type: 'auth'; signature: string }
+  /** As for tables: signed by the member's key, or by a device presenting its `grant`. */
+  | { type: 'auth'; signature: string; grant?: string }
   | { type: 'lobby' }
   | { type: 'sit'; tableId?: string; templateId?: string; buyIn?: number }
   | { type: 'leave'; tableId: string }

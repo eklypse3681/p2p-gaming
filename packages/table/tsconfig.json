@@ -4,11 +4,9 @@
     "outDir": "./dist",
     "rootDir": "."
   },
-  "include": [
-    "src",
-    "test"
-  ],
+  "include": ["src", "test"],
   "references": [
+    { "path": "../wallet" },
     {
       "path": "../protocol"
     }

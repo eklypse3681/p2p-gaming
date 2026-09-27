@@ -63,8 +63,8 @@ Revoke serial N. Every other device keeps working, and the identity itself never
 the entire reason for not copying the key:
 
 ```ts
-const token = await wallet.revoke({ serials: [1] });          // one device
-const token = await wallet.revoke({ minSerial: next });        // sign out everything
+const token = await wallet.revoke({ serials: [1] }); // one device
+const token = await wallet.revoke({ minSerial: next }); // sign out everything
 ```
 
 `minSerial` revokes every serial below it, so "sign out all devices" is one number rather than a
@@ -84,7 +84,7 @@ delegated one. Trust-on-first-use still binds the root key, and devices come and
 ## What is pinned
 
 `test/derive.test.ts` holds a known-answer vector. Derivation decides what public key a player
-*is*, so changing it silently rebuilds every identity, orphans every seat binding and every club
+_is_, so changing it silently rebuilds every identity, orphans every seat binding and every club
 membership, and no backup would restore them. If a change breaks that test, the change is wrong
 unless it comes with a migration and a new `WALLET_KDF` version string.
 

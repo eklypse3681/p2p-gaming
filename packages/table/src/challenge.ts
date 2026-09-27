@@ -1,4 +1,6 @@
-import { base64UrlToBytes, randomNonce, verify } from '@bgf/protocol';
+import { randomNonce } from '@bgf/protocol';
+import type { GrantScope } from '@bgf/wallet';
+import { verifyDelegated } from '@bgf/wallet';
 
 /**
  * Keyed challenge/response shared by every server that seats keyed identities (tables, clubs).
@@ -28,16 +30,24 @@ export function cancelChallenge(pending: PendingChallenge): void {
 
 /**
  * Verify a client's answer. Returns false for a malformed or wrong signature; never throws.
- * `bytes` are the domain-separated challenge bytes the client was expected to sign.
+ * `bytes` are the domain-separated challenge bytes the client was expected to sign. The seat (or
+ * membership) stays bound to the player's own key: a device answers with its own signature plus
+ * the grant from that key, which must be current and must allow `scope`.
  */
 export async function verifyChallengeAnswer(
   pending: PendingChallenge,
   bytes: Uint8Array,
   signatureBase64Url: string,
+  opts: { grant?: string; scope?: GrantScope; now?: number } = {},
 ): Promise<boolean> {
   try {
-    const signature = base64UrlToBytes(signatureBase64Url);
-    return await verify(pending.publicKey, bytes, signature);
+    const result = await verifyDelegated(
+      pending.publicKey,
+      bytes,
+      { signature: signatureBase64Url, ...(opts.grant ? { grant: opts.grant } : {}) },
+      { now: opts.now ?? Date.now(), scope: opts.scope ?? 'seat' },
+    );
+    return result.ok;
   } catch {
     return false;
   }

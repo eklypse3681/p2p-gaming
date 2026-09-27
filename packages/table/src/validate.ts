@@ -1,6 +1,8 @@
 import type { PlayerProfile, TableClientMessage } from '@bgf/protocol';
 import { looksLikePublicKey } from '@bgf/protocol';
 
+/** A device grant is a few hundred characters; anything far longer is not one. */
+export const MAX_GRANT = 2048;
 export const MAX_CHAT_LENGTH = 500;
 export const MAX_NAME_LENGTH = 40;
 
@@ -66,7 +68,19 @@ export function validateTableMessage(raw: unknown): TableValidation {
         raw.signature.length > 512
       )
         return { ok: false, reason: 'invalid signature' };
-      return { ok: true, message: { type: 'auth', signature: raw.signature } };
+      if (
+        raw.grant !== undefined &&
+        (typeof raw.grant !== 'string' || raw.grant.length > MAX_GRANT)
+      )
+        return { ok: false, reason: 'invalid grant' };
+      return {
+        ok: true,
+        message: {
+          type: 'auth',
+          signature: raw.signature,
+          ...(typeof raw.grant === 'string' ? { grant: raw.grant } : {}),
+        },
+      };
     }
     case 'command':
       if (raw.command === undefined) return { ok: false, reason: 'missing command' };

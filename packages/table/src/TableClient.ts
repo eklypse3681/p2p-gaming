@@ -64,8 +64,10 @@ export interface TableClientState<V = unknown, A = unknown, Cfg = unknown> {
 export interface TableClientOptions<S = unknown, A = unknown, Cfg = unknown> {
   transport: Transport;
   profile: PlayerProfile;
-  /** Signs the server's seat challenge with this player's private key. */
+  /** Signs the server's seat challenge with this player's private key, or this device's. */
   signer?: Signer;
+  /** Sent with the signature when `signer` is a device's key: the grant from the player's key. */
+  grant?: string;
   /** Our persisted copy, offered to the server so the newest replayable state wins. */
   resumeSnapshot?: TableSnapshot<S, A, Cfg>;
   store?: SnapshotStore<S, A, Cfg>;
@@ -92,6 +94,7 @@ export class TableClient<S = unknown, A = unknown, Cfg = unknown, V = S> {
   private readonly now: () => number;
   private readonly onStoreError: (error: unknown) => void;
   private readonly signer: Signer | undefined;
+  private readonly grant: string | undefined;
   private readonly unsubscribe: Unsubscribe[] = [];
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private helloSent = false;
@@ -103,6 +106,7 @@ export class TableClient<S = unknown, A = unknown, Cfg = unknown, V = S> {
     this.store = opts.store;
     this.resumeSnapshot = opts.resumeSnapshot;
     this.signer = opts.signer;
+    this.grant = opts.grant;
     this.pingIntervalMs = opts.pingIntervalMs ?? 10_000;
     this.now = opts.now ?? Date.now;
     this.onStoreError = opts.onStoreError ?? ((e) => console.warn('[TableClient] store error', e));
@@ -232,7 +236,7 @@ export class TableClient<S = unknown, A = unknown, Cfg = unknown, V = S> {
       return;
     }
     if (this.closed) return;
-    this.sendRaw({ type: 'auth', signature });
+    this.sendRaw({ type: 'auth', signature, ...(this.grant ? { grant: this.grant } : {}) });
   }
 
   private onTransportClosed(reason?: string): void {

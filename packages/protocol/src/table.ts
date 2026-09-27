@@ -211,8 +211,12 @@ export type TableClientMessage =
       /** When resuming, a device offers its own copy so the newest replayable one wins. */
       snapshot?: TableSnapshot;
     }
-  /** Answer to a `challenge`: base64url signature over `challengeBytes({ matchId, profileId, nonce })`. */
-  | { type: 'auth'; signature: string }
+  /**
+   * Answer to a `challenge`: base64url signature over `challengeBytes({ matchId, profileId, nonce })`.
+   * Signed by the player's own key, or by one of their devices presenting the `grant` (a `p2pd1.`
+   * token from `@bgf/wallet`) that lets it act for them.
+   */
+  | { type: 'auth'; signature: string; grant?: string }
   /** A game command; validated and interpreted by the game definition. */
   | { type: 'command'; command: unknown }
   /** Table flow: this seat is (not) ready for the next hand / game. */

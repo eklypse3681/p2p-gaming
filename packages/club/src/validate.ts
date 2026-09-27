@@ -1,3 +1,4 @@
+import { MAX_GRANT } from '@bgf/table';
 import type { ClubCallMethod, ClubClientMessage, PlayerProfile } from '@bgf/protocol';
 import { isRecord, validateProfile } from '@bgf/table';
 
@@ -54,7 +55,19 @@ export function validateClubMessage(raw: unknown): ClubValidation {
     case 'auth':
       if (typeof raw.signature !== 'string' || raw.signature.length > 256)
         return { ok: false, reason: 'auth.signature' };
-      return { ok: true, message: { type: 'auth', signature: raw.signature } };
+      if (
+        raw.grant !== undefined &&
+        (typeof raw.grant !== 'string' || raw.grant.length > MAX_GRANT)
+      )
+        return { ok: false, reason: 'auth.grant' };
+      return {
+        ok: true,
+        message: {
+          type: 'auth',
+          signature: raw.signature,
+          ...(typeof raw.grant === 'string' ? { grant: raw.grant } : {}),
+        },
+      };
     case 'lobby':
     case 'statement':
     case 'bye':

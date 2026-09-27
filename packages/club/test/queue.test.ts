@@ -31,9 +31,7 @@ async function build(
   const fixture = await clubFixture({ reserve: 10_000_000 });
   const { state: withRoom, room } = addRoom(fixture.state, { name: 'Main' });
   const { state: withTemplate, template } = addTemplate(withRoom, room.id, TEMPLATE, GAMES);
-  const people = await Promise.all(
-    ['Ada', 'Bob', 'Cy', 'Dee'].map((n) => keyedProfile(n)),
-  );
+  const people = await Promise.all(['Ada', 'Bob', 'Cy', 'Dee'].map((n) => keyedProfile(n)));
   let state: ClubState = {
     ...withTemplate,
     members: [
