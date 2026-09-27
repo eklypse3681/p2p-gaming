@@ -169,3 +169,39 @@
   font-weight: 400;
   color: var(--ui-text-muted);
 }
+
+/* ------------------------------------------------------------------ tabs */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid var(--ui-border);
+  padding-bottom: var(--space-2);
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: var(--ui-text-muted);
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.tab:hover {
+  color: var(--ui-text);
+}
+.tabActive {
+  color: var(--ui-text);
+  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+}
+
+.cardPreview {
+  display: flex;
+  gap: 8px;
+}

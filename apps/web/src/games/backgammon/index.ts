@@ -8,6 +8,7 @@ import { JoinScreen } from './JoinScreen';
 import { GameScreen } from './GameScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { DemoScreen } from './DemoScreen';
+import { BackgammonSettings } from './SettingsPanel';
 
 /** A saved backgammon match as the hub shows it. */
 export function describeSavedMatch(snapshot: unknown, myId: string): SavedSummary | null {
@@ -40,6 +41,7 @@ export const backgammon: GameDefinition = {
     Game: GameScreen,
     History: HistoryScreen,
   },
+  Settings: BackgammonSettings,
   Demo: DemoScreen,
   describeSaved: describeSavedMatch,
 };

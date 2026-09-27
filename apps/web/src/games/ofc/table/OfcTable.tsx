@@ -3,7 +3,7 @@ import { LayoutGroup, MotionConfig } from 'motion/react';
 import type { TableClientState } from '@bgf/table';
 import type { Command, Row, TableView, Card as CardT } from '@bgf/ofc-engine';
 import { Card, HiddenStack } from '../cards/Card';
-import type { SeatModel } from './model';
+import type { SeatModel, SortMode } from './model';
 import { useOfcTableModel, usePlacementDraft } from './model';
 import { SeatPanel } from './SeatPanel';
 import { PendingTray } from './PendingTray';
@@ -19,6 +19,7 @@ export interface OfcTableProps {
   names: string[];
   mySeat: number | null;
   reducedMotion?: boolean;
+  traySort?: SortMode;
   /** The shell shows its ledger / settle sheet. */
   onOpenLedger?: () => void;
   fourColor?: boolean;
@@ -46,6 +47,7 @@ export function OfcTable(props: OfcTableProps) {
     names,
     mySeat,
     reducedMotion = false,
+    traySort = 'dealt',
     onOpenLedger,
     fourColor = false,
     flow,
@@ -205,6 +207,7 @@ export function OfcTable(props: OfcTableProps) {
                   onDragCancel={onDragCancel}
                   fourColor={fourColor}
                   reducedMotion={reducedMotion}
+                  initialSort={traySort}
                 />
               </section>
               <div className={styles.hiddenSeats} data-testid="opponents">
@@ -264,6 +267,7 @@ export function OfcTable(props: OfcTableProps) {
                     onDragCancel={onDragCancel}
                     fourColor={fourColor}
                     reducedMotion={reducedMotion}
+                    initialSort={traySort}
                   />
                 )}
               </div>

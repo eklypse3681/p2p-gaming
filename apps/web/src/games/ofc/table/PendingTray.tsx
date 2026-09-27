@@ -25,6 +25,8 @@ export interface PendingTrayProps {
   onDragCancel: () => void;
   fourColor?: boolean;
   reducedMotion?: boolean;
+  /** Where the sort starts; the buttons still change it. */
+  initialSort?: SortMode;
 }
 
 const DRAG_THRESHOLD = 6;
@@ -48,9 +50,10 @@ export function PendingTray(props: PendingTrayProps) {
     onDragCancel,
     fourColor = false,
     reducedMotion = false,
+    initialSort = 'dealt',
   } = props;
   const pressed = useRef<{ card: CardT; x: number; y: number; dragging: boolean } | null>(null);
-  const [sort, setSort] = useState<SortMode>('dealt');
+  const [sort, setSort] = useState<SortMode>(initialSort);
 
   const onPointerDown = useCallback((card: CardT, e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;

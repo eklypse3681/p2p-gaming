@@ -21,10 +21,12 @@ function Harness({
   client,
   send,
   onOpenLedger,
+  traySort,
 }: {
   client: FakeOfcClient;
   send?: (c: Command) => void;
   onOpenLedger?: () => void;
+  traySort?: 'dealt' | 'low' | 'high' | 'suit';
 }) {
   return (
     <OfcTable
@@ -34,6 +36,7 @@ function Harness({
       mySeat={client.mySeat}
       reducedMotion
       onOpenLedger={onOpenLedger}
+      traySort={traySort}
     />
   );
 }
@@ -45,6 +48,13 @@ function dealToMe(client: FakeOfcClient) {
 }
 
 describe('OfcTable', () => {
+  it('lays dealt cards out in the sort the player chose in settings', () => {
+    const client = tableFor({ variant: 'pineapple', seats: 2 });
+    act(() => dealToMe(client));
+    render(<Harness client={client} traySort="suit" />);
+    expect(screen.getByTestId('pending-cards')).toHaveAttribute('data-sort', 'suit');
+  });
+
   it('renders the lobby with a deal button, then three seats with me at the bottom', () => {
     const client = tableFor({ variant: 'pineapple', seats: 3 });
     const { rerender } = render(<Harness client={client} />);

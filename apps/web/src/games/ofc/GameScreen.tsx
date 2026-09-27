@@ -7,7 +7,7 @@ import { DEALER_SEAT } from '@bgf/protocol';
 import type { RandomnessMode } from '@bgf/protocol';
 import { SessionError } from '../../session/session';
 import type { FlowProgress } from '../../session/retry';
-import { getSettings } from '../../session/settings';
+import { getSettings, useSettings } from '../../session/settings';
 import { randomnessFromSettings } from '../../session/entropy';
 import { FairnessPanel } from '../../hud/FairnessPanel';
 import { TrustBadge } from '../../hud/TrustBadge';
@@ -344,6 +344,7 @@ function LiveTable({
   const client = session.client;
   const state = useTableState(client);
   const { reducedMotion } = useTheme();
+  const [settings] = useSettings();
   const toasts = useToasts();
   const landscape = useMediaQuery(LANDSCAPE_PHONE_QUERY);
   const [railTab, setRailTab] = useState<RailTab>('match');
@@ -688,6 +689,8 @@ function LiveTable({
             names={names}
             mySeat={seat}
             reducedMotion={reducedMotion}
+            fourColor={settings.ofcFourColor}
+            traySort={settings.ofcTraySort}
             onOpenLedger={() => setLedgerOpen(true)}
             flow={flow}
           />

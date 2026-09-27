@@ -45,7 +45,14 @@ export interface Settings {
   randomOrgKey: string;
   /** Use this device's generator when the oracle is unreachable (flagged in the audit). */
   entropyFallback: boolean;
+  /** OFC: clubs green and diamonds blue, so four suits never read as two colours. */
+  ofcFourColor: boolean;
+  /** OFC: how dealt cards start out in the tray; the buttons there still change it per hand. */
+  ofcTraySort: OfcTraySort;
 }
+
+export type OfcTraySort = 'dealt' | 'low' | 'high' | 'suit';
+export const OFC_TRAY_SORTS: readonly OfcTraySort[] = ['dealt', 'low', 'high', 'suit'];
 
 export type EntropySourceId = 'crypto' | 'random.org' | 'drand';
 export const ENTROPY_SOURCES: readonly EntropySourceId[] = ['crypto', 'random.org', 'drand'];
@@ -74,6 +81,8 @@ export const DEFAULT_SETTINGS: Settings = {
   randomnessMode: 'per-draw',
   randomOrgKey: '',
   entropyFallback: false,
+  ofcFourColor: false,
+  ofcTraySort: 'dealt',
 };
 
 /** What is actually persisted: the settings plus when they last changed (for device sync). */
@@ -148,6 +157,7 @@ export function sanitizeSettings(value: unknown): Settings {
     out.entropySource = DEFAULT_SETTINGS.entropySource;
   if (!RANDOMNESS_MODES.includes(out.randomnessMode))
     out.randomnessMode = DEFAULT_SETTINGS.randomnessMode;
+  if (!OFC_TRAY_SORTS.includes(out.ofcTraySort)) out.ofcTraySort = DEFAULT_SETTINGS.ofcTraySort;
   return out;
 }
 

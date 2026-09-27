@@ -7,6 +7,7 @@ import { GameScreen } from './GameScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { DemoScreen } from './DemoScreen';
 import { describeSavedTable } from './history';
+import { OfcSettings } from './SettingsPanel';
 
 export const ofc: GameDefinition = {
   id: 'ofc',
@@ -22,6 +23,7 @@ export const ofc: GameDefinition = {
     Game: GameScreen,
     History: HistoryScreen,
   },
+  Settings: OfcSettings,
   Demo: DemoScreen,
   describeSaved: describeSavedTable,
 };

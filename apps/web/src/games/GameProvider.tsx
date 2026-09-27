@@ -45,6 +45,11 @@ export interface GameDefinition {
     Game: ComponentType;
     History: ComponentType;
   };
+  /**
+   * This game's own settings, shown as its tab on the settings screen (`#/<profile>/settings/<id>`).
+   * Anything that applies to every game belongs on the General tab instead.
+   */
+  Settings?: ComponentType;
   /** Optional profile-less playground mounted at `#/<id>/demo`. */
   Demo?: ComponentType;
   /**

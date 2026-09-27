@@ -123,6 +123,7 @@ export function AppRoutes() {
       <Route path=":profile" element={<ProfileShell />}>
         <Route index element={<HubScreen />} />
         <Route path="settings" element={<SettingsScreen />} />
+        <Route path="settings/:game" element={<SettingsScreen />} />
         <Route path="clubs" element={<ClubsScreen />} />
         <Route path="club/join/:token" element={<ClubJoinScreen />} />
         <Route path="club/:clubId" element={<LobbyScreen />} />
