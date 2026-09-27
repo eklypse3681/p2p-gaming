@@ -61,7 +61,7 @@ export function defaultDataDir(env: NodeJS.ProcessEnv = process.env): string {
   return env.P2P_DEALER_DATA ?? join(homedir(), '.p2p-dealer');
 }
 
-export const USAGE = `dealer — host a P2P Gaming table from a terminal
+export const USAGE = `dealer — host an Among Friends table from a terminal
 
 Usage:
   dealer host --game <backgammon|ofc> [--rules rules.json] [--seats N] [--code ABC123]

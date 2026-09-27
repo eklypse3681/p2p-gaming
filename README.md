@@ -1,9 +1,17 @@
-# P2P Gaming
+# Among Friends
 
-Serverless, peer-to-peer backgammon for two named players. No backend, no accounts, nothing to
-pay for: the **host's browser runs the game server**, the guest connects directly over WebRTC
-(signalled through the free PeerJS cloud), and both players' browsers keep the match so it can be
-paused and resumed later from either side.
+Games with your friends, played directly between your devices — live at
+**[amongfriends.gg](https://amongfriends.gg/)**. No accounts to create and no game servers: the
+**host's browser runs the game**, everyone else connects to it directly over WebRTC (signalled
+through the free PeerJS cloud, relayed through Cloudflare only when a network forbids a direct
+connection), and every player's browser keeps the match so it can be paused and resumed later.
+
+This repository holds the games, the table core, the transports, the club specification and its
+reference implementation, and the web app. It is published as `eklypse3681/p2p-gaming`.
+
+## Backgammon
+
+Two named players.
 
 - Full rules: bar, hitting, bearing off (exact / higher-die), must-use-both-dice and higher-die
   rules, doubling cube with ownership, Crawford rule, Jacoby rule (money play), gammons and

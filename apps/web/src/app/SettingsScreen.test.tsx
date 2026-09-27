@@ -172,7 +172,7 @@ describe('SettingsScreen transfer', () => {
     await userEvent.click(screen.getByTestId('board-marine'));
     await userEvent.click(screen.getByTestId('settings-tab-general'));
     await userEvent.click(screen.getByTestId('export-profile'));
-    expect(await screen.findByTestId('transfer-note')).toHaveTextContent('p2p-gaming-alice.json');
+    expect(await screen.findByTestId('transfer-note')).toHaveTextContent('amongfriends-alice.json');
     expect(click).toHaveBeenCalledTimes(1);
     expect(blobs).toHaveLength(1);
     const data = JSON.parse(await blobs[0]!.text());

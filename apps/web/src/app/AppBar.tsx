@@ -32,16 +32,29 @@ function SyncDot({ slug }: { slug: string }) {
   );
 }
 
+/** A table seen from above with four friends around it: the brand, whatever the game. */
 function Logo() {
+  const seats = [
+    [13, 13],
+    [51, 13],
+    [13, 51],
+    [51, 51],
+  ];
   return (
     <svg viewBox="0 0 64 64" aria-hidden="true">
       <rect width="64" height="64" rx="14" fill="var(--ui-surface-raised)" />
-      <polygon points="8,8 20,8 14,40" fill="var(--ui-accent)" />
-      <polygon points="22,8 34,8 28,40" fill="var(--ui-text-muted)" />
-      <polygon points="36,8 48,8 42,40" fill="var(--ui-accent)" />
-      <circle cx="14" cy="50" r="6" fill="#f3ecd8" />
-      <circle cx="28" cy="50" r="6" fill="#2a2d38" stroke="#f3ecd8" strokeWidth="1.5" />
-      <circle cx="42" cy="50" r="6" fill="#f3ecd8" />
+      {seats.map(([cx, cy]) => (
+        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="7" fill="var(--ui-text)" />
+      ))}
+      <circle cx="32" cy="32" r="16" fill="var(--ui-accent)" />
+      <circle
+        cx="32"
+        cy="32"
+        r="9"
+        fill="none"
+        stroke="var(--ui-surface-raised)"
+        strokeWidth="2.5"
+      />
     </svg>
   );
 }
@@ -66,7 +79,7 @@ export function AppBar() {
     >
       <NavLink to={ctx ? ctx.path('/') : '/'} className={styles.logo}>
         <Logo />
-        <span>P2P Gaming</span>
+        <span>Among Friends</span>
       </NavLink>
       <nav className={styles.nav} aria-label="Primary">
         {ctx ? (

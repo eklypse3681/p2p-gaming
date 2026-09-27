@@ -82,7 +82,7 @@ describe('capability gating', () => {
 
 describe('club disclosure', () => {
   const cases: Array<[ClubCustody, RegExp]> = [
-    [{ kind: 'hosted', operator: 'P2P Gaming' }, /P2P Gaming runs this club's books/],
+    [{ kind: 'hosted', operator: 'Among Friends' }, /Among Friends runs this club's books/],
     [{ kind: 'self-hosted', operator: 'Steve' }, /trusting them personally/],
     [{ kind: 'contract', chain: 'Base', address: '0xabc' }, /contract on Base/],
     [{ kind: 'local' }, /not real/],

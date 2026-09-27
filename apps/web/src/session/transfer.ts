@@ -152,7 +152,7 @@ export async function exportProfile(
 }
 
 export function exportFileName(slug: string): string {
-  return `p2p-gaming-${slug}.json`;
+  return `amongfriends-${slug}.json`;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -310,15 +310,15 @@ export function parseProfileExport(input: string | unknown): ProfileExport {
     try {
       value = JSON.parse(input);
     } catch {
-      throw new TransferError('bad-file', 'that file is not a P2P Gaming player export');
+      throw new TransferError('bad-file', 'that file is not an Among Friends player export');
     }
   }
   if (typeof value !== 'object' || value === null) {
-    throw new TransferError('bad-file', 'that file is not a P2P Gaming player export');
+    throw new TransferError('bad-file', 'that file is not an Among Friends player export');
   }
   const v = value as Record<string, unknown>;
   if (v.format !== EXPORT_FORMAT) {
-    throw new TransferError('bad-file', 'that file is not a P2P Gaming player export');
+    throw new TransferError('bad-file', 'that file is not an Among Friends player export');
   }
   if (v.version !== EXPORT_VERSION) {
     throw new TransferError('bad-file', `unsupported export version ${String(v.version)}`);

@@ -118,9 +118,9 @@ describe('parseProfileExport', () => {
   });
 
   it('rejects the wrong format, version, identity or match shapes', () => {
-    expect(() => parseProfileExport('not json')).toThrow(/not a P2P Gaming/);
+    expect(() => parseProfileExport('not json')).toThrow(/not an Among Friends/);
     expect(() => parseProfileExport({ format: 'other', version: 1, profile: identity })).toThrow(
-      /not a P2P Gaming/,
+      /not an Among Friends/,
     );
     expect(() => parseProfileExport(exportOf({ version: 2 as never }))).toThrow(/version 2/);
     expect(() => parseProfileExport(exportOf({ profile: { ...identity, id: '' } }))).toThrow(
@@ -254,7 +254,7 @@ describe('import / export', () => {
     expect(data.profile.syncKey).toBe(getProfile('alice')!.syncKey);
     expect(data.settings.look).toBe('paper');
     expect(data.matches.backgammon?.map((m) => m.id)).toEqual(['m1']);
-    expect(exportFileName('alice')).toBe('p2p-gaming-alice.json');
+    expect(exportFileName('alice')).toBe('amongfriends-alice.json');
 
     // Another browser: nothing there yet.
     localStorage.clear();
