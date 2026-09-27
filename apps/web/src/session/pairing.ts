@@ -23,6 +23,7 @@ import { generateKeyPair, generateRoomCode } from '@bgf/protocol';
 import { fingerprint, issueGrant, verifyGrant } from '@bgf/wallet';
 import type { GrantScope } from '@bgf/wallet';
 import type { PairedDevice } from './profiles';
+import { DEVICE_GRANT_MS } from './grants';
 import {
   createProfile,
   getProfile,
@@ -165,6 +166,7 @@ export async function hostPairing(
             label: msg.label,
             scopes: DEVICE_SCOPES,
             issuedAt,
+            expiresAt: issuedAt + DEVICE_GRANT_MS,
           });
           const decoded = await verifyGrant(grant, { now: issuedAt, root: root.publicKey });
           if (!decoded.ok) throw new PairingError('bad-grant', 'could not issue a grant');

@@ -201,6 +201,29 @@ describe('SettingsScreen transfer', () => {
     window.history.replaceState(null, '', '/');
   });
 
+  it('signs out a paired device: it leaves the list and stops being renewed', async () => {
+    const { ensureKeys, recordPairedDevice, getProfile } = await import('../session/profiles');
+    await ensureKeys('alice');
+    recordPairedDevice('alice', {
+      serial: 1,
+      label: 'iPhone · Safari',
+      publicKey: 'k'.repeat(87),
+      pairedAt: Date.now(),
+      expiresAt: Date.now() + 86_400_000,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 503 })),
+    );
+    renderSettings();
+    expect(screen.getByTestId('paired-devices')).toHaveTextContent('iPhone · Safari');
+    await userEvent.click(screen.getByTestId('sign-out-1'));
+    expect(await screen.findByTestId('sign-out-note')).toHaveTextContent(/signed out here/i);
+    expect(screen.queryByTestId('paired-devices')).toBeNull();
+    expect(getProfile('alice')!.devices![0]!.revokedAt).toBeDefined();
+    vi.unstubAllGlobals();
+  });
+
   it('has a Devices section: sync toggle persists and rotating the key changes it', async () => {
     renderSettings();
     const section = screen.getByTestId('sync-section');

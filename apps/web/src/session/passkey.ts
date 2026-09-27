@@ -124,6 +124,21 @@ function webauthn(): CredentialsContainer {
   return navigator.credentials;
 }
 
+let available: Promise<boolean> | null = null;
+
+/** Whether this site can store passkey backups (false on the dev server, or before it is set up). */
+export function backupsAvailable(fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  available ??= fetchImpl('/api/backup-status')
+    .then(async (res) => res.ok && ((await res.json()) as { passkeys?: unknown }).passkeys === true)
+    .catch(() => false);
+  return available;
+}
+
+/** For tests. */
+export function resetBackupsAvailable(): void {
+  available = null;
+}
+
 /** Best guess before trying: `false` only when the browser says outright it cannot. */
 export async function passkeysLikelyWork(): Promise<boolean> {
   if (typeof PublicKeyCredential === 'undefined') return false;

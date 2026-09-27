@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { restoreWithPasskey } from '../session/passkey';
+import { useEffect, useState } from 'react';
+import { backupsAvailable, restoreWithPasskey } from '../session/passkey';
 import { restoreFromPhrase } from '../session/recovery';
 import { WalletError } from '@bgf/wallet';
 import { describePasskeyError } from './SafetySection';
@@ -9,6 +9,10 @@ export function RestorePanel({ onRestored }: { onRestored: (slug: string) => voi
   const [busy, setBusy] = useState(false);
   const [words, setWords] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [backups, setBackups] = useState(false);
+  useEffect(() => {
+    void backupsAvailable().then(setBackups);
+  }, []);
 
   const run = (restore: () => Promise<string>, describe: (e: unknown) => string) => {
     setBusy(true);
@@ -22,17 +26,19 @@ export function RestorePanel({ onRestored }: { onRestored: (slug: string) => voi
   return (
     <section className="card stack" data-testid="restore-panel">
       <h2>Restore a player</h2>
-      <button
-        className="btn btn-primary"
-        disabled={busy}
-        onClick={() => run(() => restoreWithPasskey(), describePasskeyError)}
-        data-testid="restore-passkey"
-      >
-        Use a passkey
-      </button>
+      {backups && (
+        <button
+          className="btn btn-primary"
+          disabled={busy}
+          onClick={() => run(() => restoreWithPasskey(), describePasskeyError)}
+          data-testid="restore-passkey"
+        >
+          Use a passkey
+        </button>
+      )}
       <div className="field">
         <label className="label" htmlFor="restore-words">
-          Or type the 24 recovery words
+          {backups ? 'Or type' : 'Type'} the 24 recovery words
         </label>
         <textarea
           id="restore-words"

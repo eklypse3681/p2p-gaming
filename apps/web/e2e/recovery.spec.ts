@@ -11,6 +11,9 @@ import type { BrowserContext, Page } from '@playwright/test';
 const backups = new Map<string, string>();
 
 async function withBackupEndpoint(context: BrowserContext): Promise<void> {
+  await context.route('**/api/backup-status', (route) =>
+    route.fulfill({ status: 200, json: { passkeys: true } }),
+  );
   await context.route('**/api/backup/*', async (route) => {
     const id = route.request().url().split('/api/backup/')[1]!;
     if (route.request().method() === 'PUT') {

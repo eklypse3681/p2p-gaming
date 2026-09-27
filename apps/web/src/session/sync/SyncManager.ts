@@ -3,7 +3,6 @@ import { TransportError } from '@bgf/protocol';
 import { constantTimeEqual, hasWebCrypto, hmacSha256Hex, randomNonce, syncAddress } from './crypto';
 import type { SyncChange, SyncData, SyncMessage, SyncStore } from './protocol';
 import {
-  SYNC_PROTOCOL,
   applied,
   applyData,
   buildManifest,
@@ -12,6 +11,8 @@ import {
   isEmptyData,
   isEmptyWant,
   parseSyncMessage,
+  SYNC_MESSAGE_TYPES,
+  SYNC_PROTOCOL,
 } from './protocol';
 import type { DeviceInfo } from './device';
 
@@ -329,6 +330,11 @@ export class SyncManager {
 
   private async handle(peer: Peer, raw: unknown, gen: number): Promise<void> {
     if (!this.alive(gen) || !this.peers.has(peer)) return;
+    const type = (raw as { type?: unknown } | null)?.type;
+    if (typeof type === 'string' && !SYNC_MESSAGE_TYPES.has(type)) {
+      this.log(`ignoring ${type}: newer than this build`);
+      return;
+    }
     const msg = parseSyncMessage(raw);
     if (!msg) {
       this.log('malformed message; closing peer');
@@ -361,6 +367,8 @@ export class SyncManager {
           peer.authed = true;
           this.syncDevices();
           this.send(peer, { type: 'manifest', ...(await buildManifest(this.store)) });
+          const grant = this.store.currentGrant?.();
+          if (grant) this.send(peer, { type: 'grant', grant });
           return;
         }
         case 'bye':
@@ -382,6 +390,16 @@ export class SyncManager {
         case 'want': {
           const data = await collectData(this.store, msg);
           if (!isEmptyData(data)) this.send(peer, { type: 'data', ...data });
+          return;
+        }
+        case 'grant': {
+          const fresh = await this.store.renewGrant?.(msg.grant);
+          if (fresh && this.peers.has(peer))
+            this.send(peer, { type: 'grant-renewal', grant: fresh });
+          return;
+        }
+        case 'grant-renewal': {
+          await this.store.acceptGrant?.(msg.grant);
           return;
         }
         case 'data': {

@@ -193,3 +193,54 @@ async function addressOf(key: string): Promise<string> {
   const { syncAddress } = await import('./crypto');
   return syncAddress(key);
 }
+
+describe('SyncManager: grants', () => {
+  it('a paired device shows its grant and takes the renewal a player’s device sends back', async () => {
+    const phone = Object.assign(new MemorySyncStore(), {
+      grant: 'p2pd1.old',
+      currentGrant() {
+        return this.grant;
+      },
+      async acceptGrant(g: string) {
+        this.grant = g;
+        return true;
+      },
+    });
+    const shown: string[] = [];
+    const laptop = Object.assign(new MemorySyncStore(), {
+      async renewGrant(g: string) {
+        shown.push(g);
+        return 'p2pd1.fresh';
+      },
+    });
+    start(manager(laptop, shared, 'laptop'));
+    await until(() => managers[0]!.getStatus().state === 'hub');
+    start(manager(phone, shared, 'phone'));
+    await until(() => phone.grant === 'p2pd1.fresh');
+    expect(shown).toEqual(['p2pd1.old']);
+  });
+
+  it('ignores a message type it does not know instead of dropping the device', async () => {
+    const a = new MemorySyncStore();
+    const b = new MemorySyncStore();
+    const ma = start(manager(a, shared, 'a'));
+    await until(() => ma.getStatus().state === 'hub');
+    const mb = start(manager(b, shared, 'b'));
+    await until(() => connected(ma) && connected(mb));
+    // Reach into the hub's peer and deliver something from the future.
+    const hub = ma as unknown as {
+      peers: Set<{ authed: boolean }>;
+      handle: (peer: unknown, raw: unknown, gen: number) => Promise<void>;
+    };
+    const peer = Array.from(hub.peers)[0]!;
+    await hub.handle.call(
+      ma,
+      peer,
+      { type: 'from-the-future', x: 1 },
+      (ma as unknown as { gen: number }).gen,
+    );
+    await flush();
+    expect(connected(ma)).toBe(true);
+    expect(connected(mb)).toBe(true);
+  });
+});

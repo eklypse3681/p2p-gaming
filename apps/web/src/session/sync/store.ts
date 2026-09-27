@@ -1,6 +1,7 @@
 import type { MatchSnapshot } from '@bgf/protocol';
 import type { SyncChange, SyncProfile, SyncSettings, SyncStore } from './protocol';
 import { getProfile, getSecrets, subscribeProfiles, updateProfile } from '../profiles';
+import { acceptGrant, renewGrant } from '../grants';
 import { getSettings, getSettingsUpdatedAt, replaceSettings, subscribeSettings } from '../settings';
 import { getMatchStore, matchStoreBus } from '../matchStore';
 import type { GameId } from '../../games/ids';
@@ -59,6 +60,18 @@ export class LocalSyncStore implements SyncStore {
 
   putMatch(game: GameId, snapshot: MatchSnapshot): Promise<void> {
     return getMatchStore(this.slug, game).put(snapshot);
+  }
+
+  currentGrant(): string | null {
+    return getProfile(this.slug)?.grant ?? null;
+  }
+
+  renewGrant(grant: string): Promise<string | null> {
+    return renewGrant(this.slug, grant);
+  }
+
+  acceptGrant(grant: string): Promise<boolean> {
+    return acceptGrant(this.slug, grant);
   }
 
   onChange(listener: (change: SyncChange) => void): () => void {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayerProfile } from '@bgf/protocol';
 import { createMemoryPair, generateKeyPair, signerFor } from '@bgf/protocol';
-import { issueGrant } from '@bgf/wallet';
+import { issueGrant, issueRevocation, openRevocation } from '@bgf/wallet';
 import type { GameDefinition } from '../src/index.js';
-import { TableClient, TableServer } from '../src/index.js';
+import { TableClient, TableServer, setRevocationLookup } from '../src/index.js';
 
 /**
  * A player's seat is bound to their own key. One of their devices, holding only its own key and
@@ -129,5 +129,54 @@ describe('a seat taken by one of the player’s devices', () => {
     const client = connect(server, profile, signerFor(player.privateKey));
     await settle();
     expect(client.getState().status).toBe('joined');
+  });
+});
+
+describe('a device the player signed out', () => {
+  it('is refused once the table can see the revocation, and the player still gets in', async () => {
+    const { server, player, profile } = await setup();
+    const phone = await generateKeyPair();
+    const grant = await issueGrant(player, {
+      device: phone.publicKey,
+      serial: 3,
+      label: 'lost phone',
+      scopes: ['seat'],
+    });
+    const revocation = await openRevocation(
+      await issueRevocation(player, { serials: [3] }),
+      player.publicKey,
+    );
+    setRevocationLookup(async (key) => (key === player.publicKey ? revocation : null));
+    try {
+      const lost = connect(server, profile, signerFor(phone.privateKey, grant));
+      await settle();
+      expect(lost.getState().rejectReason).toBe('unauthorized');
+      const owner = connect(server, profile, signerFor(player.privateKey));
+      await settle();
+      expect(owner.getState().status).toBe('joined');
+    } finally {
+      setRevocationLookup(null);
+    }
+  });
+
+  it('is still admitted when the table cannot reach the list', async () => {
+    const { server, player, profile } = await setup();
+    const phone = await generateKeyPair();
+    const grant = await issueGrant(player, {
+      device: phone.publicKey,
+      serial: 1,
+      label: 'phone',
+      scopes: ['seat'],
+    });
+    setRevocationLookup(async () => {
+      throw new Error('offline');
+    });
+    try {
+      const client = connect(server, profile, signerFor(phone.privateKey, grant));
+      await settle();
+      expect(client.getState().status).toBe('joined');
+    } finally {
+      setRevocationLookup(null);
+    }
   });
 });

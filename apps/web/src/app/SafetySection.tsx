@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useProfile } from '../session/ProfileProvider';
 import { canPairDevices } from '../session/pairing';
-import { PasskeyError, passkeysLikelyWork, saveWithPasskey } from '../session/passkey';
+import {
+  PasskeyError,
+  backupsAvailable,
+  passkeysLikelyWork,
+  saveWithPasskey,
+} from '../session/passkey';
 import { phraseFor } from '../session/recovery';
 import { relativeTime } from '../session/time';
 import styles from './SettingsScreen.module.css';
@@ -36,8 +41,10 @@ export function SafetySection() {
   const [note, setNote] = useState<string | null>(null);
   const [showWords, setShowWords] = useState(false);
   const [passkeysOk, setPasskeysOk] = useState(true);
+  const [backups, setBackups] = useState(false);
   useEffect(() => {
     void passkeysLikelyWork().then(setPasskeysOk);
+    void backupsAvailable().then(setBackups);
   }, []);
   if (!canPairDevices(slug)) return null;
   const words = phraseFor(slug);
@@ -55,33 +62,37 @@ export function SafetySection() {
   return (
     <section className={`card ${styles.section}`} data-testid="safety-section">
       <h2>Don’t lose {record.name}</h2>
-      <div className={styles.rowField}>
-        <div className={styles.rowText}>
-          Save with a passkey
-          <small>
-            {saved
-              ? `Saved ${relativeTime(saved.createdAt)}. On a new device, choose “Restore a player” and use the same passkey.`
-              : 'Face ID, a fingerprint or your computer’s sign-in. Your passkey is kept by Apple, Google or your password manager, so a lost device loses nothing.'}
-          </small>
-        </div>
-        <button
-          className={`btn btn-sm ${saved ? 'btn-ghost' : 'btn-primary'}`}
-          disabled={busy || !passkeysOk}
-          onClick={save}
-          data-testid="save-passkey"
-        >
-          {busy ? 'Saving…' : saved ? 'Save again' : 'Save with a passkey'}
-        </button>
-      </div>
-      {!passkeysOk && (
-        <p className="muted small">
-          This browser can’t use passkeys for this; use the words below.
-        </p>
-      )}
-      {note && (
-        <p className="small" role="status" data-testid="passkey-note">
-          {note}
-        </p>
+      {backups && (
+        <>
+          <div className={styles.rowField}>
+            <div className={styles.rowText}>
+              Save with a passkey
+              <small>
+                {saved
+                  ? `Saved ${relativeTime(saved.createdAt)}. On a new device, choose “Restore a player” and use the same passkey.`
+                  : 'Face ID, a fingerprint or your computer’s sign-in. Your passkey is kept by Apple, Google or your password manager, so a lost device loses nothing.'}
+              </small>
+            </div>
+            <button
+              className={`btn btn-sm ${saved ? 'btn-ghost' : 'btn-primary'}`}
+              disabled={busy || !passkeysOk}
+              onClick={save}
+              data-testid="save-passkey"
+            >
+              {busy ? 'Saving…' : saved ? 'Save again' : 'Save with a passkey'}
+            </button>
+          </div>
+          {!passkeysOk && (
+            <p className="muted small">
+              This browser can’t use passkeys for this; use the words below.
+            </p>
+          )}
+          {note && (
+            <p className="small" role="status" data-testid="passkey-note">
+              {note}
+            </p>
+          )}
+        </>
       )}
       {words && (
         <div className="stack">

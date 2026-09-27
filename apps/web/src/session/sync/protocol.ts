@@ -17,6 +17,12 @@ import { GAME_IDS, isGameId } from '../../games/ids';
  *
  * Merge rules: matches by id, higher `seq` wins (equal keeps local); profile name/avatar and the
  * settings blob are last-write-wins by `updatedAt`. Deletions are not synced.
+ *
+ * Grants: once authenticated, a paired device sends `grant` (its current one); a device holding
+ * the player's own key may answer `grant-renewal` with a fresh one (see `session/grants.ts`).
+ *
+ * A message type this build does not know is ignored, not treated as an attack, so a newer
+ * device can talk to an older one.
  */
 
 export const SYNC_PROTOCOL = 1;
@@ -69,7 +75,22 @@ export type SyncMessage =
   | ({ type: 'manifest' } & Manifest)
   | ({ type: 'want' } & Want)
   | ({ type: 'data' } & SyncData)
+  /** A paired device's current grant, shown so a device holding the player's key can renew it. */
+  | { type: 'grant'; grant: string }
+  | { type: 'grant-renewal'; grant: string }
   | { type: 'bye' };
+
+/** Every type this build understands; anything else is skipped. */
+export const SYNC_MESSAGE_TYPES: ReadonlySet<string> = new Set([
+  'sync-hello',
+  'sync-auth',
+  'manifest',
+  'want',
+  'data',
+  'grant',
+  'grant-renewal',
+  'bye',
+]);
 
 /** A local change worth pushing to the other devices. */
 export type SyncChange =
@@ -92,6 +113,12 @@ export interface SyncStore {
   putMatch(game: GameId, snapshot: MatchSnapshot): Promise<void>;
   /** Local changes made on this device (including ones applied from a peer — callers filter). */
   onChange(listener: (change: SyncChange) => void): () => void;
+  /** On a paired device: its current grant, to be renewed by a device holding the player's key. */
+  currentGrant?(): string | null;
+  /** On a device holding the player's key: a fresh grant for the one shown, or null. */
+  renewGrant?(grant: string): Promise<string | null>;
+  /** On a paired device: adopt a renewed grant; whether it was taken. */
+  acceptGrant?(grant: string): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -168,6 +195,11 @@ export function parseSyncMessage(raw: unknown): SyncMessage | null {
     case 'sync-auth':
       return isStr(raw.mac) && /^[0-9a-f]{64}$/.test(raw.mac)
         ? { type: 'sync-auth', mac: raw.mac }
+        : null;
+    case 'grant':
+    case 'grant-renewal':
+      return isStr(raw.grant) && raw.grant.length < 4096
+        ? { type: raw.type, grant: raw.grant }
         : null;
     case 'manifest': {
       if (!isObj(raw.profile) || !isNum(raw.profile.updatedAt)) return null;

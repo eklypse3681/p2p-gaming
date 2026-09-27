@@ -25,7 +25,6 @@ import {
   generateId,
   randomNonce,
 } from '@bgf/protocol';
-import { verifyDelegated } from '@bgf/wallet';
 import type { ClubErrorCode } from '@bgf/club-spec';
 import type {
   AuthRequest,
@@ -56,7 +55,7 @@ import {
 } from '@bgf/club-spec';
 import type { ClubCapabilities } from '@bgf/club-spec';
 import type { PendingChallenge } from '@bgf/table';
-import { beginChallenge, cancelChallenge, verifyChallengeAnswer } from '@bgf/table';
+import { beginChallenge, cancelChallenge, verifyAnswer, verifyChallengeAnswer } from '@bgf/table';
 import {
   addCommitment,
   closeCommitments,
@@ -1048,14 +1047,12 @@ export class ClubServer implements ClubApi {
     if (known && known.publicKey !== profile.publicKey) {
       throw new SpecError('unauthorized', 'that member id belongs to a different key');
     }
-    const ok = (
-      await verifyDelegated(
-        profile.publicKey,
-        clubChallengeBytes({ clubId: this.state.identity.id, profileId: profile.id, nonce }),
-        { signature, ...(grant ? { grant } : {}) },
-        { now: this.now(), scope: 'club' },
-      ).catch(() => ({ ok: false }))
-    ).ok;
+    const ok = await verifyAnswer(
+      profile.publicKey,
+      clubChallengeBytes({ clubId: this.state.identity.id, profileId: profile.id, nonce }),
+      signature,
+      { ...(grant ? { grant } : {}), scope: 'club', now: this.now() },
+    );
     if (!ok) throw new SpecError('unauthorized', 'the challenge was not signed with the right key');
 
     let invite: ClubInvite | undefined;

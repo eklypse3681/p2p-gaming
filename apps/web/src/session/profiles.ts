@@ -90,6 +90,8 @@ export interface ProfileRecord {
   grant?: string;
   /** On the player's own devices: every device they have paired, newest last. */
   devices?: PairedDevice[];
+  /** When this device last published its signed-out devices (see `session/revocations.ts`). */
+  revocationsPublishedAt?: number;
   /** Passkeys this player was saved with (the backups themselves live at `/api/backup/<id>`). */
   passkeys?: { credentialId: string; createdAt: number }[];
   /** Password-encrypted secrets (`privateKey`, `syncKey`, `seed`, `deviceKey`); plain ones removed. */
@@ -647,4 +649,27 @@ export function recordPasskey(
     passkey,
   ];
   commit({ ...index, [slug]: { ...record, passkeys } });
+}
+
+/** A paired device's renewed grant (same device key, later expiry). */
+export function setGrant(slug: string, grant: string): void {
+  const index = store.get();
+  const record = index[slug];
+  if (!record) return;
+  commit({ ...index, [slug]: { ...record, grant } });
+}
+
+export function markRevocationsPublished(slug: string, at: number = Date.now()): void {
+  const index = store.get();
+  const record = index[slug];
+  if (!record) return;
+  commit({ ...index, [slug]: { ...record, revocationsPublishedAt: at } });
+}
+
+/** A device was signed out here since the list was last published. */
+export function revocationsUnpublished(
+  record: Pick<ProfileRecord, 'devices' | 'revocationsPublishedAt'>,
+): boolean {
+  const published = record.revocationsPublishedAt ?? 0;
+  return (record.devices ?? []).some((d) => (d.revokedAt ?? 0) > published);
 }

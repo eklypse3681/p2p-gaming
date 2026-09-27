@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate, useParams } from 'react-router';
 import { useSettings, resetSettings, DEFAULT_SETTINGS } from '../session/settings';
 import { RandomnessControls } from '../hud/RandomnessControls';
@@ -7,7 +7,14 @@ import type { ReducedMotionSetting } from '../session/settings';
 import { useProfile } from '../session/ProfileProvider';
 import { changePassword, lockProfile, removePassword } from '../session/profiles';
 import { SecretsError } from '../session/secrets';
-import { deleteProfile, isPairedDevice, listProfiles, rotateSyncKey } from '../session/profiles';
+import {
+  deleteProfile,
+  isPairedDevice,
+  listProfiles,
+  revocationsUnpublished,
+  rotateSyncKey,
+} from '../session/profiles';
+import { publishRevocations, signOutDevice } from '../session/revocations';
 import { canPairDevices } from '../session/pairing';
 import { decodeGrant } from '@bgf/wallet';
 import { PairOffer } from '../hud/PairOffer';
@@ -79,7 +86,36 @@ function PairingBlock({ slug }: { slug: string }) {
     );
   }
   if (!canPairDevices(slug)) return null;
+  return <PairedDevices slug={slug} adding={adding} setAdding={setAdding} />;
+}
+
+function PairedDevices({
+  slug,
+  adding,
+  setAdding,
+}: {
+  slug: string;
+  adding: boolean;
+  setAdding: (f: (v: boolean) => boolean) => void;
+}) {
+  const { record } = useProfile();
+  const [note, setNote] = useState<string | null>(null);
+  const unpublished = revocationsUnpublished(record);
+  // A sign-out made while offline reaches the tables the next time this screen is open.
+  useEffect(() => {
+    if (unpublished) void publishRevocations(slug);
+  }, [slug, unpublished]);
   const devices = (record.devices ?? []).filter((d) => !d.revokedAt);
+  const signOut = (serial: number, label: string, expiresAt: number) => {
+    setNote(null);
+    void signOutDevice(slug, serial).then((published) =>
+      setNote(
+        published
+          ? `${label} is signed out. Tables stop letting it in now.`
+          : `${label} is signed out here. Tables hear as soon as the list can be published; it stops working by ${formatDate(expiresAt)} regardless.`,
+      ),
+    );
+  };
   return (
     <div className="stack" data-testid="pairing-block">
       <div className={styles.rowField}>
@@ -102,14 +138,28 @@ function PairingBlock({ slug }: { slug: string }) {
       {devices.length > 0 && (
         <ul className={styles.deviceList} data-testid="paired-devices">
           {devices.map((d) => (
-            <li key={d.serial}>
-              <strong>{d.label}</strong>{' '}
-              <span className="muted small">
-                paired {relativeTime(d.pairedAt)} · until {formatDate(d.expiresAt)}
+            <li key={d.serial} className={styles.deviceRow}>
+              <span>
+                <strong>{d.label}</strong>{' '}
+                <span className="muted small">
+                  paired {relativeTime(d.pairedAt)} · renews while you use it
+                </span>
               </span>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => signOut(d.serial, d.label, d.expiresAt)}
+                data-testid={`sign-out-${d.serial}`}
+              >
+                Sign out
+              </button>
             </li>
           ))}
         </ul>
+      )}
+      {note && (
+        <p className="small" role="status" data-testid="sign-out-note">
+          {note}
+        </p>
       )}
     </div>
   );
