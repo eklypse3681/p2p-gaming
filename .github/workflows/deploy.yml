@@ -33,13 +33,14 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
-      # Run from apps/web so Pages picks up functions/ beside dist/.
-      - uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/web
-          command: pages deploy dist --project-name=amongfriends --branch=main
+      # Run from apps/web so Pages picks up functions/ beside dist/. wrangler-action is not used:
+      # it installs with npm, which cannot resolve this pnpm workspace.
+      - run: pnpm dlx wrangler@4 pages deploy dist --project-name=amongfriends --branch=main
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
 
   # The old address only forwards, so invite links already shared keep working.
   github-redirect:
