@@ -186,3 +186,43 @@ describe('sync key and change stamps', () => {
     expect(getProfile('alice')!.syncKey).toBe(rotated);
   });
 });
+
+describe('wallet-backed players', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    profilesModule.resetProfilesForTests();
+  });
+
+  it('gives a new player a seed their key derives from, and keeps their sync key', async () => {
+    const { openWallet, seedFromBase64Url } = await import('@bgf/wallet');
+    const entry = profilesModule.createProfile('Dana', { syncKey: 'shared-with-my-laptop' });
+    const record = (await profilesModule.ensureKeys(entry.slug))!;
+    expect(record.seed).toBeDefined();
+    const wallet = await openWallet(seedFromBase64Url(record.seed!));
+    expect(record.publicKey).toBe(wallet.publicKey);
+    expect(record.privateKey).toBe(wallet.root.privateKey);
+    expect(record.syncKey).toBe('shared-with-my-laptop');
+  });
+
+  it('keeps a player made before the wallet on the key they already have', async () => {
+    const { generateKeyPair } = await import('@bgf/protocol');
+    const keys = await generateKeyPair();
+    const entry = profilesModule.createProfile('Old', { ...keys });
+    const record = (await profilesModule.ensureKeys(entry.slug))!;
+    expect(record.publicKey).toBe(keys.publicKey);
+    expect(record.seed).toBeUndefined();
+  });
+
+  it('locks the seed and the device key with the password like any other secret', async () => {
+    const entry = profilesModule.createProfile('Eve');
+    await profilesModule.ensureKeys(entry.slug);
+    const before = profilesModule.getSecrets(entry.slug)!;
+    await profilesModule.lockProfile(entry.slug, 'open-sesame', { iterations: 1000 });
+    profilesModule.lockNow(entry.slug);
+    const stored = profilesModule.getProfile(entry.slug)!;
+    expect(stored.seed).toBeUndefined();
+    expect(stored.privateKey).toBeUndefined();
+    expect(await profilesModule.unlockProfile(entry.slug, 'open-sesame')).toBe(true);
+    expect(profilesModule.getSecrets(entry.slug)).toEqual(before);
+  });
+});

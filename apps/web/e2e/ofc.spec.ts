@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { GUEST, HOST, THIRD, seedProfile } from './helpers';
+import { GUEST, HOST, THIRD, approvePairing, pairLinkOf, seedProfile } from './helpers';
 import { hostTable, joinTable, ofcUrl, playHand } from './ofcHelpers';
 
 test.describe('Open Face Chinese Poker', () => {
@@ -145,10 +145,11 @@ test.describe('Open Face Chinese Poker', () => {
       timeout: 20_000,
     });
 
-    // Alice's hand-off link opens the table as Alice on a "phone".
-    const link = await host.getByTestId('handoff-link').first().inputValue();
+    // Alice pairs a "phone" from the hand-off panel; it opens the table as Alice.
+    const link = await pairLinkOf(host);
     const phone = await context.newPage();
     await phone.goto(link);
+    await approvePairing(host);
     await expect(phone.getByTestId('game-screen')).toBeVisible({ timeout: 20_000 });
     await expect(phone.getByTestId('game-screen')).toHaveAttribute('data-seat', '0');
     await expect(phone.getByTestId('seat-name-0').first()).toContainText('Alice');

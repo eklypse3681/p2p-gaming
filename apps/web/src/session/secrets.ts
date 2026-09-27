@@ -9,8 +9,22 @@ import { base64UrlToBytes, bytesToBase64Url } from '@bgf/protocol';
  */
 
 export interface PlainSecrets {
+  /** The player's own key (derived from `seed` for players created since the wallet). */
   privateKey?: string;
   syncKey?: string;
+  /** base64url wallet seed: everything else derives from it. Only on the player's own devices. */
+  seed?: string;
+  /** A paired device's own private key; it acts for the player through `ProfileRecord.grant`. */
+  deviceKey?: string;
+}
+
+export const SECRET_FIELDS = ['privateKey', 'syncKey', 'seed', 'deviceKey'] as const;
+
+/** Only the known secret fields, each only when it is a string. */
+export function pickSecrets(value: Partial<Record<string, unknown>>): PlainSecrets {
+  const out: PlainSecrets = {};
+  for (const k of SECRET_FIELDS) if (typeof value[k] === 'string') out[k] = value[k] as string;
+  return out;
 }
 
 export interface EncryptedSecrets {
@@ -131,11 +145,7 @@ export async function decryptSecrets(
     throw new SecretsError('wrong-password', 'that password does not unlock this player');
   }
   try {
-    const parsed = JSON.parse(dec.decode(plain)) as Record<string, unknown>;
-    const out: PlainSecrets = {};
-    if (typeof parsed.privateKey === 'string') out.privateKey = parsed.privateKey;
-    if (typeof parsed.syncKey === 'string') out.syncKey = parsed.syncKey;
-    return out;
+    return pickSecrets(JSON.parse(dec.decode(plain)) as Record<string, unknown>);
   } catch {
     throw new SecretsError('bad-secrets', 'the decrypted secrets are malformed');
   }

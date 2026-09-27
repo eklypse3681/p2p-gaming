@@ -23,7 +23,7 @@ function peerKey(s: Settings): string {
 }
 
 /** A game, the device-to-device profile sync channel, or the club lobby channel. */
-export type Channel = GameId | 'sync' | 'club';
+export type Channel = GameId | 'sync' | 'club' | 'pair';
 
 /** PeerJS id namespace per channel: room codes of different games (and sync) never collide. */
 export function peerNamespaceFor(channel: Channel): string {

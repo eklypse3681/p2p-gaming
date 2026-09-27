@@ -7,8 +7,11 @@ import type { ReducedMotionSetting } from '../session/settings';
 import { useProfile } from '../session/ProfileProvider';
 import { changePassword, lockProfile, removePassword } from '../session/profiles';
 import { SecretsError } from '../session/secrets';
-import { deleteProfile, listProfiles, rotateSyncKey } from '../session/profiles';
-import { downloadJson, exportFileName, exportProfile, transferCodeFor } from '../session/transfer';
+import { deleteProfile, isPairedDevice, listProfiles, rotateSyncKey } from '../session/profiles';
+import { canPairDevices } from '../session/pairing';
+import { decodeGrant } from '@bgf/wallet';
+import { PairOffer } from '../hud/PairOffer';
+import { downloadJson, exportFileName, exportProfile } from '../session/transfer';
 import { restartSync, syncSupported, useSyncStatus } from '../session/sync/registry';
 import type { SyncStatus } from '../session/sync/SyncManager';
 import { relativeTime } from '../session/time';
@@ -58,6 +61,67 @@ export function describeSyncStatus(status: SyncStatus, enabled: boolean): string
   }
 }
 
+/**
+ * Pairing: on a device holding the player's own key, add another device (it gets its own key and
+ * a grant) and see the ones already added. On a paired device, say what it is.
+ */
+function PairingBlock({ slug }: { slug: string }) {
+  const { record } = useProfile();
+  const [adding, setAdding] = useState(false);
+  if (isPairedDevice(record)) {
+    const decoded = record.grant ? decodeGrant(record.grant) : null;
+    return (
+      <p className="small" data-testid="paired-device-note">
+        This device plays as {record.name} with its own key, paired from another of their devices.
+        {decoded ? ` It can play and sync until ${formatDate(decoded.grant.expiresAt)}.` : ''}
+      </p>
+    );
+  }
+  if (!canPairDevices(slug)) return null;
+  const devices = (record.devices ?? []).filter((d) => !d.revokedAt);
+  return (
+    <div className="stack" data-testid="pairing-block">
+      <div className={styles.rowField}>
+        <div className={styles.rowText}>
+          Add a device
+          <small>
+            Play as {record.name} on your phone or another computer. It makes its own key; yours
+            never leaves this device.
+          </small>
+        </div>
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => setAdding((v) => !v)}
+          data-testid="add-device"
+        >
+          {adding ? 'Close' : 'Add a device'}
+        </button>
+      </div>
+      {adding && <PairOffer slug={slug} name={record.name} />}
+      {devices.length > 0 && (
+        <ul className={styles.deviceList} data-testid="paired-devices">
+          {devices.map((d) => (
+            <li key={d.serial}>
+              <strong>{d.label}</strong>{' '}
+              <span className="muted small">
+                paired {relativeTime(d.pairedAt)} · until {formatDate(d.expiresAt)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function formatDate(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 function DevicesSection({ slug }: { slug: string }) {
   const [settings, update] = useSettings(slug);
   const status = useSyncStatus(slug);
@@ -71,6 +135,7 @@ function DevicesSection({ slug }: { slug: string }) {
   return (
     <section className={`card ${styles.section}`} data-testid="sync-section">
       <h2>Devices</h2>
+      <PairingBlock slug={slug} />
       <div className={styles.rowField}>
         <div className={styles.rowText}>
           Sync between my devices
@@ -92,8 +157,8 @@ function DevicesSection({ slug }: { slug: string }) {
       <p className="muted small">
         Sync happens whenever the app is open on this player on both devices, directly between them
         over WebRTC — nothing is uploaded anywhere. Devices recognise each other with a secret sync
-        key that travels only inside your export file, transfer code and hand-off QR; opponents
-        never see it.
+        key that a device receives only when you approve pairing it, or inside your backup file;
+        opponents never see it.
       </p>
       <div className="row">
         {!confirmRotate ? (
@@ -107,8 +172,8 @@ function DevicesSection({ slug }: { slug: string }) {
         ) : (
           <>
             <span className="small">
-              Your other devices stop syncing until they import a fresh code from this one. Do it if
-              a QR or transfer code was seen by someone else.
+              Your other devices stop syncing until you pair them again. Do it if a backup file
+              reached someone else.
             </span>
             {locked && (
               <input
@@ -156,7 +221,7 @@ function DevicesSection({ slug }: { slug: string }) {
         )}
         {rotated && (
           <span className="small" role="status" data-testid="rotate-note">
-            New sync key in use. Re-export or re-share a code to reconnect other devices.
+            New sync key in use. Pair your other devices again to reconnect them.
           </span>
         )}
       </div>
@@ -415,7 +480,6 @@ function GeneralSettings() {
   const [confirmRemove, setConfirmRemove] = useState(false);
   // The stored name is never empty, so edit through a draft that may be.
   const [nameDraft, setNameDraft] = useState(profile.name);
-  const [transferCode, setTransferCode] = useState<string | null>(null);
   const [transferNote, setTransferNote] = useState<string | null>(null);
 
   const exportPlayer = async () => {
@@ -424,23 +488,6 @@ function GeneralSettings() {
       setTransferNote(`Downloaded ${exportFileName(slug)}`);
     } catch {
       setTransferNote('Could not export this player');
-    }
-  };
-
-  const copyTransferCode = async () => {
-    let code: string;
-    try {
-      code = transferCodeFor(slug);
-    } catch {
-      setTransferNote('Unlock this player first');
-      return;
-    }
-    setTransferCode(code);
-    try {
-      await navigator.clipboard.writeText(code);
-      setTransferNote('Transfer code copied to the clipboard');
-    } catch {
-      setTransferNote('Copy the code below');
     }
   };
 
@@ -547,11 +594,11 @@ function GeneralSettings() {
           </div>
         </div>
         <div className="field" data-testid="transfer-section">
-          <span className="label">Move to another browser</span>
+          <span className="label">Back up this player</span>
           <span className="help">
-            Export downloads this player with their settings and saved matches; a transfer code
-            carries just the identity and settings and is short enough to paste. Import it from the
-            player picker on the other browser. From then on the two copies keep separate histories.
+            Downloads this player with their key, settings and saved matches. Keep the file private:
+            whoever has it can restore {profile.name}. To play on another device, pair it under
+            Devices instead; it gets its own key.
           </span>
           <div className="row">
             <button
@@ -559,31 +606,13 @@ function GeneralSettings() {
               onClick={exportPlayer}
               data-testid="export-profile"
             >
-              Export player…
-            </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={copyTransferCode}
-              data-testid="copy-transfer-code"
-            >
-              Copy transfer code
+              Download backup…
             </button>
           </div>
           {transferNote && (
             <span className="small" role="status" data-testid="transfer-note">
               {transferNote}
             </span>
-          )}
-          {transferCode && (
-            <textarea
-              className="input"
-              readOnly
-              rows={3}
-              value={transferCode}
-              aria-label="Transfer code"
-              data-testid="transfer-code"
-              onFocus={(e) => e.currentTarget.select()}
-            />
           )}
         </div>
         <PasswordSection slug={slug} locked={locked} onLockNow={lockNow} />

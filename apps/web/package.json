@@ -24,6 +24,7 @@
     "@bgf/soak": "workspace:*",
     "@bgf/table": "workspace:*",
     "@bgf/transport-peerjs": "workspace:*",
+    "@bgf/wallet": "workspace:*",
     "idb-keyval": "^6.3.0",
     "motion": "^13.2.0",
     "qrcode": "^1.5.4",

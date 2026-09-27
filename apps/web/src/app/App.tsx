@@ -18,6 +18,7 @@ import { ClubRegistryProvider } from '../clubs/ClubRegistry';
 import { ClubsScreen } from '../clubs/ClubsScreen';
 import { ClubJoinScreen } from '../clubs/ClubJoinScreen';
 import { LobbyScreen } from '../clubs/LobbyScreen';
+import { PairScreen } from './PairScreen';
 
 /** Routes with no player in scope: the picker, invite links, game demos. */
 function GlobalShell() {
@@ -117,6 +118,8 @@ export function AppRoutes() {
             : [];
         })}
         <Route path="demo" element={<Navigate to={`/${DEFAULT_GAME}/demo`} replace />} />
+        {/* Pairing: `#/pair/<code>` makes this device one of another player's devices. */}
+        <Route path="pair/:code" element={<PairScreen />} />
         {/* Club invite links: `#/club/join/<token>` → pick a player → join the club. */}
         <Route path="club/join/:token" element={<PickerScreen club />} />
       </Route>

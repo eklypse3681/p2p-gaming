@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { extractCode, extractGame, handoffLink, identityFromSearch, joinLink } from './links';
-import { IDENTITY_PREFIX, decodeTransferCode } from './transfer';
+import { extractCode, extractGame, identityFromSearch, joinLink } from './links';
+import { decodeTransferCode, encodeIdentityCode } from './transfer';
 
 const alice = { id: 'alice-id', name: 'Alice', avatar: '🦊' };
 
@@ -11,9 +11,8 @@ describe('links', () => {
     expect(extractGame(joinLink('ABC234'))).toBe('backgammon');
   });
 
-  it('a hand-off link carries the identity as ?import= inside the hash', () => {
-    const link = handoffLink('ABC234', alice);
-    expect(link).toContain(`#/backgammon/join/ABC234?import=${IDENTITY_PREFIX}`);
+  it('still reads the identity an old hand-off link carried as ?import=', () => {
+    const link = `${joinLink('ABC234')}?import=${encodeIdentityCode(alice)}`;
     expect(extractCode(link)).toBe('ABC234');
     const search = link.slice(link.indexOf('?import='));
     const code = identityFromSearch(search);

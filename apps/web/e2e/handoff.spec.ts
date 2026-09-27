@@ -3,26 +3,31 @@ import type { Page } from '@playwright/test';
 import {
   GUEST,
   HOST,
+  approvePairing,
   completeOpening,
   hostMatch,
   joinMatch,
+  pairLinkOf,
   seedProfile,
   step,
   startGameIfNeeded,
 } from './helpers';
 
 /**
- * "Move to another device": the hand-off link on the game screen opens the match on another
- * page as the *same* player. Both devices share the seat and stay in sync. (All pages live in one
- * browser context because the BroadcastChannel test transport only crosses tabs of one context,
- * so the "phone" already knows the player and the import merges rather than creates.)
+ * "Move to another device": the hand-off panel pairs another page with the player and opens the
+ * match there as the *same* player, once approved. Both devices share the seat and stay in sync.
+ * (All pages live in one browser context because the BroadcastChannel test transport only
+ * crosses tabs of one context, so the "phone" already holds the player; pairing across separate
+ * storage is covered by sync.spec.ts.)
  */
 test.setTimeout(120_000);
 
-async function handoffLinkOf(page: Page): Promise<string> {
-  const value = await page.getByTestId('handoff-link').first().inputValue();
-  expect(value).toContain('?import=p2pi1.');
-  return value;
+/** Open the hand-off panel's pairing link on `phone` and approve it from `from`. */
+async function handOff(from: Page, phone: Page): Promise<void> {
+  const link = await pairLinkOf(from);
+  expect(link).toContain('?next=backgammon/join/');
+  await phone.goto(link);
+  await approvePairing(from);
 }
 
 const online = (page: Page) =>
@@ -44,7 +49,7 @@ test('the host hands the game to a second device; both stay in sync and the seco
 
   // Scan the QR (open its link) on a "phone".
   const phone = await context.newPage();
-  await phone.goto(await handoffLinkOf(laptop));
+  await handOff(laptop, phone);
   await expect(phone.getByTestId('game-screen')).toBeVisible({ timeout: 20_000 });
   await expect(phone.getByTestId('game-screen')).toHaveAttribute('data-seat', 'white');
   await expect(phone.getByTestId('player-name-white')).toContainText(HOST.name);
@@ -91,7 +96,7 @@ test('a guest hands the game to a second device without interrupting anyone', as
   await startGameIfNeeded(bob);
 
   const bobPhone = await context.newPage();
-  await bobPhone.goto(await handoffLinkOf(bob));
+  await handOff(bob, bobPhone);
   await expect(bobPhone.getByTestId('game-screen')).toBeVisible({ timeout: 20_000 });
   await expect(bobPhone.getByTestId('game-screen')).toHaveAttribute('data-seat', 'black');
   await expect(bobPhone.getByTestId('game-screen')).toHaveAttribute('data-role', 'guest');

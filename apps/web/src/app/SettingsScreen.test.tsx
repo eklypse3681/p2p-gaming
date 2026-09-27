@@ -186,17 +186,19 @@ describe('SettingsScreen transfer', () => {
     click.mockRestore();
   });
 
-  it('copies a transfer code and shows it as a fallback', async () => {
-    const writeText = vi.fn(async () => {});
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  it('adds a device by pairing, never by handing over the key', async () => {
+    window.history.replaceState(null, '', '/?transport=memory');
+    const { resetProviderCache } = await import('../session/providers');
+    const { ensureKeys, getSecrets } = await import('../session/profiles');
+    resetProviderCache();
+    await ensureKeys('alice');
     renderSettings();
-    await userEvent.click(screen.getByTestId('copy-transfer-code'));
-    const code = (await screen.findByTestId('transfer-code')) as HTMLTextAreaElement;
-    expect(code.value.startsWith('p2pg1.')).toBe(true);
-    expect(writeText).toHaveBeenCalledWith(code.value);
-    const { decodeTransferCode } = await import('../session/transfer');
-    expect(decodeTransferCode(code.value).profile).toMatchObject({ id: 'alice-id', name: 'Alice' });
-    expect(screen.getByTestId('transfer-note')).toHaveTextContent(/copied/i);
+    expect(screen.queryByTestId('copy-transfer-code')).toBeNull();
+    await userEvent.click(screen.getByTestId('add-device'));
+    const link = (await screen.findByTestId('pair-link')) as HTMLInputElement;
+    expect(link.value).toMatch(/#\/pair\/[A-Z0-9]{8}$/);
+    expect(link.value).not.toContain(getSecrets('alice')!.privateKey!);
+    window.history.replaceState(null, '', '/');
   });
 
   it('has a Devices section: sync toggle persists and rotating the key changes it', async () => {

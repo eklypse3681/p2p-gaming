@@ -38,7 +38,7 @@ test('export file → import in a fresh browser keeps the id and the saved match
     a.waitForEvent('download'),
     a.getByTestId('export-profile').click(),
   ]);
-  expect(download.suggestedFilename()).toBe('p2p-gaming-alice.json');
+  expect(download.suggestedFilename()).toBe('amongfriends-alice.json');
   const path = await download.path();
   const exported = readFileSync(path!, 'utf8');
   expect(JSON.parse(exported)).toMatchObject({
@@ -69,32 +69,5 @@ test('export file → import in a fresh browser keeps the id and the saved match
   await expect(b.getByTestId('game-screen')).toBeVisible({ timeout: 20_000 });
   await expect(b.getByTestId('game-screen')).toHaveAttribute('data-seat', 'white');
   await expect(b.getByTestId('room-code').first()).toHaveText(code);
-  await b.context().close();
-});
-
-test('transfer code → import carries identity and settings but no matches', async ({ browser }) => {
-  const a = await freshPage(browser);
-  await seedProfile(a, 'alice', HOST);
-  await hostMatch(a, 'alice', { length: 1 });
-  await a.goto(profileUrl('alice', '/settings'));
-  await a.getByTestId('pieces-sky-navy').click();
-  await a.getByTestId('copy-transfer-code').click();
-  const code = await a.getByTestId('transfer-code').inputValue();
-  expect(code.startsWith('p2pg1.')).toBe(true);
-  await a.context().close();
-
-  const b = await freshPage(browser);
-  await b.goto('/?transport=broadcast#/');
-  await b.getByTestId('import-profile-toggle').click();
-  await b.getByTestId('import-profile-code').fill(code);
-  await b.getByTestId('import-profile-button').click();
-  await expect(b.getByTestId('games-hub')).toBeVisible({ timeout: 10_000 });
-  expect(await storedProfileId(b, 'alice')).toBe(HOST.id);
-  expect(
-    await b.evaluate(() => JSON.parse(localStorage.getItem('bgf:settings:alice') ?? '{}').pieceSet),
-  ).toBe('sky-navy');
-  await b.goto(appUrl('alice', '/'));
-  await expect(b.getByTestId('home-screen')).toBeVisible();
-  await expect(b.locator('[data-testid^="saved-game-"]')).toHaveCount(0);
   await b.context().close();
 });

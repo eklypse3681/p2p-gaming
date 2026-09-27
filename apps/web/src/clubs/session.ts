@@ -171,6 +171,7 @@ async function handshake(
     api.authenticate({
       profile: opts.profile,
       signature,
+      ...(opts.signer.grant ? { grant: opts.signer.grant } : {}),
       nonce,
       spec: CLUB_SPEC_VERSION,
       ...(opts.invite ? { invite: opts.invite } : {}),

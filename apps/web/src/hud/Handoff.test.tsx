@@ -1,28 +1,27 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { renderWithProfile } from '../test/renderWithProfile';
 import { Handoff } from './Handoff';
-import { IDENTITY_PREFIX, decodeTransferCode } from '../session/transfer';
-import { getProfile } from '../session/profiles';
+import { ensureKeys, getSecrets } from '../session/profiles';
+import { resetProviderCache } from '../session/providers';
 
 describe('Handoff', () => {
-  it('shows a QR code and a copyable hand-off link carrying this player', async () => {
-    const writeText = vi.fn(async () => {});
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  beforeEach(() => {
+    // No WebRTC in jsdom: pair over the in-memory transport.
+    window.history.replaceState(null, '', '/?transport=memory');
+    resetProviderCache();
+  });
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('offers a pairing link that opens this match, carrying no key at all', async () => {
     renderWithProfile('alice', <Handoff code="ABC234" />, { game: 'backgammon' });
-    const link = screen.getByTestId('handoff-link') as HTMLInputElement;
-    expect(link.value).toContain(`#/backgammon/join/ABC234?import=${IDENTITY_PREFIX}`);
-    const code = link.value.slice(link.value.indexOf('?import=') + '?import='.length);
-    expect(decodeTransferCode(code).profile.id).toBe(getProfile('alice')!.id);
-    // The link carries the player's secrets, so the panel says to treat it like a password.
-    expect(decodeTransferCode(code).profile.syncKey).toBe(getProfile('alice')!.syncKey);
-    expect(screen.getByTestId('handoff-warning')).toHaveTextContent(/like a password/i);
-    await waitFor(() =>
-      expect(screen.getByTestId('handoff-qr').querySelector('svg')).not.toBeNull(),
-    );
-    await userEvent.click(screen.getByTestId('copy-handoff'));
-    expect(writeText).toHaveBeenCalledWith(link.value);
-    expect(screen.getByTestId('copy-handoff')).toHaveTextContent('Copied');
+    await ensureKeys('alice');
+    const link = (await screen.findByTestId('pair-link')) as HTMLInputElement;
+    expect(link.value).toMatch(/#\/pair\/[A-Z0-9]{8}\?next=backgammon\/join\/ABC234$/);
+    const secrets = getSecrets('alice')!;
+    for (const secret of [secrets.privateKey, secrets.seed, secrets.syncKey]) {
+      expect(link.value).not.toContain(secret);
+    }
+    await waitFor(() => expect(screen.getByTestId('pair-qr').querySelector('svg')).not.toBeNull());
   });
 });

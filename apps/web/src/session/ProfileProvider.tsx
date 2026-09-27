@@ -42,6 +42,19 @@ export interface ProfileContext {
 
 const Ctx = createContext<ProfileContext | null>(null);
 
+/**
+ * The player's own key signs as them. A paired device has no such key: it signs with its own,
+ * and the signer carries the grant that lets servers accept it for the player.
+ */
+export function signerOf(
+  secrets: { privateKey?: string | null; deviceKey?: string | null },
+  grant: string | null,
+): Signer | null {
+  if (secrets.privateKey) return signerFor(secrets.privateKey);
+  if (secrets.deviceKey && grant) return signerFor(secrets.deviceKey, grant);
+  return null;
+}
+
 export function profilePath(slug: string, sub = '/'): string {
   return `/${slug}${sub.startsWith('/') ? sub : `/${sub}`}`;
 }
@@ -89,14 +102,18 @@ export function ProfileProvider({
   }, [slug, valid, record, unlocked]);
 
   const privateKey = secrets?.privateKey ?? null;
-  const signer = useMemo(() => (privateKey ? signerFor(privateKey) : null), [privateKey]);
+  const deviceKey = secrets?.deviceKey ?? null;
+  const grant = record?.grant ?? null;
+  const signer = useMemo(
+    () => signerOf({ privateKey, deviceKey }, grant),
+    [privateKey, deviceKey, grant],
+  );
   const ready = useCallback(async () => {
     const r = (await ensureKeys(slug)) ?? record;
     if (!r) throw new Error(`no player "${slug}"`);
-    const s = getSecrets(slug);
     return {
       profile: toPlayerProfile(r),
-      signer: s?.privateKey ? signerFor(s.privateKey) : null,
+      signer: signerOf(getSecrets(slug) ?? {}, r.grant ?? null),
     };
   }, [slug, record]);
   const doLockNow = useCallback(() => lockNow(slug), [slug]);

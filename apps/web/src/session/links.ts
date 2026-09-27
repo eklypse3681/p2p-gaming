@@ -1,7 +1,6 @@
 import { getTransportName, DEFAULT_TRANSPORT } from './providers';
 import type { GameId } from '../games/ids';
 import { DEFAULT_GAME, isGameId } from '../games/ids';
-import { encodeIdentityCode } from './transfer';
 
 /**
  * Shareable join link: `#/<game>/join/<code>`. It carries no profile: the guest picks (or
@@ -18,26 +17,9 @@ export function joinLink(code: string, game: GameId = DEFAULT_GAME): string {
 }
 
 /**
- * Hand-off link: a join link that also carries the player's identity (`?import=` inside the hash),
- * so scanning it on a phone continues the game *as the same player* — no picker, no form.
- * The two devices then share the seat and stay in sync until one of them leaves.
+ * The `import` identity code carried by a hand-off link from before pairing, if any. Those links
+ * carried the player's key; they are still read so old ones open, but no longer made.
  */
-export function handoffLink(
-  code: string,
-  profile: {
-    id: string;
-    name: string;
-    avatar?: string;
-    syncKey?: string;
-    publicKey?: string;
-    privateKey?: string;
-  },
-  game: GameId = DEFAULT_GAME,
-): string {
-  return `${joinLink(code, game)}?import=${encodeIdentityCode(profile)}`;
-}
-
-/** The `import` identity code carried by a hand-off link, if any. */
 export function identityFromSearch(search: string): string | null {
   const v = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search).get('import');
   return v && v.trim() ? v.trim() : null;

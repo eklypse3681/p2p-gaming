@@ -350,3 +350,16 @@ export async function startGameIfNeeded(page: Page, others: Page[] = []): Promis
     { timeout: 20_000 },
   );
 }
+
+/** The pairing link a `PairOffer` is showing (hand-off panel or Settings → Add a device). */
+export async function pairLinkOf(page: Page): Promise<string> {
+  const value = await page.getByTestId('pair-link').first().inputValue({ timeout: 20_000 });
+  expect(value).toMatch(/#\/pair\/[A-Z0-9]{8}/);
+  return value;
+}
+
+/** Approve the device that opened the pairing link. */
+export async function approvePairing(page: Page): Promise<void> {
+  await page.getByTestId('pair-approve').first().click({ timeout: 20_000 });
+  await expect(page.getByTestId('pair-done').first()).toBeVisible({ timeout: 20_000 });
+}

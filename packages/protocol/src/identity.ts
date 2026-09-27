@@ -15,8 +15,12 @@ export interface KeyPair {
   privateKey: string;
 }
 
-/** Produces a signature for the given bytes with a private key it holds. */
-export type Signer = (bytes: Uint8Array) => Promise<Uint8Array>;
+/**
+ * Produces a signature for the given bytes with a private key it holds. A signer for one of a
+ * player's paired devices carries `grant`, the `p2pd1.` token from the player's own key that lets
+ * this device's key act for them; servers need it alongside every signature the device makes.
+ */
+export type Signer = ((bytes: Uint8Array) => Promise<Uint8Array>) & { readonly grant?: string };
 
 export interface Challenge {
   matchId: string;
@@ -94,9 +98,10 @@ export async function verify(
   }
 }
 
-/** A signer bound to one private key. */
-export function signerFor(privateKey: string): Signer {
-  return (bytes) => sign(privateKey, bytes);
+/** A signer bound to one private key; pass `grant` when that key is a paired device's. */
+export function signerFor(privateKey: string, grant?: string): Signer {
+  const signer = (bytes: Uint8Array) => sign(privateKey, bytes);
+  return grant ? Object.assign(signer, { grant }) : signer;
 }
 
 /** The bytes a client signs to prove it may take a seat: deterministic, domain-separated. */

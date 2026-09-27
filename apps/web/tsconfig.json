@@ -25,6 +25,9 @@
       "path": "../../packages/protocol"
     },
     {
+      "path": "../../packages/wallet"
+    },
+    {
       "path": "../../packages/server"
     },
     {

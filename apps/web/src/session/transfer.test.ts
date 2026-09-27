@@ -404,7 +404,10 @@ describe('keys and password-locked players', () => {
     expect(record.secrets?.alg).toBe('pbkdf2-aes-gcm');
     expect(record.publicKey).toBe(keys.publicKey);
     expect(record.privateKey).toBeUndefined();
-    expect(getSecrets(result.slug)).toEqual({ privateKey: keys.privateKey, syncKey: 'sk' });
+    // The encrypted block is a full backup: the wallet seed travels with the key.
+    const secrets = getSecrets(result.slug)!;
+    expect(secrets).toMatchObject({ privateKey: keys.privateKey, syncKey: 'sk' });
+    expect(secrets.seed).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
   it('refuses to merge a different key for the same id unless the user confirms', async () => {

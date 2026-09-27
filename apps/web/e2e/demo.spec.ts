@@ -47,7 +47,7 @@ test('the board demo renders a full position and reacts to theme changes', async
   const barBox = (await page.getByTestId('bar-white').boundingBox())!;
   expect(trayBox.x).toBeGreaterThan(barBox.x);
 
-  // Settings theme switch also changes app chrome.
-  await page.goto('/#/tester/settings');
+  // The board presets live on backgammon's own settings tab.
+  await page.goto('/#/tester/settings/backgammon');
   await expect(page.getByTestId('theme-picker')).toBeVisible();
 });

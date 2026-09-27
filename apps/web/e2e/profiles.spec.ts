@@ -120,7 +120,7 @@ test.describe('players are route segments', () => {
 
   test('settings and saved matches are per player', async ({ page, context }) => {
     await seedProfile(page, 'alice', HOST);
-    await page.goto(profileUrl('alice', '/settings'));
+    await page.goto(profileUrl('alice', '/settings/backgammon'));
     await page.getByTestId('preset-classic').click();
     await expect(page.locator('html')).toHaveAttribute('data-theme-id', 'classic');
     await page.getByTestId('pieces-sky-navy').click();

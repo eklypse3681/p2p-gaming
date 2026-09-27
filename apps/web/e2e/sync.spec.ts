@@ -1,13 +1,14 @@
 import { expect, test } from '@playwright/test';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { GUEST, HOST, seedProfile, startGameIfNeeded } from './helpers';
+import { GUEST, HOST, approvePairing, pairLinkOf, seedProfile, startGameIfNeeded } from './helpers';
 
 /**
  * Device-to-device profile sync over the real network (PeerJS cloud + WebRTC), so it is opt-in:
  *   E2E_NETWORK=1 pnpm --filter @bgf/web test:e2e e2e/sync.spec.ts
- * Three separate browser contexts play "laptop", "opponent" and "phone". The phone gets Alice's
- * identity code (which carries the sync key) and — with no match code at all — sees the match
- * arrive in its Continue list, then joins it as Alice. A settings change on the laptop follows.
+ * Three separate browser contexts play "laptop", "opponent" and "phone". The laptop pairs the
+ * phone (which makes its own key; the approval sends a grant and the sync key) and — with no match
+ * code at all — the phone sees the match arrive in its Continue list, then joins it as Alice. A
+ * settings change on the laptop follows.
  */
 test.skip(!process.env.E2E_NETWORK, 'needs the network (set E2E_NETWORK=1)');
 test.setTimeout(180_000);
@@ -46,33 +47,36 @@ test('a match and a setting reach a second device through sync alone', async ({ 
   await startGameIfNeeded(opponent.page);
   await expect(laptop.page.getByTestId('opening-roll-button')).toBeVisible({ timeout: 20_000 });
 
-  // The laptop's own hand-off/transfer code carries the sync key; the phone imports it.
+  // The laptop pairs the phone: the phone makes its own key, the laptop approves it.
   await laptop.page.goto(`${BASE}#/alice/settings`);
-  await laptop.page.getByTestId('copy-transfer-code').click();
-  const transferCode = await laptop.page.getByTestId('transfer-code').inputValue();
-  expect(transferCode).toMatch(/^p2pg1\./);
   await expect(laptop.page.getByTestId('sync-status')).toHaveAttribute('data-state', 'hub', {
     timeout: 60_000,
   });
-
-  await phone.page.goto(`${BASE}#/`);
-  await phone.page.getByTestId('import-profile-toggle').click();
-  await phone.page.getByTestId('import-profile-code').fill(transferCode);
-  await phone.page.getByTestId('import-profile-button').click();
-  await expect(phone.page).toHaveURL(/#\/alice\/$/, { timeout: 20_000 });
-  const phoneKey = await phone.page.evaluate(
-    () => JSON.parse(localStorage.getItem('bgf:profiles')!).alice.syncKey,
+  await laptop.page.getByTestId('add-device').click();
+  await phone.page.goto(await pairLinkOf(laptop.page));
+  await approvePairing(laptop.page);
+  await expect(phone.page).toHaveURL(/#\/alice\/$/, { timeout: 30_000 });
+  const phoneRecord = await phone.page.evaluate(
+    () => JSON.parse(localStorage.getItem('bgf:profiles')!).alice,
   );
-  expect(phoneKey).toBe(SYNC_KEY);
+  expect(phoneRecord.syncKey).toBe(SYNC_KEY);
+  expect(phoneRecord.grant).toMatch(/^p2pd1\./);
+  // The phone has a key of its own and none of the laptop's.
+  expect(phoneRecord.deviceKey).toBeTruthy();
+  expect(phoneRecord.privateKey).toBeUndefined();
+  expect(phoneRecord.seed).toBeUndefined();
 
   // With no match code at all, the match shows up on the phone via sync.
   await expect(phone.page.getByTestId(`hub-resume-${matchId}`)).toBeVisible({ timeout: 90_000 });
   await phone.page.goto(`${BASE}#/alice/settings`);
-  await expect(phone.page.getByTestId('sync-status')).toHaveText(/connected to 1 device/i, {
-    timeout: 60_000,
-  });
+  // Either device may end up as the hub the other connects to; both mean the two are in sync.
+  await expect(phone.page.getByTestId('sync-status')).toHaveText(
+    /connected to 1 device|hub for 1 device/i,
+    { timeout: 60_000 },
+  );
 
   // A setting changed on the laptop follows to the phone.
+  await laptop.page.goto(`${BASE}#/alice/settings/backgammon`);
   await laptop.page.getByTestId('pieces-sky-navy').click();
   await expect
     .poll(

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { PlayerProfile } from '@bgf/protocol';
-import { generateId, generateKeyPair } from '@bgf/protocol';
+import { generateId } from '@bgf/protocol';
+import { generateSeed, openWallet, seedToBase64Url } from '@bgf/wallet';
 import { allKeys, createStore, readJson, removeKey, writeJson } from './storage';
 import { GAME_IDS } from '../games/ids';
 import type { EncryptedSecrets, PlainSecrets } from './secrets';
@@ -11,6 +12,8 @@ import {
   encryptSecrets,
   forgetUnlocked,
   isEncryptedSecrets,
+  SECRET_FIELDS,
+  pickSecrets,
   readUnlocked,
   rememberUnlocked,
 } from './secrets';
@@ -36,6 +39,9 @@ export const RESERVED_SLUGS: readonly string[] = [
   'settings',
   'history',
   'games',
+  'pair',
+  'club',
+  'clubs',
   ...GAME_IDS,
 ];
 
@@ -61,13 +67,45 @@ export interface ProfileRecord {
    * Absent while the player is password-locked.
    */
   syncKey?: string;
-  /** Password-encrypted `privateKey` + `syncKey`; when present the plain fields are removed. */
+  /**
+   * base64url wallet seed (`@bgf/wallet`) that `privateKey` and `syncKey` derive from. Players
+   * made before the wallet have none: their key was generated directly and stays their identity.
+   * Absent while password-locked.
+   */
+  seed?: string;
+  /**
+   * On a paired device: this device's own private key. It never signs as the player by itself;
+   * servers accept it only together with `grant`. Absent while password-locked.
+   */
+  deviceKey?: string;
+  /** On a paired device: the `p2pd1.` grant from the player's key to this device's key. */
+  grant?: string;
+  /** On the player's own devices: every device they have paired, newest last. */
+  devices?: PairedDevice[];
+  /** Password-encrypted secrets (`privateKey`, `syncKey`, `seed`, `deviceKey`); plain ones removed. */
   secrets?: EncryptedSecrets;
   /** Last change to name/avatar; used for last-write-wins between devices. */
   updatedAt: number;
 }
 
 export type { PlainSecrets };
+
+/** A device this player paired: what the grant said, for the Devices list and for sign-out. */
+export interface PairedDevice {
+  serial: number;
+  label: string;
+  publicKey: string;
+  pairedAt: number;
+  expiresAt: number;
+  /** Set when the player signed this device out. */
+  revokedAt?: number;
+}
+
+function withoutSecrets(record: ProfileRecord): ProfileRecord {
+  const next = { ...record };
+  for (const k of SECRET_FIELDS) delete next[k];
+  return next;
+}
 
 export function isLocked(record: Pick<ProfileRecord, 'secrets'>): boolean {
   return isEncryptedSecrets(record.secrets);
@@ -251,10 +289,7 @@ export function getSecrets(slug: string): PlainSecrets | null {
   const record = store.get()[slug];
   if (!record) return null;
   if (isLocked(record)) return readUnlocked(slug);
-  const out: PlainSecrets = {};
-  if (record.privateKey) out.privateKey = record.privateKey;
-  if (record.syncKey) out.syncKey = record.syncKey;
-  return out;
+  return pickSecrets(record as unknown as Record<string, unknown>);
 }
 
 /** True when this tab may use the player's secrets (not locked, or unlocked here). */
@@ -268,29 +303,42 @@ function bump(): void {
 }
 
 /**
- * Make sure the player owns a key pair. Legacy players get one on first use (their id does not
- * change; their seats are bound on the next keyed hello). No-op for locked players (they were
- * keyed before they could be locked).
+ * Make sure the player has an identity key. A new player gets a wallet seed and their key is
+ * derived from it, so a backup of the seed restores it. (Players made before
+ * the wallet keep the key they already have: it is what their seats are bound to.) No-op for
+ * locked players and paired devices, which were keyed before they could be either.
  */
 export async function ensureKeys(slug: string): Promise<ProfileRecord | null> {
   const record = store.get()[slug];
   if (!record) return null;
   if (record.publicKey || isLocked(record)) return record;
-  const keys = await generateKeyPair();
+  const wallet = await openWallet(generateSeed());
   const index = store.get();
   const current = index[slug];
   if (!current) return null;
   if (current.publicKey) return current; // raced with another call
   const next: ProfileRecord = {
     ...current,
-    publicKey: keys.publicKey,
-    privateKey: keys.privateKey,
+    publicKey: wallet.publicKey,
+    privateKey: wallet.root.privateKey,
+    seed: seedToBase64Url(wallet.seed),
+    // The sync key stays as it is: a player from before keys may already share it with other
+    // devices, and replacing it would silently cut them off.
   };
   commit({ ...index, [slug]: next });
   return next;
 }
 
-/** Write new secrets for a player; a locked player needs its password to re-encrypt them. */
+function dropEmpty(secrets: PlainSecrets): PlainSecrets {
+  const out = { ...secrets };
+  for (const k of SECRET_FIELDS) if (out[k] === '') delete out[k];
+  return out;
+}
+
+/**
+ * Write new secrets for a player; a locked player needs its password to re-encrypt them. An
+ * empty string removes that secret (a replaced key takes its seed with it).
+ */
 export async function setProfileSecrets(
   slug: string,
   patch: Partial<PlainSecrets> & { publicKey?: string },
@@ -304,18 +352,15 @@ export async function setProfileSecrets(
   if (isLocked(record)) {
     if (!opts.password) throw new SecretsError('wrong-password', 'password required');
     const current = await decryptSecrets(record.secrets!, opts.password);
-    const merged: PlainSecrets = { ...current };
-    if (patch.privateKey) merged.privateKey = patch.privateKey;
-    if (patch.syncKey) merged.syncKey = patch.syncKey;
-    next.secrets = await encryptSecrets(merged, opts.password, opts.iterations);
-    delete next.privateKey;
-    delete next.syncKey;
-    commit({ ...index, [slug]: next });
+    const merged = dropEmpty({ ...current, ...pickSecrets(patch) });
+    const locked = withoutSecrets(next);
+    locked.secrets = await encryptSecrets(merged, opts.password, opts.iterations);
+    commit({ ...index, [slug]: locked });
     if (readUnlocked(slug)) rememberUnlocked(slug, merged);
     return;
   }
-  if (patch.privateKey) next.privateKey = patch.privateKey;
-  if (patch.syncKey) next.syncKey = patch.syncKey;
+  Object.assign(next, pickSecrets(patch));
+  for (const k of SECRET_FIELDS) if (next[k] === '') delete next[k];
   commit({ ...index, [slug]: next });
 }
 
@@ -332,13 +377,9 @@ export async function lockProfile(
   const record = index[slug];
   if (!record) throw new Error(`no player "${slug}"`);
   if (isLocked(record)) throw new SecretsError('bad-secrets', 'already locked');
-  const plain: PlainSecrets = {};
-  if (record.privateKey) plain.privateKey = record.privateKey;
-  if (record.syncKey) plain.syncKey = record.syncKey;
+  const plain = pickSecrets(record as unknown as Record<string, unknown>);
   const secrets = await encryptSecrets(plain, password, opts.iterations);
-  const next: ProfileRecord = { ...record, secrets };
-  delete next.privateKey;
-  delete next.syncKey;
+  const next: ProfileRecord = { ...withoutSecrets(record), secrets };
   commit({ ...index, [slug]: next });
   rememberUnlocked(slug, plain);
 }
@@ -405,6 +446,10 @@ export function createProfile(
     updatedAt?: number;
     publicKey?: string;
     privateKey?: string;
+    seed?: string;
+    /** A paired device: its own key and the grant that lets it act for the player. */
+    deviceKey?: string;
+    grant?: string;
     /** Import of a locked player: keep its encrypted block (no plain secrets are stored). */
     secrets?: EncryptedSecrets;
   } = {},
@@ -431,7 +476,10 @@ export function createProfile(
   } else {
     record.syncKey = opts.syncKey ?? generateId();
     if (opts.privateKey) record.privateKey = opts.privateKey;
+    if (opts.seed) record.seed = opts.seed;
+    if (opts.deviceKey) record.deviceKey = opts.deviceKey;
   }
+  if (opts.grant) record.grant = opts.grant;
   commit({ ...index, [slug]: record });
   return { slug, ...record };
 }
@@ -527,4 +575,45 @@ export function replaceProfilesForTests(index: ProfilesIndex): void {
 export function resetProfilesForTests(): void {
   commit({});
   writeJson(MIGRATED_KEY, 1);
+}
+
+// ---- paired devices --------------------------------------------------------------------------
+
+/** How this device signs as the player: its own key alone, or its device key plus the grant. */
+export function isPairedDevice(record: Pick<ProfileRecord, 'grant'>): boolean {
+  return typeof record.grant === 'string' && record.grant.length > 0;
+}
+
+/** The serial the next paired device gets: one past every serial ever handed out. */
+export function nextDeviceSerial(record: Pick<ProfileRecord, 'devices'>): number {
+  return (record.devices ?? []).reduce((max, d) => Math.max(max, d.serial), 0) + 1;
+}
+
+export function recordPairedDevice(slug: string, device: PairedDevice): void {
+  const index = store.get();
+  const record = index[slug];
+  if (!record) return;
+  const devices = [...(record.devices ?? []).filter((d) => d.serial !== device.serial), device];
+  commit({ ...index, [slug]: { ...record, devices } });
+}
+
+export function markDeviceRevoked(slug: string, serial: number, at: number = Date.now()): void {
+  const index = store.get();
+  const record = index[slug];
+  if (!record?.devices) return;
+  const devices = record.devices.map((d) => (d.serial === serial ? { ...d, revokedAt: at } : d));
+  commit({ ...index, [slug]: { ...record, devices } });
+}
+
+/** A paired device re-paired: new device key and grant, same player. */
+export async function setDeviceGrant(
+  slug: string,
+  input: { deviceKey: string; grant: string },
+  opts: { password?: string } = {},
+): Promise<void> {
+  await setProfileSecrets(slug, { deviceKey: input.deviceKey }, opts);
+  const index = store.get();
+  const record = index[slug];
+  if (!record) return;
+  commit({ ...index, [slug]: { ...record, grant: input.grant } });
 }

@@ -55,6 +55,8 @@ export interface ExportedIdentity {
   publicKey?: string;
   /** base64url private key; present in your own codes/exports of an unlocked player. */
   privateKey?: string;
+  /** The wallet seed `privateKey` derives from, when it does; travels with the key. */
+  seed?: string;
   /** Password-encrypted private key + sync key, for exports of a locked player. */
   secrets?: EncryptedSecrets;
 }
@@ -117,6 +119,7 @@ function identityOf(slug: string, opts: { plain?: boolean } = {}): ExportedIdent
   if (secrets) {
     if (secrets.syncKey) base.syncKey = secrets.syncKey;
     if (secrets.privateKey) base.privateKey = secrets.privateKey;
+    if (secrets.seed && secrets.privateKey) base.seed = secrets.seed;
     return base;
   }
   if (isLocked(record)) {
@@ -284,6 +287,7 @@ function parseIdentity(value: unknown, code: TransferError['code']): ExportedIde
   if (typeof v.publicKey === 'string' && v.publicKey.trim()) out.publicKey = v.publicKey.trim();
   if (typeof v.privateKey === 'string' && v.privateKey.trim()) {
     out.privateKey = v.privateKey.trim();
+    if (typeof v.seed === 'string' && v.seed.trim()) out.seed = v.seed.trim();
   }
   if (v.secrets !== undefined) {
     if (!isEncryptedSecrets(v.secrets)) {
@@ -391,8 +395,9 @@ export async function importProfile(
   const incoming = data.profile;
 
   // Secrets carried by the import: plain, or unlocked from an encrypted block with the password.
-  let plain: { privateKey?: string; syncKey?: string } = {};
+  let plain: { privateKey?: string; syncKey?: string; seed?: string } = {};
   if (incoming.privateKey) plain.privateKey = incoming.privateKey;
+  if (incoming.privateKey && incoming.seed) plain.seed = incoming.seed;
   if (incoming.syncKey) plain.syncKey = incoming.syncKey;
   if (incoming.secrets) {
     if (!opts.password) {
@@ -430,7 +435,11 @@ export async function importProfile(
     const keyPatch: Parameters<typeof setProfileSecrets>[1] = {};
     if (incoming.publicKey && (opts.replaceKey || !record.publicKey)) {
       keyPatch.publicKey = incoming.publicKey;
-      if (plain.privateKey) keyPatch.privateKey = plain.privateKey;
+      if (plain.privateKey) {
+        keyPatch.privateKey = plain.privateKey;
+        // A seed belongs to the key it derives: replace it, or drop ours if the import has none.
+        keyPatch.seed = plain.seed ?? '';
+      }
     } else if (plain.privateKey && record.publicKey === incoming.publicKey) {
       keyPatch.privateKey = plain.privateKey;
     }
@@ -459,6 +468,7 @@ export async function importProfile(
       now,
       publicKey: incoming.publicKey,
       privateKey: plain.privateKey,
+      seed: plain.seed,
       syncKey: plain.syncKey,
       // An export of a locked player stays locked here; this tab holds the unlocked copy.
       secrets: incoming.secrets,
