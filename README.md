@@ -282,7 +282,7 @@ web app uses (WebRTC from Node via the optional `node-datachannel` package, Node
 pnpm install
 pnpm exec dealer host --game ofc --rules my-rules.json --seats 3
 #   Room code:    Q7XK2M
-#   Invite link:  https://eklypse3681.github.io/p2p-gaming/#/ofc/join/Q7XK2M
+#   Invite link:  https://amongfriends.gg/#/ofc/join/Q7XK2M
 ```
 
 Players open the invite link (or enter the code) in the web app as usual. Other commands:

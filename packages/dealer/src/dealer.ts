@@ -11,7 +11,7 @@ import { loadTable, saveTable } from './storage.js';
 import type { DealerEntropyOptions } from './entropy.js';
 import { entropySourceFor } from './entropy.js';
 
-export const DEFAULT_APP_URL = 'https://eklypse3681.github.io/p2p-gaming/';
+export const DEFAULT_APP_URL = 'https://amongfriends.gg/';
 
 /**
  * The table core supports a non-playing host (`hostSeat: null`): the dealer's profile is recorded
