@@ -441,7 +441,9 @@ export async function importProfile(
         keyPatch.seed = plain.seed ?? '';
       }
     } else if (plain.privateKey && record.publicKey === incoming.publicKey) {
+      // Same player, and now this browser holds their own key (a paired device restored).
       keyPatch.privateKey = plain.privateKey;
+      if (plain.seed) keyPatch.seed = plain.seed;
     }
     // Your own code: adopting its sync key joins this browser to that player's devices.
     if (plain.syncKey) keyPatch.syncKey = plain.syncKey;

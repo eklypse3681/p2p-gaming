@@ -18,6 +18,7 @@ import {
   deriveKeyPair,
   deriveSecret,
   devicePath,
+  playerIdFor,
 } from './derive.js';
 import { fingerprint, generateSeed } from './seed.js';
 
@@ -41,6 +42,8 @@ export interface Wallet {
   readonly fingerprint: string;
   /** The device-sync secret, derived rather than stored. */
   readonly syncKey: string;
+  /** The player id this seed restores to (players made before the wallet keep a random one). */
+  readonly playerId: string;
   /** This player's key at one club; unrelated to their key at any other. */
   clubKeys(clubId: string): Promise<KeyPair>;
   /** A key this wallet can re-derive for a device it owns, when it holds both ends. */
@@ -76,6 +79,7 @@ export async function openWallet(seed: Uint8Array): Promise<Wallet> {
     publicKey: root.publicKey,
     fingerprint: fingerprint(root.publicKey),
     syncKey: deriveSecret(seed, SYNC_PATH),
+    playerId: playerIdFor(seed),
     clubKeys: (clubId) => at(clubPath(clubId)),
     deviceKeys: (serial) => at(devicePath(serial)),
     pairDevice: (request) =>

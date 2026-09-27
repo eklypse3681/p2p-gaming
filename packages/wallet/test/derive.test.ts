@@ -12,6 +12,8 @@ import {
   devicePath,
   fingerprint,
   generateSeed,
+  playerIdFor,
+  seedToPhrase,
   seedFromBase64Url,
   seedToBase64Url,
 } from '../src/index.js';
@@ -107,6 +109,13 @@ describe('known answers', () => {
    * and no backup would restore them. If a change to `derive.ts` breaks this test, the change is
    * wrong unless it comes with a migration and a new `WALLET_KDF` version string.
    */
+  it('derives the pinned id and phrase for the all-bytes-0..31 seed', () => {
+    expect(playerIdFor(FIXED)).toBe('bu2sSXpUr_zOBmJqwhrOkw');
+    expect(seedToPhrase(FIXED).join(' ')).toBe(
+      'abandon amount liar amount expire adjust cage candy arch gather drum bullet absurd math era live bid rhythm alien crouch range attend journey unaware',
+    );
+  });
+
   it('derives the pinned keys for the all-bytes-0..31 seed', async () => {
     const identity = await deriveKeyPair(FIXED, IDENTITY_PATH);
     expect(identity.publicKey).toBe(

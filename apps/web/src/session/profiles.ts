@@ -1,7 +1,15 @@
 import { useSyncExternalStore } from 'react';
 import type { PlayerProfile } from '@bgf/protocol';
 import { generateId } from '@bgf/protocol';
-import { generateSeed, openWallet, seedToBase64Url } from '@bgf/wallet';
+import {
+  SYNC_PATH,
+  deriveSecret,
+  generateSeed,
+  openWallet,
+  playerIdFor,
+  seedFromBase64Url,
+  seedToBase64Url,
+} from '@bgf/wallet';
 import { allKeys, createStore, readJson, removeKey, writeJson } from './storage';
 import { GAME_IDS } from '../games/ids';
 import type { EncryptedSecrets, PlainSecrets } from './secrets';
@@ -82,6 +90,8 @@ export interface ProfileRecord {
   grant?: string;
   /** On the player's own devices: every device they have paired, newest last. */
   devices?: PairedDevice[];
+  /** Passkeys this player was saved with (the backups themselves live at `/api/backup/<id>`). */
+  passkeys?: { credentialId: string; createdAt: number }[];
   /** Password-encrypted secrets (`privateKey`, `syncKey`, `seed`, `deviceKey`); plain ones removed. */
   secrets?: EncryptedSecrets;
   /** Last change to name/avatar; used for last-write-wins between devices. */
@@ -303,16 +313,17 @@ function bump(): void {
 }
 
 /**
- * Make sure the player has an identity key. A new player gets a wallet seed and their key is
- * derived from it, so a backup of the seed restores it. (Players made before
- * the wallet keep the key they already have: it is what their seats are bound to.) No-op for
- * locked players and paired devices, which were keyed before they could be either.
+ * Make sure the player has an identity key, derived from their wallet seed. A player made since
+ * the wallet has had a seed from the start (their id and sync key come from it too); an older
+ * player without a key gets a seed now, keeping the id and sync key they have. (Players made
+ * before the wallet with a key keep it: it is what their seats are bound to.) No-op for locked
+ * players and paired devices, which were keyed before they could be either.
  */
 export async function ensureKeys(slug: string): Promise<ProfileRecord | null> {
   const record = store.get()[slug];
   if (!record) return null;
   if (record.publicKey || isLocked(record)) return record;
-  const wallet = await openWallet(generateSeed());
+  const wallet = await openWallet(record.seed ? seedFromBase64Url(record.seed) : generateSeed());
   const index = store.get();
   const current = index[slug];
   if (!current) return null;
@@ -460,7 +471,12 @@ export function createProfile(
   const slug = opts.slug ?? uniqueSlug(clean, Object.keys(index));
   if (!isValidSlug(slug)) throw new Error(`invalid slug: ${slug}`);
   if (index[slug]) throw new Error(`slug taken: ${slug}`);
-  const id = opts.id ?? generateId();
+  // A brand-new player (not an import, not a paired device) starts from a wallet seed, so their
+  // recovery phrase brings back the same id and the same device sync, not just the key.
+  const fresh = !opts.id && !opts.publicKey && !opts.privateKey && !opts.secrets && !opts.deviceKey;
+  const seed = opts.seed ?? (fresh ? seedToBase64Url(generateSeed()) : undefined);
+  const seedBytes = seed && !opts.id ? seedFromBase64Url(seed) : null;
+  const id = opts.id ?? (seedBytes ? playerIdFor(seedBytes) : generateId());
   const now = opts.now ?? Date.now();
   const record: ProfileRecord = {
     id,
@@ -474,9 +490,10 @@ export function createProfile(
   if (opts.secrets && isEncryptedSecrets(opts.secrets)) {
     record.secrets = opts.secrets;
   } else {
-    record.syncKey = opts.syncKey ?? generateId();
+    record.syncKey =
+      opts.syncKey ?? (seedBytes ? deriveSecret(seedBytes, SYNC_PATH) : generateId());
     if (opts.privateKey) record.privateKey = opts.privateKey;
-    if (opts.seed) record.seed = opts.seed;
+    if (seed) record.seed = seed;
     if (opts.deviceKey) record.deviceKey = opts.deviceKey;
   }
   if (opts.grant) record.grant = opts.grant;
@@ -616,4 +633,18 @@ export async function setDeviceGrant(
   const record = index[slug];
   if (!record) return;
   commit({ ...index, [slug]: { ...record, grant: input.grant } });
+}
+
+export function recordPasskey(
+  slug: string,
+  passkey: { credentialId: string; createdAt: number },
+): void {
+  const index = store.get();
+  const record = index[slug];
+  if (!record) return;
+  const passkeys = [
+    ...(record.passkeys ?? []).filter((p) => p.credentialId !== passkey.credentialId),
+    passkey,
+  ];
+  commit({ ...index, [slug]: { ...record, passkeys } });
 }

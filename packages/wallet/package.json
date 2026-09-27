@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@bgf/protocol": "workspace:*",
-    "@noble/curves": "^2.4.0"
-  },
-  "devDependencies": {}
+    "@noble/curves": "^2.4.0",
+    "@scure/bip39": "^2.4.0"
+  }
 }

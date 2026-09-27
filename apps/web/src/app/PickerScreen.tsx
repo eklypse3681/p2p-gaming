@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { RestorePanel } from './RestorePanel';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { isValidRoomCode, normalizeRoomCode } from '@bgf/protocol';
@@ -44,6 +45,7 @@ export function PickerScreen({ game, club }: { game?: GameId; club?: boolean } =
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
@@ -386,11 +388,22 @@ export function PickerScreen({ game, club }: { game?: GameId; club?: boolean } =
           </span>
         )}
 
+        {restoreOpen && <RestorePanel onRestored={(slug) => go(slug)} />}
+
         {importOpen ? (
           importPanel
         ) : (
           <p className="muted small">
-            Played on another browser?{' '}
+            Lost a device?{' '}
+            <button
+              type="button"
+              className="btn-link"
+              onClick={() => setRestoreOpen((v) => !v)}
+              data-testid="restore-toggle"
+            >
+              Restore a player
+            </button>{' '}
+            · Played on another browser?{' '}
             <button
               type="button"
               className="btn-link"

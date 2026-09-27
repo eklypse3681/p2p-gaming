@@ -30,6 +30,7 @@ const PATH = /^[a-z][a-z0-9]*(\/[A-Za-z0-9_-]+)*$/;
 
 export const IDENTITY_PATH = 'identity';
 export const SYNC_PATH = 'sync';
+export const PLAYER_ID_PATH = 'player';
 
 export function clubPath(clubId: string): string {
   return checkPath(`club/${clubId}`);
@@ -100,4 +101,12 @@ async function keyPairFromScalar(scalar: Uint8Array): Promise<KeyPair> {
   const key = await subtle().importKey('jwk', jwk, EC, true, ['sign']);
   const pkcs8 = await subtle().exportKey('pkcs8', key);
   return { publicKey: bytesToBase64Url(point), privateKey: bytesToBase64Url(pkcs8) };
+}
+
+/**
+ * The player's id: 16 derived bytes as base64url. A player restored from their recovery phrase
+ * needs to come back as the same id, since seats and club memberships name them by it.
+ */
+export function playerIdFor(seed: Uint8Array): string {
+  return bytesToBase64Url(deriveBytes(seed, PLAYER_ID_PATH, 16, 'id'));
 }
