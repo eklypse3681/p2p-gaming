@@ -144,6 +144,9 @@ importers:
       '@bgf/transport-peerjs':
         specifier: workspace:*
         version: link:../../packages/transport-peerjs
+      '@bgf/wallet':
+        specifier: workspace:*
+        version: link:../../packages/wallet
       idb-keyval:
         specifier: ^6.3.0
         version: 6.3.0
@@ -223,6 +226,9 @@ importers:
       '@bgf/table':
         specifier: workspace:*
         version: link:../table
+      '@bgf/wallet':
+        specifier: workspace:*
+        version: link:../wallet
 
   packages/club-spec:
     dependencies:
@@ -370,6 +376,9 @@ importers:
       '@bgf/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@bgf/wallet':
+        specifier: workspace:*
+        version: link:../wallet
 
   packages/transport-peerjs:
     dependencies:
@@ -389,9 +398,6 @@ importers:
       '@bgf/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@bgf/table':
-        specifier: workspace:*
-        version: link:../table
       '@noble/curves':
         specifier: ^2.4.0
         version: 2.4.0
