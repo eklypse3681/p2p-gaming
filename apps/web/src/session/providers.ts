@@ -4,6 +4,7 @@ import { peerJsProvider } from '@bgf/transport-peerjs';
 import type { Settings } from './settings';
 import { getSettings, parseIceServers } from './settings';
 import type { GameId } from '../games/ids';
+import { relayServers } from './relay';
 
 export type TransportName = 'memory' | 'broadcast' | 'peerjs';
 export const DEFAULT_TRANSPORT: TransportName = 'peerjs';
@@ -47,7 +48,7 @@ export function getProvider(
   let provider: TransportProvider;
   if (name === 'memory') provider = memoryProvider();
   else if (name === 'broadcast') provider = broadcastChannelProvider();
-  else provider = peerJsProvider({ ...peerOptionsFromSettings(settings), namespace });
+  else provider = peerJsProvider({ ...peerOptionsFromSettings(settings), namespace, relayServers });
   cache.set(key, provider);
   return provider;
 }

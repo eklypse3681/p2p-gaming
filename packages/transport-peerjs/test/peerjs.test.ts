@@ -80,6 +80,31 @@ describe('peerJsProvider options', () => {
     expect(options.port).toBe(9000);
     expect(options.secure).toBe(false);
   });
+
+  it('asks for fresh relay servers on every connection and adds them', async () => {
+    let issued = 0;
+    const relayServers = vi.fn(async () => [
+      { urls: 'turn:turn.example.com:3478', username: `u${++issued}`, credential: 'p' },
+    ]);
+    const { peer } = await startHost({ relayServers });
+    const options = peer.options as { config: RTCConfiguration };
+    expect(options.config.iceServers).toEqual([
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'turn:turn.example.com:3478', username: 'u1', credential: 'p' },
+    ]);
+    expect(relayServers).toHaveBeenCalledTimes(1);
+  });
+
+  it('still connects directly when the relay cannot be reached', async () => {
+    const { peer } = await startHost({
+      relayServers: async () => {
+        throw new Error('offline');
+      },
+    });
+    const options = peer.options as { config: RTCConfiguration };
+    expect(options.config.iceServers).toHaveLength(2);
+  });
 });
 
 describe('host', () => {

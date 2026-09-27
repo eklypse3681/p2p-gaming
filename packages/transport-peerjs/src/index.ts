@@ -41,6 +41,12 @@ export interface PeerJsProviderOptions {
   debug?: number;
   /** Replaces the default ICE server list entirely (add TURN here). */
   iceServers?: RTCIceServer[];
+  /**
+   * Relay (TURN) servers fetched fresh for every connection and added to the list above. TURN
+   * credentials are short-lived, so they cannot be fixed when the provider is made. Should resolve
+   * quickly and never reject; an empty list just means direct connections only.
+   */
+  relayServers?: () => Promise<RTCIceServer[]>;
   /** Id namespace, see {@link peerIdFor}. Defaults to `'v1'`. */
   namespace?: string;
   /** Keepalive period in ms; `0` disables it. Defaults to 5000. */
@@ -365,9 +371,13 @@ function mergeIceServers(
   return merged;
 }
 
-function buildPeerOptions(options: PeerJsProviderOptions, defaults: RTCIceServer[]): PeerOptions {
+function buildPeerOptions(
+  options: PeerJsProviderOptions,
+  defaults: RTCIceServer[],
+  relay: RTCIceServer[] = [],
+): PeerOptions {
   const peerOptions: PeerOptions = {
-    config: { iceServers: mergeIceServers(defaults, options.iceServers) },
+    config: { iceServers: [...mergeIceServers(defaults, options.iceServers), ...relay] },
   };
   if (options.host !== undefined) peerOptions.host = options.host;
   if (options.port !== undefined) peerOptions.port = options.port;
@@ -376,6 +386,16 @@ function buildPeerOptions(options: PeerJsProviderOptions, defaults: RTCIceServer
   if (options.key !== undefined) peerOptions.key = options.key;
   if (options.debug !== undefined) peerOptions.debug = options.debug;
   return { ...peerOptions, ...options.peerOptions };
+}
+
+/** A relay that cannot be reached must not stop a direct connection from being tried. */
+async function relayFor(options: PeerJsProviderOptions): Promise<RTCIceServer[]> {
+  if (!options.relayServers) return [];
+  try {
+    return await options.relayServers();
+  } catch {
+    return [];
+  }
 }
 
 /** Keep Node's event loop free: a heartbeat or a join timeout must never hold a process open. */
@@ -423,10 +443,13 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
     name: 'peerjs',
 
     async host(code: string): Promise<Listener> {
-      const { Peer, defaultIceServers } = await loadPeerJs(node);
+      const [{ Peer, defaultIceServers }, relay] = await Promise.all([
+        loadPeerJs(node),
+        relayFor(options),
+      ]);
       const peer = new Peer(
         peerIdFor(code, namespace),
-        buildPeerOptions(options, defaultIceServers),
+        buildPeerOptions(options, defaultIceServers, relay),
       );
       return new Promise<Listener>((resolve, reject) => {
         let settled = false;
@@ -462,9 +485,12 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
 
     async join(code: string, opts?: { timeoutMs?: number }): Promise<Transport> {
       const timeoutMs = opts?.timeoutMs ?? defaultTimeoutMs;
-      const { Peer, defaultIceServers } = await loadPeerJs(node);
+      const [{ Peer, defaultIceServers }, relay] = await Promise.all([
+        loadPeerJs(node),
+        relayFor(options),
+      ]);
       const target = peerIdFor(code, namespace);
-      const peer = new Peer(undefined, buildPeerOptions(options, defaultIceServers));
+      const peer = new Peer(undefined, buildPeerOptions(options, defaultIceServers, relay));
 
       return new Promise<Transport>((resolve, reject) => {
         let settled = false;
