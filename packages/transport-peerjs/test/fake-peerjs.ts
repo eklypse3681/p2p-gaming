@@ -82,6 +82,8 @@ export class FakePeer extends FakeEmitter {
   id: string | undefined;
   destroyed = false;
   opened = false;
+  disconnected = false;
+  reconnects = 0;
   readonly outgoing: FakeDataConnection[] = [];
 
   constructor(
@@ -132,6 +134,24 @@ export class FakePeer extends FakeEmitter {
 
   emitError(type: string, message = type): void {
     this.emit('error', Object.assign(new Error(message), { type }));
+  }
+
+  /** The signalling socket drops (a phone backgrounded, a network change): unreachable by id. */
+  dropSignalling(): void {
+    if (this.id && registry.get(this.id) === this) registry.delete(this.id);
+    this.disconnected = true;
+    this.emit('disconnected', this.id);
+  }
+
+  reconnect(): void {
+    this.reconnects++;
+    if (!fakeNet.auto || this.destroyed) return;
+    queueMicrotask(() => {
+      if (this.destroyed || !this.id) return;
+      this.disconnected = false;
+      registry.set(this.id, this);
+      this.emit('open', this.id);
+    });
   }
 }
 

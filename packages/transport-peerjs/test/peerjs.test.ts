@@ -307,6 +307,47 @@ describe('keepalive', () => {
   });
 });
 
+describe('a host whose signalling drops', () => {
+  it('registers again, so a guest arriving afterwards still finds it', async () => {
+    vi.useFakeTimers();
+    fakeNet.auto = true;
+    const hostProvider = peerJsProvider({ keepaliveMs: 0 });
+    const listener = await hostProvider.host('PHON');
+    const accepted: Transport[] = [];
+    listener.onConnection((t) => accepted.push(t));
+    const hostPeer = fakeNet.peers.find((p) => p.id === peerIdFor('PHON'))!;
+
+    // The phone locks: the host is no longer reachable by its room code.
+    hostPeer.dropSignalling();
+    const early = peerJsProvider({ keepaliveMs: 0, timeoutMs: 50 }).join('PHON');
+    const refused = early.catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await refused).toBeInstanceOf(TransportError);
+
+    // It re-registers on its own within a second.
+    await vi.advanceTimersByTimeAsync(600);
+    expect(hostPeer.reconnects).toBeGreaterThan(0);
+    expect(hostPeer.disconnected).toBe(false);
+
+    const guest = await peerJsProvider({ keepaliveMs: 0 }).join('PHON');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(guest.status).toBe('open');
+    expect(accepted).toHaveLength(1);
+    listener.close();
+  });
+
+  it('stops trying once the host is closed', async () => {
+    vi.useFakeTimers();
+    fakeNet.auto = true;
+    const listener = await peerJsProvider({ keepaliveMs: 0 }).host('GONE');
+    const hostPeer = fakeNet.peers.find((p) => p.id === peerIdFor('GONE'))!;
+    listener.close();
+    hostPeer.dropSignalling();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(hostPeer.reconnects).toBe(0);
+  });
+});
+
 describe('two providers over the fake network', () => {
   it('round-trips a message host -> guest -> host', async () => {
     fakeNet.auto = true;

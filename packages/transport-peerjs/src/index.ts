@@ -214,12 +214,60 @@ class PeerJsListener implements Listener {
   private readonly transports = new Set<PeerJsTransport>();
   private closed = false;
 
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempt = 0;
+  private readonly unwake: () => void;
+
   constructor(
     public readonly address: string,
     private readonly peer: Peer,
     private readonly keepaliveMs: number,
   ) {
     this.peer.on('connection', (conn: DataConnection) => this.accept(conn));
+    // Guests find a host only through its registration with the signalling server, and that
+    // socket drops whenever a phone locks, switches apps or changes network. Players already at
+    // the table keep their direct channels, but nobody new could ever reach the host again, so
+    // register again: on our own with backoff, and at once when the device wakes or comes online.
+    this.peer.on('disconnected', () => this.scheduleReconnect());
+    this.peer.on('open', () => {
+      this.reconnectAttempt = 0;
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+    });
+    this.peer.on('error', () => {
+      if (this.peer.disconnected) this.scheduleReconnect();
+    });
+    this.unwake = onWake(() => {
+      if (this.peer.disconnected) this.reconnectNow();
+    });
+  }
+
+  private scheduleReconnect(): void {
+    if (this.closed || this.peer.destroyed || this.reconnectTimer) return;
+    const delay = RECONNECT_BACKOFF_MS[this.reconnectAttempt] ?? RECONNECT_MAX_MS;
+    this.reconnectAttempt++;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.reconnectNow();
+    }, delay);
+    unrefTimer(this.reconnectTimer);
+  }
+
+  private reconnectNow(): void {
+    if (this.closed || this.peer.destroyed || !this.peer.disconnected) return;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    try {
+      this.peer.reconnect();
+    } catch {
+      // Still offline; the error or the next wake schedules another try.
+    }
+    // If this attempt fails quietly, try again later anyway.
+    this.scheduleReconnect();
   }
 
   private accept(conn: DataConnection): void {
@@ -254,6 +302,11 @@ class PeerJsListener implements Listener {
   }
 
   close(): void {
+    this.unwake();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.closed) return;
     this.closed = true;
     for (const t of Array.from(this.transports)) t.close();
@@ -396,6 +449,31 @@ async function relayFor(options: PeerJsProviderOptions): Promise<RTCIceServer[]>
   } catch {
     return [];
   }
+}
+
+/** Waits between attempts to re-register a host: quick at first, then every 15 s for good. */
+const RECONNECT_BACKOFF_MS = [500, 1000, 2000, 5000];
+const RECONNECT_MAX_MS = 15_000;
+
+/**
+ * Calls `wake` when a browser tab becomes visible again or the device comes back online — the
+ * moments a phone's suspended signalling socket is known to be dead. A no-op outside a browser.
+ */
+function onWake(wake: () => void): () => void {
+  const win = typeof window !== 'undefined' ? window : undefined;
+  const doc = typeof document !== 'undefined' ? document : undefined;
+  if (!win || !doc) return () => {};
+  const onVisible = () => {
+    if (doc.visibilityState === 'visible') wake();
+  };
+  win.addEventListener('online', wake);
+  win.addEventListener('pageshow', wake);
+  doc.addEventListener('visibilitychange', onVisible);
+  return () => {
+    win.removeEventListener('online', wake);
+    win.removeEventListener('pageshow', wake);
+    doc.removeEventListener('visibilitychange', onVisible);
+  };
 }
 
 /** Keep Node's event loop free: a heartbeat or a join timeout must never hold a process open. */
