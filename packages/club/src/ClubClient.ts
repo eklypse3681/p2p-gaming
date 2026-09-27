@@ -188,7 +188,8 @@ export class ClubClient {
         nonce: msg.nonce,
       });
       const signature = bytesToBase64Url(await this.signer(bytes));
-      this.sendRaw({ type: 'auth', signature, ...(this.grant ? { grant: this.grant } : {}) });
+      const grant = this.grant ?? this.signer.grant;
+      this.sendRaw({ type: 'auth', signature, ...(grant ? { grant } : {}) });
     } catch (e) {
       this.setState({
         status: 'rejected',

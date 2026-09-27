@@ -72,6 +72,21 @@ describe('a seat taken by one of the player’s devices', () => {
     expect(client.getState().seat).toBe(0);
   });
 
+  it('admits a device whose signer carries the grant, as the app builds it', async () => {
+    const { server, player, profile } = await setup();
+    const phone = await generateKeyPair();
+    const grant = await issueGrant(player, {
+      device: phone.publicKey,
+      serial: 1,
+      label: 'phone',
+      scopes: ['seat'],
+    });
+    // No separate `grant` option: the signer itself carries it (see ProfileProvider.signerOf).
+    const client = connect(server, profile, signerFor(phone.privateKey, grant));
+    await settle();
+    expect(client.getState().status).toBe('joined');
+  });
+
   it('refuses a device without a grant', async () => {
     const { server, profile } = await setup();
     const phone = await generateKeyPair();

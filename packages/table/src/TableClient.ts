@@ -236,7 +236,8 @@ export class TableClient<S = unknown, A = unknown, Cfg = unknown, V = S> {
       return;
     }
     if (this.closed) return;
-    this.sendRaw({ type: 'auth', signature, ...(this.grant ? { grant: this.grant } : {}) });
+    const grant = this.grant ?? this.signer.grant;
+    this.sendRaw({ type: 'auth', signature, ...(grant ? { grant } : {}) });
   }
 
   private onTransportClosed(reason?: string): void {
