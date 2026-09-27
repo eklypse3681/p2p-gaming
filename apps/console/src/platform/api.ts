@@ -67,7 +67,7 @@ export interface MatchmakingStatus {
 /** Ratings per game, per member. */
 export type RatingBook = Record<string, Record<string, number>>;
 
-export type PurchaseMethod = 'dev' | 'manual';
+export type PurchaseMethod = 'dev' | 'manual' | 'house';
 export type PurchaseStatus = 'pending' | 'paid' | 'cancelled';
 
 export interface PurchaseRow {

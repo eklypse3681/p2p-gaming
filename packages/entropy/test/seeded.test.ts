@@ -97,8 +97,11 @@ describe('verifySegment over a seeded table with this device as the source', () 
       );
     }
     const tampered = JSON.parse(JSON.stringify(snap)) as typeof snap;
-    tampered.actionMeta![2]!.entropy!.bytes =
-      '00' + tampered.actionMeta![2]!.entropy!.bytes.slice(2);
+    // Flip the first byte rather than set it: a byte that already held the new value would
+    // leave the record untouched one run in 256, and the test would fail for no reason.
+    const bytes = tampered.actionMeta![2]!.entropy!.bytes;
+    const flipped = (parseInt(bytes.slice(0, 2), 16) ^ 0xff).toString(16).padStart(2, '0');
+    tampered.actionMeta![2]!.entropy!.bytes = flipped + bytes.slice(2);
     expect(verifySegment(tampered, 1).ok).toBe(false);
     server.close();
   });
