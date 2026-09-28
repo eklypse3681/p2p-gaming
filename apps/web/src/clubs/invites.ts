@@ -1,10 +1,11 @@
 import type { ClubInvite } from '@bgf/protocol';
+import { parseInviteToken } from '@bgf/club';
 
 /**
  * Club invite tokens are opaque to the web app: the club validates them. We only decode enough
- * to know which club to connect to and what to call it. Accepted shapes:
- * `p2pc1.<base64url JSON>` where the JSON is a `ClubInvite` (optionally with `signature`), or
- * `{ invite: ClubInvite, signature }`. Links look like `…#/club/join/<token>`.
+ * to know which club to connect to and what to call it. Accepted shapes: the signed token a club
+ * issues, `p2pc1.<payload>.<signature>`; and, from older builds, `p2pc1.<base64url JSON>` where
+ * the JSON is a `ClubInvite` or `{ invite, signature }`. Links look like `…#/club/join/<token>`.
  */
 export const CLUB_INVITE_PREFIX = 'p2pc1.';
 
@@ -24,6 +25,15 @@ function base64UrlDecode(text: string): string {
 export function decodeClubInvite(tokenOrLink: string): DecodedInvite {
   const token = extractClubToken(tokenOrLink);
   if (!token) throw new Error('That does not look like a club invite');
+  // What a club actually hands out: `p2pc1.<payload>.<signature>`.
+  if (token.split('.').length === 3) {
+    try {
+      const { invite, signature } = parseInviteToken(token);
+      return { token, invite, signature };
+    } catch {
+      throw new Error('That club invite is damaged');
+    }
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(base64UrlDecode(token.slice(CLUB_INVITE_PREFIX.length)));

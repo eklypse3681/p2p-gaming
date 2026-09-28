@@ -38,3 +38,30 @@ describe('club invites', () => {
     );
   });
 });
+
+describe('an invite a club actually issued', () => {
+  it('reads the signed three-part token, as a link or bare', async () => {
+    const { generateKeyPair, signerFor } = await import('@bgf/protocol');
+    const { signInvite } = await import('@bgf/club');
+    const keys = await generateKeyPair();
+    const token = await signInvite(
+      {
+        clubId: 'club-id',
+        clubName: 'The House',
+        address: 'club-id',
+        role: 'member',
+        autoApprove: true,
+        nonce: 'n1',
+      },
+      signerFor(keys.privateKey),
+    );
+    expect(token.split('.')).toHaveLength(3);
+    for (const input of [token, clubJoinLink(token)]) {
+      const decoded = decodeClubInvite(input);
+      expect(decoded.token).toBe(token);
+      expect(decoded.invite).toMatchObject({ clubId: 'club-id', clubName: 'The House' });
+      expect(decoded.signature).toMatch(/^[A-Za-z0-9_-]+$/);
+    }
+    expect(() => decodeClubInvite(`${token.slice(0, -4)}.x.y`)).toThrow(/damaged/);
+  });
+});
