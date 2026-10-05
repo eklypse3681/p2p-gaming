@@ -17,6 +17,8 @@ export const DEFAULT_NAMESPACE = 'v1';
 export const DEFAULT_TIMEOUT_MS = 15_000;
 /** Default application-level keepalive period. `0` disables the keepalive entirely. */
 export const DEFAULT_KEEPALIVE_MS = 5_000;
+/** How long a flushed close may take before the data connection is dropped regardless. */
+export const CLOSE_FLUSH_MS = 1_000;
 /** How many unanswered keepalives close the transport with reason `timeout`. */
 export const KEEPALIVE_MAX_MISSED = 3;
 
@@ -25,6 +27,10 @@ export const EXTRA_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
+
+export type TransportLog = (event: string, detail?: Record<string, unknown>) => void;
+
+const noLog: TransportLog = () => {};
 
 export interface PeerJsProviderOptions {
   /** Signalling host. Defaults to the PeerJS cloud (`0.peerjs.com`). */
@@ -58,6 +64,11 @@ export interface PeerJsProviderOptions {
    * override anything above (`config`, `token`, `pingInterval`, `referrerPolicy`, …).
    */
   peerOptions?: PeerOptions;
+  /**
+   * Called with what the signalling and data connections do (registered, dropped, refused,
+   * closed and why), for a device-side diagnostic log. Never given message contents.
+   */
+  log?: TransportLog;
   /**
    * Node support. `'auto'` (default) installs the `node-datachannel` WebRTC polyfill when there
    * is no `window` and no `RTCPeerConnection`; `true` forces it; `false` never touches globals.
@@ -119,6 +130,7 @@ class PeerJsTransport extends BaseTransport {
     private readonly conn: DataConnection,
     private readonly keepaliveMs: number,
     private readonly onClosed: () => void,
+    private readonly log: TransportLog = noLog,
   ) {
     super(id);
     conn.on('data', (data: unknown) => this.handleData(data));
@@ -138,12 +150,25 @@ class PeerJsTransport extends BaseTransport {
   }
 
   protected doClose(): void {
+    this.log('channel:close', { peer: this.id });
     this.cleanup();
+    // Flush: a plain close() throws away whatever is still queued, and the last thing a host
+    // sends before hanging up is often the reason (a `rejected`), which the guest then never
+    // sees. The far side closes when the flushed marker arrives; if it never does, close anyway.
+    const conn = this.conn;
     try {
-      this.conn.close();
+      conn.close({ flush: true });
     } catch {
       /* already gone */
     }
+    const hard = setTimeout(() => {
+      try {
+        conn.close();
+      } catch {
+        /* already gone */
+      }
+    }, CLOSE_FLUSH_MS);
+    unrefTimer(hard);
   }
 
   private handleData(data: unknown): void {
@@ -194,6 +219,7 @@ class PeerJsTransport extends BaseTransport {
   /** Close because of something the far side (or the network) did; keeps the reason. */
   private fail(reason: string): void {
     if (this.status === 'closed') return;
+    this.log('channel:lost', { peer: this.id, reason });
     this.cleanup();
     // Set the status first: closing the DataConnection can re-enter through `close`/`error`.
     this.setStatus('closed', reason);
@@ -224,14 +250,19 @@ class PeerJsListener implements Listener {
     public readonly address: string,
     private readonly peer: Peer,
     private readonly keepaliveMs: number,
+    private readonly log: TransportLog = noLog,
   ) {
     this.peer.on('connection', (conn: DataConnection) => this.accept(conn));
     // Guests find a host only through its registration with the signalling server, and that
     // socket drops whenever a phone locks, switches apps or changes network. Players already at
     // the table keep their direct channels, but nobody new could ever reach the host again, so
     // register again: on our own with backoff, and at once when the device wakes or comes online.
-    this.peer.on('disconnected', () => this.scheduleReconnect());
+    this.peer.on('disconnected', () => {
+      this.log('host:signalling-dropped', { code: address });
+      this.scheduleReconnect();
+    });
     this.peer.on('open', () => {
+      if (this.reconnectAttempt > 0) this.log('host:registered-again', { code: address });
       this.reconnectAttempt = 0;
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
@@ -239,6 +270,7 @@ class PeerJsListener implements Listener {
       }
     });
     this.peer.on('error', (err: unknown) => {
+      this.log('host:error', { code: address, type: errorType(err), message: errorMessage(err, '') });
       // Someone else registered our id while we were away: most likely the other player's phone
       // reopened the table after ours went quiet. Retrying can never win it back, and two hosts of
       // one table would each wait forever for the other, so give the address up and say so.
@@ -256,6 +288,7 @@ class PeerJsListener implements Listener {
   private markLost(reason: string): void {
     if (this.closed || this.lost) return;
     this.lost = true;
+    this.log('host:code-taken', { code: this.address, reason });
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -280,6 +313,7 @@ class PeerJsListener implements Listener {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.log('host:re-register', { code: this.address, attempt: this.reconnectAttempt });
     try {
       this.peer.reconnect();
     } catch {
@@ -290,6 +324,7 @@ class PeerJsListener implements Listener {
   }
 
   private accept(conn: DataConnection): void {
+    this.log('host:incoming', { code: this.address, from: conn.peer, open: conn.open });
     if (this.closed) {
       try {
         conn.close();
@@ -310,7 +345,9 @@ class PeerJsListener implements Listener {
       conn,
       this.keepaliveMs,
       () => this.transports.delete(transport),
+      this.log,
     );
+    this.log('host:channel-open', { code: this.address, from: transport.id });
     this.transports.add(transport);
     transport.open();
     this.connections.emit(transport);
@@ -325,6 +362,7 @@ class PeerJsListener implements Listener {
   }
 
   close(): void {
+    if (!this.closed) this.log('host:close', { code: this.address });
     this.unwake();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -540,6 +578,7 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
   const keepaliveMs = options.keepaliveMs ?? DEFAULT_KEEPALIVE_MS;
   const defaultTimeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const node = options.node ?? 'auto';
+  const log = options.log ?? noLog;
 
   return {
     name: 'peerjs',
@@ -549,6 +588,7 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
         loadPeerJs(node),
         relayFor(options),
       ]);
+      log('host:start', { code, relay: relay.length });
       const peer = new Peer(
         peerIdFor(code, namespace),
         buildPeerOptions(options, defaultIceServers, relay),
@@ -560,6 +600,7 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
         const timer = setTimeout(() => {
           if (settled) return;
           settled = true;
+          log('host:timeout', { code });
           peer.destroy();
           reject(
             new TransportError(
@@ -572,13 +613,15 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
           if (settled) return;
           settled = true;
           clearTimeout(timer);
-          resolve(new PeerJsListener(code, peer, keepaliveMs));
+          log('host:registered', { code });
+          resolve(new PeerJsListener(code, peer, keepaliveMs, log));
         });
         peer.on('error', (err: unknown) => {
           // After the listener exists, errors are per-connection noise; PeerJS keeps the peer.
           if (settled) return;
           settled = true;
           clearTimeout(timer);
+          log('host:refused', { code, type: errorType(err), message: errorMessage(err, '') });
           peer.destroy();
           reject(toTransportError(err, `could not host ${code}`));
         });
@@ -592,6 +635,7 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
         relayFor(options),
       ]);
       const target = peerIdFor(code, namespace);
+      log('join:start', { code, relay: relay.length, timeoutMs });
       const peer = new Peer(undefined, buildPeerOptions(options, defaultIceServers, relay));
 
       return new Promise<Transport>((resolve, reject) => {
@@ -611,6 +655,7 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
 
         function fail(error: TransportError): void {
           if (!settle()) return;
+          log('join:failed', { code, error: error.code, message: error.message });
           peer.destroy();
           reject(error);
         }
@@ -619,10 +664,18 @@ export function peerJsProvider(options: PeerJsProviderOptions = {}): TransportPr
 
         peer.on('open', () => {
           if (settled) return;
+          log('join:signalling-open', { code });
           const conn = peer.connect(target, { reliable: true, serialization: 'json' });
           conn.on('open', () => {
             if (!settle()) return;
-            const transport = new PeerJsTransport(target, conn, keepaliveMs, () => peer.destroy());
+            log('join:channel-open', { code });
+            const transport = new PeerJsTransport(
+              target,
+              conn,
+              keepaliveMs,
+              () => peer.destroy(),
+              log,
+            );
             transport.open();
             resolve(transport);
           });

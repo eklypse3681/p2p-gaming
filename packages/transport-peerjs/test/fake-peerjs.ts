@@ -62,8 +62,12 @@ export class FakeDataConnection extends FakeEmitter {
     this.emit('open');
   }
 
-  close(): void {
+  /** Whether the first close asked PeerJS to flush queued messages first. */
+  flushedClose: boolean | null = null;
+
+  close(options?: { flush?: boolean }): void {
     if (this.closed) return;
+    this.flushedClose ??= !!options?.flush;
     this.closed = true;
     this.open = false;
     this.emit('close');

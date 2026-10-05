@@ -16,6 +16,7 @@ describe('retry helpers', () => {
     expect(isRetryable(err('timeout'))).toBe(true);
     expect(isRetryable(err('network'))).toBe(true);
     expect(isRetryable(err('not-found'))).toBe(true);
+    expect(isRetryable(err('disconnected'))).toBe(true);
     expect(isRetryable(err('rejected'))).toBe(false);
     expect(isRetryable(new Error('x'))).toBe(false);
   });

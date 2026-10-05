@@ -1,4 +1,5 @@
 import { SessionError } from './session';
+import { connLog } from './connLog';
 
 /**
  * Shared retry loop for reopening and joining tables. Signalling can stall (a PeerJS host or join
@@ -52,7 +53,12 @@ export function backoffMs(attempt: number): number {
 export function isRetryable(e: unknown): boolean {
   return (
     e instanceof SessionError &&
-    (e.code === 'timeout' || e.code === 'network' || e.code === 'not-found')
+    (e.code === 'timeout' ||
+      e.code === 'network' ||
+      e.code === 'not-found' ||
+      // The channel opened and then dropped before the welcome: a phone's flaky network, or a
+      // host still clearing out its last connection. A refusal arrives as `rejected` instead.
+      e.code === 'disconnected')
   );
 }
 
@@ -75,6 +81,18 @@ function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** Report progress to the screen and to the device's connection log. */
+function reporter(flow: FlowOptions, label: string): (p: FlowProgress) => void {
+  return (p) => {
+    connLog(`${label} ${p.phase}`, {
+      attempt: p.attempt,
+      ...(p.nextRetryMs !== undefined ? { retryInMs: p.nextRetryMs } : {}),
+      ...(p.lastError ? { lastError: p.lastError } : {}),
+    });
+    flow.onProgress?.(p);
+  };
+}
+
 /**
  * Join with up to `attempts` tries. Retries only when the host may just not be there yet
  * (`timeout`, `network`, `not-found`); rejections and cancellations stop immediately.
@@ -86,10 +104,11 @@ export async function joinWithRetry<S>(
   deps: FlowDeps = {},
 ): Promise<S> {
   const sleep = deps.sleep ?? sleepWithAbort;
+  const progress = reporter(flow, 'join');
   let lastError: string | undefined;
   for (let attempt = 1; ; attempt++) {
     throwIfAborted(flow.signal);
-    flow.onProgress?.({ phase: 'joining', attempt, lastError });
+    progress({ phase: 'joining', attempt, lastError });
     try {
       return await joinOnce();
     } catch (e) {
@@ -97,7 +116,7 @@ export async function joinWithRetry<S>(
       if (!isRetryable(e) || attempt >= attempts) throw e;
       lastError = messageOf(e);
       const wait = backoffMs(attempt);
-      flow.onProgress?.({ phase: 'joining', attempt, nextRetryMs: wait, lastError });
+      progress({ phase: 'joining', attempt, nextRetryMs: wait, lastError });
       await sleep(wait, flow.signal);
     }
   }
@@ -126,6 +145,7 @@ export async function resumeWithRetry<S>(
   const now = deps.now ?? Date.now;
   const started = now();
   const budget = flow.maxTotalMs ?? DEFAULT_MAX_TOTAL_MS;
+  const progress = reporter(flow, 'resume');
   let lastError: string | undefined;
   let lastErr: unknown;
   for (let attempt = 1; ; attempt++) {
@@ -135,7 +155,7 @@ export async function resumeWithRetry<S>(
       let hostErr: unknown;
       for (let t = 0; t <= ADDRESS_TAKEN_RETRIES; t++) {
         throwIfAborted(flow.signal);
-        flow.onProgress?.({ phase: 'hosting', attempt, lastError });
+        progress({ phase: 'hosting', attempt, lastError });
         try {
           return await steps.hostOnce();
         } catch (e) {
@@ -155,7 +175,7 @@ export async function resumeWithRetry<S>(
         lastError = messageOf(hostErr);
         if (now() - started >= budget) throw hostErr;
         const wait = backoffMs(attempt);
-        flow.onProgress?.({ phase: 'hosting', attempt, nextRetryMs: wait, lastError });
+        progress({ phase: 'hosting', attempt, nextRetryMs: wait, lastError });
         await sleep(wait, flow.signal);
         continue;
       } else {
@@ -164,7 +184,7 @@ export async function resumeWithRetry<S>(
     }
     void taken;
     throwIfAborted(flow.signal);
-    flow.onProgress?.({ phase: 'joining', attempt, lastError });
+    progress({ phase: 'joining', attempt, lastError });
     try {
       return await steps.joinOnce();
     } catch (e) {
@@ -183,7 +203,7 @@ export async function resumeWithRetry<S>(
         throw lastErr;
       }
       const wait = backoffMs(attempt);
-      flow.onProgress?.({
+      progress({
         phase: viewOnly ? 'waiting' : 'joining',
         attempt,
         nextRetryMs: wait,

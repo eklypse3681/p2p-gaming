@@ -15,6 +15,7 @@ import { TransportError, generateRoomCode } from '@bgf/protocol';
 import type { RandomnessChoice } from './entropy';
 import { buildEntropy, randomnessOptions } from './entropy';
 import type { FlowDeps, FlowOptions } from './retry';
+import { logStatusChanges } from './connLog';
 import { cancelled, joinWithRetry, resumeWithRetry, throwIfAborted } from './retry';
 
 export type SessionRole = 'host' | 'guest';
@@ -110,7 +111,10 @@ export function awaitJoined(
       else if (s.status === 'rejected') {
         finish(new SessionError('rejected', rejectMessage(s.rejectReason)));
       } else if (s.status === 'disconnected') {
-        finish(new SessionError('disconnected', 'The connection closed before the game started'));
+        const why = s.error?.code === 'disconnected' ? ` (${s.error.message})` : '';
+        finish(
+          new SessionError('disconnected', `The connection closed before the game started${why}`),
+        );
       }
     };
     const timer = setTimeout(
@@ -217,6 +221,7 @@ async function hostWithServer(
   const unsub = listener.onConnection((t) => server.accept(t));
   const local = server.connectLocal();
   const client = createClient({ transport: local, profile, signer, store: deps.store });
+  logStatusChanges(client, `${code} host`);
   const dispose = makeDisposer({ client, server, listener, unsub });
   // The other player re-hosted this table while we were away: stop hosting so the screen can
   // rejoin them instead of both devices waiting at their own copy of the table.
@@ -342,6 +347,7 @@ async function joinOnce(
     store: deps.store,
     resumeSnapshot,
   });
+  logStatusChanges(client, `${opts.code} guest`);
   const dispose = makeDisposer({ client });
   try {
     await awaitJoined(client, timeoutMs, signal);

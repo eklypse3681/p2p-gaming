@@ -5,6 +5,8 @@ import { opponent } from '@bgf/engine';
 import type { ClientState, GameClientApi } from '@bgf/client';
 import type { Session } from '../../session/session';
 import { resumeMatch, SessionError } from '../../session/session';
+import { connLog } from '../../session/connLog';
+import { CopyConnLog } from '../../hud/CopyConnLog';
 import type { FlowProgress } from '../../session/retry';
 import { getSettings } from '../../session/settings';
 import { randomnessFromSettings } from '../../session/entropy';
@@ -151,6 +153,7 @@ export function GameScreen() {
       (e) => {
         if (!active) return;
         if (e instanceof SessionError && e.code === 'cancelled') return;
+        connLog('resume failed', { message: e instanceof Error ? e.message : String(e) });
         setResume({
           status: 'error',
           error: e instanceof SessionError ? e.message : 'Could not resume the match',
@@ -249,6 +252,7 @@ export function GameScreen() {
                 Back home
               </button>
             </div>
+            <CopyConnLog />
           </>
         )}
       </div>

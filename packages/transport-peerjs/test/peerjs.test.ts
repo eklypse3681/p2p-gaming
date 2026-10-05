@@ -160,6 +160,15 @@ describe('host', () => {
     expect(conn.closed).toBe(true);
     expect(peer.destroyed).toBe(true);
   });
+
+  it('flushes on close so a last message (a rejection) still arrives', async () => {
+    const { peer, accepted } = await startHost({ keepaliveMs: 0 });
+    const { conn, transport } = connectGuest(peer, accepted);
+    transport.send({ type: 'rejected' });
+    transport.close();
+    expect(conn.sent).toContainEqual({ type: 'rejected' });
+    expect(conn.flushedClose).toBe(true);
+  });
 });
 
 describe('incoming connections', () => {

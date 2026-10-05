@@ -27,6 +27,8 @@ import { useTheme } from './ThemeProvider';
 import type { Look } from '../themes';
 import { GAMES, getGame } from '../games/registry';
 import { Switch } from './settingsParts';
+import { CopyConnLog } from '../hud/CopyConnLog';
+import { clearConnLog } from '../session/connLog';
 import styles from './SettingsScreen.module.css';
 
 /** App chrome in miniature: background, a surface card, text lines and the accent button. */
@@ -816,6 +818,21 @@ function GeneralSettings() {
             onClick={() => update({ peer: DEFAULT_SETTINGS.peer, iceServers: '' })}
           >
             Use free cloud defaults
+          </button>
+        </div>
+        <div className={styles.rowField}>
+          <div className={styles.rowText}>
+            Connection log
+            <small>
+              What this device's connections did lately. Copy it and send it along when tables
+              will not connect. It holds no keys or game state.
+            </small>
+          </div>
+        </div>
+        <div className="row">
+          <CopyConnLog />
+          <button className="btn btn-ghost btn-sm" onClick={clearConnLog}>
+            Clear log
           </button>
         </div>
       </section>

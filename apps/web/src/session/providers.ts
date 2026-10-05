@@ -5,6 +5,7 @@ import type { Settings } from './settings';
 import { getSettings, parseIceServers } from './settings';
 import type { GameId } from '../games/ids';
 import { relayServers } from './relay';
+import { connLog } from './connLog';
 
 export type TransportName = 'memory' | 'broadcast' | 'peerjs';
 export const DEFAULT_TRANSPORT: TransportName = 'peerjs';
@@ -48,7 +49,14 @@ export function getProvider(
   let provider: TransportProvider;
   if (name === 'memory') provider = memoryProvider();
   else if (name === 'broadcast') provider = broadcastChannelProvider();
-  else provider = peerJsProvider({ ...peerOptionsFromSettings(settings), namespace, relayServers });
+  else {
+    provider = peerJsProvider({
+      ...peerOptionsFromSettings(settings),
+      namespace,
+      relayServers,
+      log: (event, detail) => connLog(`${channel} ${event}`, detail),
+    });
+  }
   cache.set(key, provider);
   return provider;
 }

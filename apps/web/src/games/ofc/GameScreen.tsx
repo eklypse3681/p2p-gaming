@@ -6,6 +6,8 @@ import type { TableClientState } from '@bgf/table';
 import { DEALER_SEAT } from '@bgf/protocol';
 import type { RandomnessMode } from '@bgf/protocol';
 import { SessionError } from '../../session/session';
+import { connLog } from '../../session/connLog';
+import { CopyConnLog } from '../../hud/CopyConnLog';
 import type { FlowProgress } from '../../session/retry';
 import { getSettings, useSettings } from '../../session/settings';
 import { randomnessFromSettings } from '../../session/entropy';
@@ -141,6 +143,7 @@ export function GameScreen() {
         if (e instanceof SessionError && e.code === 'host-offline') {
           setResume({ status: 'host-offline', error: e.message });
         } else {
+          connLog('resume failed', { message: e instanceof Error ? e.message : String(e) });
           setResume({
             status: 'error',
             error: e instanceof SessionError ? e.message : 'Could not reopen the table',
@@ -260,6 +263,7 @@ export function GameScreen() {
                 Back home
               </Link>
             </div>
+            <CopyConnLog />
           </>
         )}
       </div>
