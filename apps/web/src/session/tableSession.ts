@@ -215,6 +215,13 @@ async function hostWithServer<S, A, C, V, Cfg>(
   const local = server.connectLocal();
   const client = createClient({ transport: local, profile, signer, store: deps.store });
   const dispose = makeDisposer({ client, server, listener, unsub });
+  // The other player re-hosted this table while we were away: stop hosting so the screen can
+  // rejoin them instead of both devices waiting at their own copy of the table.
+  let lostAddress = false;
+  listener.onLost?.(() => {
+    lostAddress = true;
+    dispose();
+  });
   try {
     await awaitTableJoined(client, deps.joinTimeoutMs ?? DEFAULT_JOIN_TIMEOUT, signal);
     throwIfAborted(signal);
@@ -232,6 +239,9 @@ async function hostWithServer<S, A, C, V, Cfg>(
     provider: deps.provider,
     gameId: def.id,
     dispose,
+    get lostAddress() {
+      return lostAddress;
+    },
   };
 }
 

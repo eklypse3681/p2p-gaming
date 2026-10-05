@@ -371,6 +371,15 @@ function LiveGame({
 }) {
   const client = session.client;
   const state = useClientState(client);
+  // A host that lost its room code to the other device rejoins them straight away: there is
+  // nothing to wait for here, and the newer copy of the match wins when we say hello.
+  const rejoined = useRef<object | null>(null);
+  useEffect(() => {
+    if (state.status !== 'disconnected' || !session.lostAddress) return;
+    if (rejoined.current === session) return;
+    rejoined.current = session;
+    onReconnect();
+  }, [state.status, session, onReconnect]);
   const [settings] = useSettings();
   const { theme, reducedMotion } = useTheme();
   const toasts = useToasts();

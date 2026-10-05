@@ -26,6 +26,8 @@ export interface Session {
   client: GameClientApi;
   server?: GameServer;
   provider: TransportProvider;
+  /** True once a hosted session gave up its room code to another device (see `Listener.onLost`). */
+  readonly lostAddress?: boolean;
   dispose(): void;
 }
 
@@ -216,6 +218,13 @@ async function hostWithServer(
   const local = server.connectLocal();
   const client = createClient({ transport: local, profile, signer, store: deps.store });
   const dispose = makeDisposer({ client, server, listener, unsub });
+  // The other player re-hosted this table while we were away: stop hosting so the screen can
+  // rejoin them instead of both devices waiting at their own copy of the table.
+  let lostAddress = false;
+  listener.onLost?.(() => {
+    lostAddress = true;
+    dispose();
+  });
   try {
     await awaitJoined(client, deps.joinTimeoutMs ?? DEFAULT_JOIN_TIMEOUT, signal);
     throwIfAborted(signal);
@@ -232,6 +241,9 @@ async function hostWithServer(
     server,
     provider: deps.provider,
     dispose,
+    get lostAddress() {
+      return lostAddress;
+    },
   };
 }
 

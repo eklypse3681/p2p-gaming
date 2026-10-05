@@ -346,6 +346,34 @@ describe('a host whose signalling drops', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(hostPeer.reconnects).toBe(0);
   });
+
+  it('gives the code up once another device has hosted it meanwhile', async () => {
+    vi.useFakeTimers();
+    fakeNet.auto = true;
+    const first = await peerJsProvider({ keepaliveMs: 0 }).host('SPLT');
+    const lost: string[] = [];
+    first.onLost!((reason) => lost.push(reason));
+    const firstPeer = fakeNet.peers.find((p) => p.id === peerIdFor('SPLT'))!;
+
+    // This phone sleeps; the other player reopens the table and takes the code.
+    firstPeer.dropSignalling();
+    const second = await peerJsProvider({ keepaliveMs: 0 }).host('SPLT');
+
+    await vi.advanceTimersByTimeAsync(600);
+    expect(lost).toHaveLength(1);
+    const tries = firstPeer.reconnects;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(firstPeer.reconnects).toBe(tries);
+
+    // Whoever joins now reaches the device that holds the code.
+    const accepted: Transport[] = [];
+    second.onConnection((t) => accepted.push(t));
+    await peerJsProvider({ keepaliveMs: 0 }).join('SPLT');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(accepted).toHaveLength(1);
+    first.close();
+    second.close();
+  });
 });
 
 describe('two providers over the fake network', () => {

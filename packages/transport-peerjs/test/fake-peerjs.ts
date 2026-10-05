@@ -148,6 +148,12 @@ export class FakePeer extends FakeEmitter {
     if (!fakeNet.auto || this.destroyed) return;
     queueMicrotask(() => {
       if (this.destroyed || !this.id) return;
+      // Like PeerJS: an id someone else registered meanwhile is refused and we stay disconnected.
+      const holder = registry.get(this.id);
+      if (holder && holder !== this) {
+        this.emitError('unavailable-id', `ID "${this.id}" is taken`);
+        return;
+      }
       this.disconnected = false;
       registry.set(this.id, this);
       this.emit('open', this.id);

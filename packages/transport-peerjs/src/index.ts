@@ -211,6 +211,8 @@ class PeerJsTransport extends BaseTransport {
 
 class PeerJsListener implements Listener {
   private readonly connections = new Emitter<Transport>();
+  private readonly lostEvents = new Emitter<string>();
+  private lost = false;
   private readonly transports = new Set<PeerJsTransport>();
   private closed = false;
 
@@ -236,7 +238,14 @@ class PeerJsListener implements Listener {
         this.reconnectTimer = null;
       }
     });
-    this.peer.on('error', () => {
+    this.peer.on('error', (err: unknown) => {
+      // Someone else registered our id while we were away: most likely the other player's phone
+      // reopened the table after ours went quiet. Retrying can never win it back, and two hosts of
+      // one table would each wait forever for the other, so give the address up and say so.
+      if (errorType(err) === 'unavailable-id') {
+        this.markLost(errorMessage(err, `${address} is hosted elsewhere`));
+        return;
+      }
       if (this.peer.disconnected) this.scheduleReconnect();
     });
     this.unwake = onWake(() => {
@@ -244,8 +253,18 @@ class PeerJsListener implements Listener {
     });
   }
 
+  private markLost(reason: string): void {
+    if (this.closed || this.lost) return;
+    this.lost = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.lostEvents.emit(reason);
+  }
+
   private scheduleReconnect(): void {
-    if (this.closed || this.peer.destroyed || this.reconnectTimer) return;
+    if (this.closed || this.lost || this.peer.destroyed || this.reconnectTimer) return;
     const delay = RECONNECT_BACKOFF_MS[this.reconnectAttempt] ?? RECONNECT_MAX_MS;
     this.reconnectAttempt++;
     this.reconnectTimer = setTimeout(() => {
@@ -256,7 +275,7 @@ class PeerJsListener implements Listener {
   }
 
   private reconnectNow(): void {
-    if (this.closed || this.peer.destroyed || !this.peer.disconnected) return;
+    if (this.closed || this.lost || this.peer.destroyed || !this.peer.disconnected) return;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -301,6 +320,10 @@ class PeerJsListener implements Listener {
     return this.connections.on(listener);
   }
 
+  onLost(listener: (reason: string) => void): Unsubscribe {
+    return this.lostEvents.on(listener);
+  }
+
   close(): void {
     this.unwake();
     if (this.reconnectTimer) {
@@ -312,6 +335,7 @@ class PeerJsListener implements Listener {
     for (const t of Array.from(this.transports)) t.close();
     this.transports.clear();
     this.connections.clear();
+    this.lostEvents.clear();
     this.peer.destroy();
   }
 }

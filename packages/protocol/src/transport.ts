@@ -28,6 +28,13 @@ export interface Listener {
   /** The address peers use to reach this listener (normally the room code). */
   readonly address: string;
   onConnection(listener: (transport: Transport) => void): Unsubscribe;
+  /**
+   * Fires once if the listener can no longer be reached at its address because someone else now
+   * holds it (another device re-hosted the room while this one was asleep). The listener stops
+   * trying to get it back; the owner should close it and join whoever holds the address now.
+   * Optional: media where an address can never be lost need not implement it.
+   */
+  onLost?(listener: (reason: string) => void): Unsubscribe;
   close(): void;
 }
 

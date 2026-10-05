@@ -23,6 +23,8 @@ export interface BaseSession {
     getState(): { status: 'connecting' | 'joined' | 'rejected' | 'disconnected' };
     subscribe(listener: () => void): () => void;
   };
+  /** True once a hosted session gave up its room code to another device; rejoin, don't wait. */
+  readonly lostAddress?: boolean;
   dispose(): void;
 }
 

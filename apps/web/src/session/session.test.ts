@@ -138,6 +138,26 @@ describe('session factories', () => {
     expect(server.close).toHaveBeenCalled();
   });
 
+  it('stops hosting when another device takes the room code', async () => {
+    const { provider, listener } = fakeProvider();
+    let lose: (reason: string) => void = () => {};
+    listener.onLost = (fn) => {
+      lose = fn;
+      return () => {};
+    };
+    const server = fakeServer();
+    const { factory } = fakeClientFactory();
+    const s = await hostNewMatch(
+      { profile, config: { length: 3 } },
+      { provider, createServer: () => server as never, createClient: factory as never },
+    );
+    expect(s.lostAddress).toBe(false);
+    lose('taken');
+    expect(s.lostAddress).toBe(true);
+    expect(server.close).toHaveBeenCalled();
+    expect(listener.close).toHaveBeenCalled();
+  });
+
   it('refuses to play without a name', async () => {
     const { provider } = fakeProvider();
     await expect(
