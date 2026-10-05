@@ -109,6 +109,35 @@ function isKeepalive(message: unknown): message is KeepaliveEnvelope {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Fragments
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * PeerJS refuses any JSON message of 16300 bytes or more ("Message too big for JSON channel"),
+ * and a match's snapshot outgrows that after a game or two: every hello, welcome or state carrying
+ * it failed and took the channel down. Larger messages therefore travel as a run of fragments
+ * `{__frag: id, i, n, d}` holding slices of the JSON text, reassembled in order on arrival (the
+ * channel is reliable and ordered, and one message's fragments are sent back to back).
+ */
+export const MAX_WHOLE_BYTES = 16_000;
+/** Characters of JSON text per fragment: at most 3 bytes each in UTF-8, so well under the cap. */
+export const FRAGMENT_CHARS = 5_000;
+/** Refuse to reassemble anything larger than this many fragments (about 50 MB of text). */
+const MAX_FRAGMENTS = 10_000;
+
+type FragmentEnvelope = { __frag: number; i: number; n: number; d: string };
+
+function isFragment(message: unknown): message is FragmentEnvelope {
+  return typeof message === 'object' && message !== null && '__frag' in message;
+}
+
+const encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+
+function utf8Length(text: string): number {
+  return encoder ? encoder.encode(text).byteLength : text.length * 3;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Transport
 // ---------------------------------------------------------------------------------------------
 
@@ -124,6 +153,8 @@ class PeerJsTransport extends BaseTransport {
   private missed = 0;
   private awaitingPong = false;
   private cleaned = false;
+  private nextFragmentId = 1;
+  private assembling: { id: number; n: number; parts: string[] } | null = null;
 
   constructor(
     id: string,
@@ -146,7 +177,17 @@ class PeerJsTransport extends BaseTransport {
   }
 
   protected doSend(message: unknown): void {
-    this.rawSend(message);
+    const text = JSON.stringify(message);
+    if (text === undefined || utf8Length(text) < MAX_WHOLE_BYTES) {
+      this.rawSend(message);
+      return;
+    }
+    const id = this.nextFragmentId++;
+    const n = Math.ceil(text.length / FRAGMENT_CHARS);
+    for (let i = 0; i < n && this.status === 'open'; i++) {
+      const d = text.slice(i * FRAGMENT_CHARS, (i + 1) * FRAGMENT_CHARS);
+      this.rawSend({ __frag: id, i, n, d } satisfies FragmentEnvelope);
+    }
   }
 
   protected doClose(): void {
@@ -178,7 +219,43 @@ class PeerJsTransport extends BaseTransport {
       if (data.__ka === KA_PING) this.rawSend({ __ka: KA_PONG });
       return;
     }
+    if (isFragment(data)) {
+      this.missed = 0; // a long transfer is proof enough that the far side is alive
+      this.awaitingPong = false;
+      this.handleFragment(data);
+      return;
+    }
     this.deliver(data);
+  }
+
+  private handleFragment(f: FragmentEnvelope): void {
+    const valid =
+      Number.isInteger(f.i) &&
+      Number.isInteger(f.n) &&
+      f.n > 0 &&
+      f.n <= MAX_FRAGMENTS &&
+      typeof f.d === 'string';
+    if (!valid) {
+      this.fail('malformed fragment');
+      return;
+    }
+    if (f.i === 0) this.assembling = { id: f.__frag, n: f.n, parts: [] };
+    const a = this.assembling;
+    if (!a || a.id !== f.__frag || a.n !== f.n || a.parts.length !== f.i) {
+      this.fail('fragment out of order');
+      return;
+    }
+    a.parts.push(f.d);
+    if (a.parts.length < a.n) return;
+    this.assembling = null;
+    let message: unknown;
+    try {
+      message = JSON.parse(a.parts.join(''));
+    } catch {
+      this.fail('malformed fragmented message');
+      return;
+    }
+    this.deliver(message);
   }
 
   private rawSend(message: unknown): void {
@@ -270,7 +347,11 @@ class PeerJsListener implements Listener {
       }
     });
     this.peer.on('error', (err: unknown) => {
-      this.log('host:error', { code: address, type: errorType(err), message: errorMessage(err, '') });
+      this.log('host:error', {
+        code: address,
+        type: errorType(err),
+        message: errorMessage(err, ''),
+      });
       // Someone else registered our id while we were away: most likely the other player's phone
       // reopened the table after ours went quiet. Retrying can never win it back, and two hosts of
       // one table would each wait forever for the other, so give the address up and say so.

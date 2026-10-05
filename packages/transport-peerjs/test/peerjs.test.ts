@@ -421,6 +421,36 @@ describe('two providers over the fake network', () => {
     expect(host.status).toBe('closed');
   });
 
+  it('carries a message far past the 16 KB JSON channel limit, in fragments', async () => {
+    fakeNet.auto = true;
+    const listener = await peerJsProvider({ keepaliveMs: 0 }).host('BIGM');
+    const accepted: Transport[] = [];
+    listener.onConnection((t) => accepted.push(t));
+    const guest = await peerJsProvider({ keepaliveMs: 0 }).join('BIGM');
+    await flush();
+    const host = accepted[0]!;
+
+    // A long match: hundreds of actions, signatures and some multi-byte chat.
+    const snapshot = {
+      kind: 'hello',
+      actions: Array.from({ length: 600 }, (_, i) => ({
+        seq: i,
+        sig: 'ab'.repeat(32),
+        note: 'é🎲"\\',
+      })),
+    };
+    expect(new TextEncoder().encode(JSON.stringify(snapshot)).byteLength).toBeGreaterThan(60_000);
+    const atHost: unknown[] = [];
+    host.onMessage((m) => atHost.push(m));
+    guest.send(snapshot);
+    guest.send({ kind: 'after' });
+    await flush();
+    expect(atHost).toEqual([snapshot, { kind: 'after' }]);
+    expect(guest.status).toBe('open');
+    expect(host.status).toBe('open');
+    listener.close();
+  });
+
   it('rejects with not-found when nobody is hosting the code', async () => {
     fakeNet.auto = true;
     const provider = peerJsProvider();

@@ -45,6 +45,14 @@ export class FakeDataConnection extends FakeEmitter {
 
   send(data: unknown): void {
     if (this.closed) throw new Error('connection is closed');
+    // Like PeerJS's JSON channel: anything of 16300 bytes or more is refused with an error.
+    if (new TextEncoder().encode(JSON.stringify(data)).byteLength >= 16_300) {
+      this.emit(
+        'error',
+        Object.assign(new Error('Message too big for JSON channel'), { type: 'message-too-big' }),
+      );
+      return;
+    }
     this.sent.push(data);
     const remote = this.remote;
     if (remote && remote.open) queueMicrotask(() => remote.receive(data));
