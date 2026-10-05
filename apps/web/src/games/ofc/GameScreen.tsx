@@ -220,6 +220,7 @@ export function GameScreen() {
                 Cancel
               </button>
             </div>
+            <CopyConnLog />
           </>
         )}
         {resume.status === 'host-offline' && (
@@ -238,6 +239,7 @@ export function GameScreen() {
                 Back home
               </button>
             </div>
+            <CopyConnLog />
           </>
         )}
         {resume.status === 'missing' && (
@@ -677,6 +679,7 @@ function LiveTable({
             >
               Reconnect
             </button>
+            <CopyConnLog label="Copy log" />
             <button className="btn btn-ghost btn-sm" onClick={onLeave}>
               Leave
             </button>

@@ -227,6 +227,7 @@ export function GameScreen() {
                 Cancel
               </button>
             </div>
+            <CopyConnLog />
           </>
         )}
         {resumeState.status === 'missing' && (
@@ -548,6 +549,7 @@ function LiveGame({
             >
               Reconnect
             </button>
+            <CopyConnLog label="Copy log" />
             <button className="btn btn-ghost btn-sm" onClick={onLeave}>
               Leave
             </button>
