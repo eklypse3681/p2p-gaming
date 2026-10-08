@@ -534,6 +534,8 @@ code,
   align-items: flex-end;
 }
 :root:has([data-dock]) .toast {
+  /* never in the way of a checker underneath */
+  pointer-events: none;
   padding: 7px 12px;
   font-size: 0.84rem;
   border-radius: 999px;
@@ -557,10 +559,12 @@ code,
   }
 }
 
-/* A table on a landscape phone has no app bar, only a floating menu button (AppBar.module.css). */
+/* A table on a landscape phone has no app bar on top, only a slim menu rail on the left. */
 @media (max-height: 480px) and (orientation: landscape) {
   :root:has([data-dock]) {
     --appbar-h: 0px;
+    /* the menu rail down the left edge (AppBar.module.css) */
+    --menu-rail-w: 48px;
   }
   /* toasts over the top of the board, clear of the side column's cards */
   :root:has([data-dock]) .toast-region {
@@ -576,6 +580,7 @@ code,
    Comes last so it wins over the landscape-phone bar height above. */
 :root[data-immersive] {
   --appbar-h: 0px;
+  --menu-rail-w: 0px;
 }
 :root[data-immersive] [data-appbar] {
   display: none;

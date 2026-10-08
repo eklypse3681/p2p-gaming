@@ -65,9 +65,15 @@ test('landscape phone: board fills the screen, controls are reachable, nothing s
 
   // The menu button opens the side panel with the app's links.
   await host.getByTestId('menu-button').tap();
-  await expect(host.getByTestId('nav-settings')).toBeVisible();
+  await expect(host.getByTestId('app-bar')).toHaveAttribute('data-menu-open', 'true');
+  await expect(host.getByTestId('nav-settings')).toContainText('Settings');
   await host.getByTestId('menu-scrim').tap({ position: { x: viewport.width - 20, y: 20 } });
-  await expect(host.getByTestId('nav-settings')).toBeHidden();
+  await expect(host.getByTestId('app-bar')).toHaveAttribute('data-menu-open', 'false');
+  // Collapsed, the menu stays as a slim rail of icons beside the board, never over it.
+  const rail = await host.getByTestId('app-bar').boundingBox();
+  const board2 = await host.getByTestId('board').boundingBox();
+  expect(rail!.x + rail!.width).toBeLessThanOrEqual(board2!.x + 1);
+  await expect(host.getByTestId('nav-settings')).toBeVisible();
 
   // Start the game from the dock; the roll button is tappable.
   await startGameIfNeeded(host);

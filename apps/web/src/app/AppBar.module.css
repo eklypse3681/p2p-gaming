@@ -140,6 +140,15 @@
 .panelOnly {
   display: none;
 }
+/* Icons appear only in the phone panel and the rail; the desktop bar stays text. */
+.icon {
+  display: none;
+}
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
 
 @media (max-width: 760px), (max-height: 480px) and (orientation: landscape) {
   /* A blur would make the bar the containing block of the fixed side panel: no blur here. */
@@ -203,6 +212,15 @@
     padding: 12px 14px;
     font-size: 1rem;
   }
+  .panel .icon {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+  }
+  .panel .emoji {
+    width: 22px;
+    text-align: center;
+  }
   .panel .spacer {
     display: none;
   }
@@ -226,31 +244,82 @@
   }
 }
 
-/* A table on a landscape phone: no bar at all, only a small menu button floating over the
-   board's top-left corner (the frame). */
+/* A table on a landscape phone: the bar becomes a slim rail down the left edge with an icon per
+   item, always there and never over the board. The menu button widens it to show the labels. */
 @media (max-height: 480px) and (orientation: landscape) {
   :global(:root:has([data-dock])) .bar {
     position: fixed;
-    top: max(10px, env(safe-area-inset-top));
-    left: max(12px, env(safe-area-inset-left));
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: calc(var(--menu-rail-w) + env(safe-area-inset-left));
     height: auto;
-    padding: 0;
+    z-index: 61;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: max(6px, env(safe-area-inset-top)) 4px max(6px, env(safe-area-inset-bottom))
+      calc(4px + env(safe-area-inset-left));
+    background: var(--ui-surface);
     border: 0;
-    background: transparent;
-    backdrop-filter: none;
-    overflow: visible;
+    border-right: 1px solid var(--ui-border);
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+    transition: width var(--dur) var(--ease);
+  }
+  :global(:root:has([data-dock])) .bar[data-menu-open='true'] {
+    width: min(260px, 70vw);
+    box-shadow: var(--shadow-md);
   }
   :global(:root:has([data-dock])) .logo {
     display: none;
   }
   :global(:root:has([data-dock])) .menuButton {
-    margin: 0;
-    min-width: 32px;
-    min-height: 32px;
-    padding: 6px;
-    background: color-mix(in srgb, var(--ui-surface) 70%, transparent);
-    border: 1px solid var(--ui-border);
-    border-radius: 50%;
-    opacity: 0.85;
+    margin: 0 0 4px;
+    align-self: flex-start;
+    width: 40px;
+    min-width: 40px;
+    justify-content: center;
+  }
+  /* The panel is part of the rail here, not a separate sliding sheet. */
+  :global(:root:has([data-dock])) .panel {
+    position: static;
+    transform: none;
+    visibility: visible;
+    width: auto;
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+    gap: 2px;
+    transition: none;
+  }
+  :global(:root:has([data-dock])) .panel .link,
+  :global(:root:has([data-dock])) .panel > :global(.btn),
+  :global(:root:has([data-dock])) .panel .chip {
+    padding: 8px 9px;
+    min-height: 40px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    border: 0;
+    background: transparent;
+  }
+  :global(:root:has([data-dock])) .panel .nav {
+    gap: 2px;
+  }
+  :global(:root:has([data-dock])) .panel .chip {
+    padding-left: 6px;
+  }
+  /* Collapsed: icons only. */
+  :global(:root:has([data-dock])) .bar:not([data-menu-open='true']) .label,
+  :global(:root:has([data-dock])) .bar:not([data-menu-open='true']) .panelOnly,
+  :global(:root:has([data-dock])) .bar:not([data-menu-open='true']) .chipName,
+  :global(:root:has([data-dock])) .bar:not([data-menu-open='true']) .syncDot {
+    display: none;
+  }
+  :global(:root:has([data-dock])) .scrim {
+    z-index: 60;
   }
 }

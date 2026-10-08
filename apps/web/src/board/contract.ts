@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { CubeOwner, Player } from '@bgf/engine';
 import type { Theme } from '../themes/theme';
 
@@ -173,6 +174,11 @@ export interface BoardRendererProps {
    * the renderer then makes it a button and hints that it can be pressed.
    */
   onCubeClick?: () => void;
+  /**
+   * Drawn over the middle of the playing area (centred on the bar, not on the whole board with
+   * its tray). Positioned absolutely: the board's container must be the positioning context.
+   */
+  centerOverlay?: ReactNode;
   /** Reduced motion preference; renderer must respect it. */
   reducedMotion?: boolean;
   /** Test hook: ids are stamped on elements as `data-testid`. */

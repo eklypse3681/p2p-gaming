@@ -61,8 +61,10 @@
   align-items: stretch;
   min-width: 0;
 }
-.split > :first-child,
-.split > .menu:first-child > .btn {
+/* Joined like one button: square where the halves meet. Doubled classes so these win over the
+   global button radius whatever order the stylesheets load in. */
+.split.split > :first-child,
+.split.split > .menu:first-child > :global(.btn) {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
@@ -70,7 +72,7 @@
   flex: 1 1 auto;
   min-width: 0;
 }
-.caret {
+.split .caret.caret {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   margin-left: 1px;

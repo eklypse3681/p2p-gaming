@@ -57,7 +57,6 @@ describe('HostScreen', () => {
       profile: { name: 'Alice' },
       config: { length: 3, rules: 'enforced' },
       hostSeat: 'white',
-      homeSide: 'left',
     });
     await waitFor(() =>
       expect(screen.getByTestId('game-route')).toHaveAttribute(
@@ -66,17 +65,6 @@ describe('HostScreen', () => {
       ),
     );
     expect(getProvider).toHaveBeenCalledWith('alice', 'backgammon');
-  });
-
-  it('table layout defaults to home boards on the left and can be switched', async () => {
-    renderHost();
-    expect(screen.getByTestId('home-side-left')).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByTestId('home-side-right')).toHaveAttribute('aria-checked', 'false');
-    await userEvent.click(screen.getByTestId('home-side-right'));
-    expect(screen.getByTestId('home-side-right')).toHaveAttribute('aria-checked', 'true');
-    await userEvent.click(screen.getByTestId('create-match-button'));
-    await waitFor(() => expect(hostNewMatch).toHaveBeenCalled());
-    expect(hostNewMatch.mock.calls[0]![0]).toMatchObject({ homeSide: 'right' });
   });
 
   it('free board is selectable', async () => {

@@ -34,9 +34,9 @@ test.describe('two players in one browser (BroadcastChannel transport)', () => {
     await expect(host.getByTestId('connection-badge')).toHaveText(/opponent online/i);
     await expect(guest.getByTestId('connection-badge')).toHaveText(/opponent online/i);
 
-    // One table: the host laid it out with home boards on the left, so the guest, sitting
-    // across, has them on the right.
-    await expect(host.getByTestId('board')).toHaveAttribute('data-home-side', 'left');
+    // Each player sees their own home board on the side they chose (bottom right by default),
+    // whichever colour they play.
+    await expect(host.getByTestId('board')).toHaveAttribute('data-home-side', 'right');
     await expect(guest.getByTestId('board')).toHaveAttribute('data-home-side', 'right');
 
     // Start the game (either side may).

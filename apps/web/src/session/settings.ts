@@ -16,7 +16,8 @@ export interface PeerServerSettings {
 
 export type ReducedMotionSetting = 'system' | 'on' | 'off';
 /** 'table' follows the match's table layout (host's choice, mirrored for the seat across). */
-export type HomeSidePreference = 'table' | HomeSide;
+/** Which side my home board (my 1..6 points) is drawn on, at the bottom, whatever I play. */
+export type HomeSidePreference = HomeSide;
 
 export interface Settings {
   /** UI look (chrome palette + light/dark). */
@@ -26,9 +27,8 @@ export interface Settings {
   /** Piece set (the two checker styles). */
   pieceSet: string;
   rendererId: RendererId;
-  /** Which side your home board (points 1..6) sits on; 'table' = as the table is laid out. */
+  /** Which side your home board (your 1..6 points) is always drawn on, at the bottom. */
   homeSidePreference: HomeSidePreference;
-  flipBoard: boolean;
   reducedMotion: ReducedMotionSetting;
   sound: boolean;
   /** Empty host = the free PeerJS cloud. */
@@ -70,8 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   boardSet: DEFAULT_PARTS.board,
   pieceSet: DEFAULT_PARTS.pieces,
   rendererId: 'svg2d',
-  homeSidePreference: 'table',
-  flipBoard: false,
+  homeSidePreference: 'right',
   reducedMotion: 'system',
   sound: true,
   peer: { host: '', port: '', path: '', secure: true, key: '' },
@@ -88,7 +87,13 @@ export const DEFAULT_SETTINGS: Settings = {
 /** What is actually persisted: the settings plus when they last changed (for device sync). */
 type StoredSettings = Partial<Settings> & { updatedAt?: number };
 
-type LegacySettings = StoredSettings & { homeSide?: HomeSide; themeId?: string };
+type LegacySettings = Omit<StoredSettings, 'homeSidePreference'> & {
+  homeSide?: HomeSide;
+  themeId?: string;
+  /** Older builds also had 'table' (follow the host's layout) and a flip-board switch. */
+  homeSidePreference?: HomeSidePreference | 'table';
+  flipBoard?: boolean;
+};
 
 /**
  * Older builds stored a per-viewer `homeSide` (now an explicit preference) and a single
@@ -97,9 +102,18 @@ type LegacySettings = StoredSettings & { homeSide?: HomeSide; themeId?: string }
  */
 export function migrateSettings(stored: LegacySettings | null): Partial<Settings> {
   if (!stored) return {};
-  const { homeSide, themeId, updatedAt: _updatedAt, ...rest } = stored;
+  const {
+    homeSide,
+    themeId,
+    updatedAt: _updatedAt,
+    homeSidePreference,
+    flipBoard: _flipBoard,
+    ...rest
+  } = stored;
   const out: Partial<Settings> = { ...rest };
-  if (out.homeSidePreference === undefined && (homeSide === 'left' || homeSide === 'right')) {
+  if (homeSidePreference === 'left' || homeSidePreference === 'right') {
+    out.homeSidePreference = homeSidePreference;
+  } else if (homeSide === 'left' || homeSide === 'right') {
     out.homeSidePreference = homeSide;
   }
   if (themeId !== undefined && out.look === undefined) {
@@ -158,12 +172,9 @@ export function sanitizeSettings(value: unknown): Settings {
   if (!RANDOMNESS_MODES.includes(out.randomnessMode))
     out.randomnessMode = DEFAULT_SETTINGS.randomnessMode;
   if (!OFC_TRAY_SORTS.includes(out.ofcTraySort)) out.ofcTraySort = DEFAULT_SETTINGS.ofcTraySort;
+  if (out.homeSidePreference !== 'left' && out.homeSidePreference !== 'right')
+    out.homeSidePreference = DEFAULT_SETTINGS.homeSidePreference;
   return out;
-}
-
-/** Resolve the preference against the table layout for the seat being viewed from. */
-export function effectiveHomeSide(preference: HomeSidePreference, tableSide: HomeSide): HomeSide {
-  return preference === 'table' ? tableSide : preference;
 }
 
 type SettingsStore = ReturnType<typeof createStore<Settings>>;

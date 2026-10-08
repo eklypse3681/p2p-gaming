@@ -81,6 +81,7 @@ export function Board2D(props: BoardRendererProps) {
     onDragStart,
     onDragCancel,
     onCubeClick,
+    centerOverlay,
     reducedMotion,
     testIdPrefix,
   } = props;
@@ -124,6 +125,18 @@ export function Board2D(props: BoardRendererProps) {
     nearestLocation,
     pointHitRect,
   } = geo;
+  // Where the bar's middle lands on screen, for an overlay centred on the playing area. The svg
+  // is `xMidYMid meet`, so allow for any letterboxing around the drawn board.
+  const overlayAt = (() => {
+    if (!space.width || !space.height) return { left: '50%', top: '50%' };
+    const scale = Math.min(space.width / VIEWBOX.width, space.height / VIEWBOX.height);
+    const offsetX = (space.width - VIEWBOX.width * scale) / 2;
+    const offsetY = (space.height - VIEWBOX.height * scale) / 2;
+    return {
+      left: `${offsetX + geo.barX(homeSide) * scale}px`,
+      top: `${offsetY + MID_Y * scale}px`,
+    };
+  })();
   const layout = useMemo(() => boardLayout(homeSide), [boardLayout, homeSide]);
 
   const sourceKeys = useMemo(
@@ -479,333 +492,356 @@ export function Board2D(props: BoardRendererProps) {
   };
 
   return (
-    <svg
-      ref={svgRef}
-      data-testid={tid('board')}
-      data-perspective={perspective}
-      data-home-side={homeSide}
-      data-interactive={model.interactive ? 'true' : 'false'}
-      data-dragging={drag ? 'true' : undefined}
-      viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`}
-      preserveAspectRatio="xMidYMid meet"
-      role="img"
-      aria-label={describe(model)}
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'block',
-        touchAction: 'none',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        WebkitTouchCallout: 'none',
-      }}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      <defs>
-        <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor={board.frame} />
-          <stop offset="55%" stopColor={board.frame} stopOpacity={0.92} />
-          <stop offset="100%" stopColor={board.frameEdge} />
-        </linearGradient>
-        <pattern
-          id="wood-grain"
-          width="220"
-          height="18"
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(2)"
-        >
-          <rect width="220" height="18" fill="transparent" />
-          <path
-            d="M0 4 Q 55 0 110 4 T 220 4"
-            stroke="rgba(0,0,0,0.16)"
-            strokeWidth="1.2"
-            fill="none"
-          />
-          <path
-            d="M0 13 Q 70 9 140 13 T 220 13"
-            stroke="rgba(255,255,255,0.06)"
-            strokeWidth="1"
-            fill="none"
-          />
-        </pattern>
-        <radialGradient id="felt-vignette" cx="50%" cy="50%" r="75%">
-          <stop offset="0%" stopColor="#fff" stopOpacity={0.06} />
-          <stop offset="70%" stopColor="#000" stopOpacity={0} />
-          <stop offset="100%" stopColor="#000" stopOpacity={0.35} />
-        </radialGradient>
-        <linearGradient id="point-shade" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#000" stopOpacity={0.18} />
-          <stop offset="50%" stopColor="#fff" stopOpacity={0.05} />
-          <stop offset="100%" stopColor="#000" stopOpacity={0.22} />
-        </linearGradient>
-        <linearGradient id="tray-shade" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#000" stopOpacity={0.35} />
-          <stop offset="30%" stopColor="#000" stopOpacity={0} />
-          <stop offset="100%" stopColor="#000" stopOpacity={0.25} />
-        </linearGradient>
-        <radialGradient id="checker-white" cx="38%" cy="32%" r="70%">
-          <stop offset="0%" stopColor={theme.pieces.white.sheen} stopOpacity={0.9} />
-          <stop offset="35%" stopColor={theme.pieces.white.fill} />
-          <stop offset="100%" stopColor={theme.pieces.white.edge} />
-        </radialGradient>
-        <radialGradient id="checker-black" cx="38%" cy="32%" r="70%">
-          <stop offset="0%" stopColor={theme.pieces.black.sheen} stopOpacity={0.9} />
-          <stop offset="35%" stopColor={theme.pieces.black.fill} />
-          <stop offset="100%" stopColor={theme.pieces.black.edge} />
-        </radialGradient>
-        <filter id="checker-shadow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="4" />
-        </filter>
-        <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="6" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-
-      {/* Frame */}
-      <rect x={0} y={0} width={VIEWBOX.width} height={VIEWBOX.height} rx={26} fill="url(#wood)" />
-      <rect
-        x={0}
-        y={0}
-        width={VIEWBOX.width}
-        height={VIEWBOX.height}
-        rx={26}
-        fill="url(#wood-grain)"
-        opacity={0.7}
-      />
-      <rect
-        x={6}
-        y={6}
-        width={VIEWBOX.width - 12}
-        height={VIEWBOX.height - 12}
-        rx={22}
-        fill="none"
-        stroke="rgba(255,255,255,0.08)"
-        strokeWidth={2}
-      />
-
-      {/* Felt */}
-      {[layout.outerFelt, layout.homeFelt].map((felt) => (
-        <g key={felt.x}>
-          <rect x={felt.x} y={FELT_TOP} width={felt.width} height={feltHeight} fill={board.felt} />
-          <rect
-            x={felt.x}
-            y={FELT_TOP}
-            width={felt.width}
-            height={feltHeight}
-            fill="url(#felt-vignette)"
-          />
-          <rect x={felt.x} y={FELT_TOP} width={felt.width} height={6} fill="rgba(0,0,0,0.35)" />
-          <rect
-            x={felt.x}
-            y={FELT_BOTTOM - 6}
-            width={felt.width}
-            height={6}
-            fill="rgba(0,0,0,0.25)"
-          />
-        </g>
-      ))}
-
-      {/* Points */}
-      <g data-testid={tid('points')}>
-        {slots.map((slot) => {
-          const s = stateOf({ kind: 'point', point: slot.abs });
-          return (
-            <Point
-              geo={geo}
-              key={slot.abs}
-              slot={slot}
-              board={board}
-              source={s.source && !highlights.quiet}
-              selected={s.selected}
+    <>
+      <svg
+        ref={svgRef}
+        data-testid={tid('board')}
+        data-perspective={perspective}
+        data-home-side={homeSide}
+        data-interactive={model.interactive ? 'true' : 'false'}
+        data-dragging={drag ? 'true' : undefined}
+        viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`}
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label={describe(model)}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none',
+        }}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <defs>
+          <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={board.frame} />
+            <stop offset="55%" stopColor={board.frame} stopOpacity={0.92} />
+            <stop offset="100%" stopColor={board.frameEdge} />
+          </linearGradient>
+          <pattern
+            id="wood-grain"
+            width="220"
+            height="18"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(2)"
+          >
+            <rect width="220" height="18" fill="transparent" />
+            <path
+              d="M0 4 Q 55 0 110 4 T 220 4"
+              stroke="rgba(0,0,0,0.16)"
+              strokeWidth="1.2"
+              fill="none"
             />
-          );
-        })}
-      </g>
+            <path
+              d="M0 13 Q 70 9 140 13 T 220 13"
+              stroke="rgba(255,255,255,0.06)"
+              strokeWidth="1"
+              fill="none"
+            />
+          </pattern>
+          <radialGradient id="felt-vignette" cx="50%" cy="50%" r="75%">
+            <stop offset="0%" stopColor="#fff" stopOpacity={0.06} />
+            <stop offset="70%" stopColor="#000" stopOpacity={0} />
+            <stop offset="100%" stopColor="#000" stopOpacity={0.35} />
+          </radialGradient>
+          <linearGradient id="point-shade" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#000" stopOpacity={0.18} />
+            <stop offset="50%" stopColor="#fff" stopOpacity={0.05} />
+            <stop offset="100%" stopColor="#000" stopOpacity={0.22} />
+          </linearGradient>
+          <linearGradient id="tray-shade" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#000" stopOpacity={0.35} />
+            <stop offset="30%" stopColor="#000" stopOpacity={0} />
+            <stop offset="100%" stopColor="#000" stopOpacity={0.25} />
+          </linearGradient>
+          <radialGradient id="checker-white" cx="38%" cy="32%" r="70%">
+            <stop offset="0%" stopColor={theme.pieces.white.sheen} stopOpacity={0.9} />
+            <stop offset="35%" stopColor={theme.pieces.white.fill} />
+            <stop offset="100%" stopColor={theme.pieces.white.edge} />
+          </radialGradient>
+          <radialGradient id="checker-black" cx="38%" cy="32%" r="70%">
+            <stop offset="0%" stopColor={theme.pieces.black.sheen} stopOpacity={0.9} />
+            <stop offset="35%" stopColor={theme.pieces.black.fill} />
+            <stop offset="100%" stopColor={theme.pieces.black.edge} />
+          </radialGradient>
+          <filter id="checker-shadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="4" />
+          </filter>
+          <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="6" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
 
-      <Bar board={board} homeSide={homeSide} geo={geo} />
-      <Tray
-        geo={geo}
-        board={board}
-        perspective={perspective}
-        homeSide={homeSide}
-        pips={model.pips}
-        names={model.names}
-      />
-      <Labels perspective={perspective} homeSide={homeSide} board={board} geo={geo} />
+        {/* Frame */}
+        <rect x={0} y={0} width={VIEWBOX.width} height={VIEWBOX.height} rx={26} fill="url(#wood)" />
+        <rect
+          x={0}
+          y={0}
+          width={VIEWBOX.width}
+          height={VIEWBOX.height}
+          rx={26}
+          fill="url(#wood-grain)"
+          opacity={0.7}
+        />
+        <rect
+          x={6}
+          y={6}
+          width={VIEWBOX.width - 12}
+          height={VIEWBOX.height - 12}
+          rx={22}
+          fill="none"
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth={2}
+        />
 
-      {/* Cube & dice (under checkers so a hit checker can cross them) */}
-      <Cube
-        geo={geo}
-        cube={model.cube}
-        perspective={perspective}
-        homeSide={homeSide}
-        board={board}
-        reducedMotion={reducedMotion}
-        pressable={!!onCubeClick}
-      />
-      {model.dice && (
-        <DiceGroup
+        {/* Felt */}
+        {[layout.outerFelt, layout.homeFelt].map((felt) => (
+          <g key={felt.x}>
+            <rect
+              x={felt.x}
+              y={FELT_TOP}
+              width={felt.width}
+              height={feltHeight}
+              fill={board.felt}
+            />
+            <rect
+              x={felt.x}
+              y={FELT_TOP}
+              width={felt.width}
+              height={feltHeight}
+              fill="url(#felt-vignette)"
+            />
+            <rect x={felt.x} y={FELT_TOP} width={felt.width} height={6} fill="rgba(0,0,0,0.35)" />
+            <rect
+              x={felt.x}
+              y={FELT_BOTTOM - 6}
+              width={felt.width}
+              height={6}
+              fill="rgba(0,0,0,0.25)"
+            />
+          </g>
+        ))}
+
+        {/* Points */}
+        <g data-testid={tid('points')}>
+          {slots.map((slot) => {
+            const s = stateOf({ kind: 'point', point: slot.abs });
+            return (
+              <Point
+                geo={geo}
+                key={slot.abs}
+                slot={slot}
+                board={board}
+                source={s.source && !highlights.quiet}
+                selected={s.selected}
+              />
+            );
+          })}
+        </g>
+
+        <Bar board={board} homeSide={homeSide} geo={geo} />
+        <Tray
           geo={geo}
-          dice={model.dice}
+          board={board}
+          perspective={perspective}
+          homeSide={homeSide}
+          pips={model.pips}
+          names={model.names}
+        />
+        <Labels perspective={perspective} homeSide={homeSide} board={board} geo={geo} />
+
+        {/* Cube & dice (under checkers so a hit checker can cross them) */}
+        <Cube
+          geo={geo}
+          cube={model.cube}
           perspective={perspective}
           homeSide={homeSide}
           board={board}
           reducedMotion={reducedMotion}
+          pressable={!!onCubeClick}
         />
-      )}
-      {!model.dice && model.openingDice && (
-        <OpeningDice
-          geo={geo}
-          opening={model.openingDice}
-          perspective={perspective}
-          homeSide={homeSide}
-          board={board}
-          reducedMotion={reducedMotion}
-        />
-      )}
+        {model.dice && (
+          <DiceGroup
+            geo={geo}
+            dice={model.dice}
+            perspective={perspective}
+            homeSide={homeSide}
+            board={board}
+            reducedMotion={reducedMotion}
+          />
+        )}
+        {!model.dice && model.openingDice && (
+          <OpeningDice
+            geo={geo}
+            opening={model.openingDice}
+            perspective={perspective}
+            homeSide={homeSide}
+            board={board}
+            reducedMotion={reducedMotion}
+          />
+        )}
 
-      {/* Target / blocked markers */}
-      <g data-testid={tid('targets')}>
-        {highlights.targets.map((loc) => targetMarker(loc, false))}
-        {highlights.combinedTargets.map((loc) => targetMarker(loc, true))}
-        {(highlights.blocked ?? []).map((loc) => blockedMarker(loc))}
-        {invalidMarker()}
-      </g>
+        {/* Target / blocked markers */}
+        <g data-testid={tid('targets')}>
+          {highlights.targets.map((loc) => targetMarker(loc, false))}
+          {highlights.combinedTargets.map((loc) => targetMarker(loc, true))}
+          {(highlights.blocked ?? []).map((loc) => blockedMarker(loc))}
+          {invalidMarker()}
+        </g>
 
-      {/* Checkers (the dragged one is drawn last, following the pointer) */}
-      <g data-testid={tid('checkers')}>
-        {drawList.map((c) => {
-          const dragged = drag?.checkerId === c.id;
-          const pos = dragged
-            ? { cx: drag.x, cy: drag.y, scale: 1, shape: 'disc' as const }
-            : checkerPosition(c.location, c.index, c.stackSize, perspective, homeSide);
-          const isTop = c.index === c.stackSize - 1;
-          const badge = isTop && c.stackSize > 5 && pos.shape === 'disc' ? c.stackSize : undefined;
-          const s = stateOf(c.location);
-          return (
-            <g key={c.id} data-location={locationKey(c.location)} data-colour={c.player}>
-              {isTop && s.selected && !dragged && pos.shape === 'disc' && (
-                <motion.circle
-                  cx={pos.cx}
-                  cy={pos.cy}
-                  r={CHECKER_RADIUS + 7}
-                  fill="none"
-                  stroke={board.highlightSelected}
-                  strokeWidth={5}
-                  initial={{ opacity: 0.7 }}
-                  animate={pulse ?? { opacity: 0.95 }}
-                  transition={pulseTransition}
-                  style={{ pointerEvents: 'none' }}
-                />
-              )}
-              {isTop &&
-                s.source &&
-                !highlights.quiet &&
-                !s.selected &&
-                !dragged &&
-                pos.shape === 'disc' && (
-                  <circle
+        {/* Checkers (the dragged one is drawn last, following the pointer) */}
+        <g data-testid={tid('checkers')}>
+          {drawList.map((c) => {
+            const dragged = drag?.checkerId === c.id;
+            const pos = dragged
+              ? { cx: drag.x, cy: drag.y, scale: 1, shape: 'disc' as const }
+              : checkerPosition(c.location, c.index, c.stackSize, perspective, homeSide);
+            const isTop = c.index === c.stackSize - 1;
+            const badge =
+              isTop && c.stackSize > 5 && pos.shape === 'disc' ? c.stackSize : undefined;
+            const s = stateOf(c.location);
+            return (
+              <g key={c.id} data-location={locationKey(c.location)} data-colour={c.player}>
+                {isTop && s.selected && !dragged && pos.shape === 'disc' && (
+                  <motion.circle
                     cx={pos.cx}
                     cy={pos.cy}
-                    r={CHECKER_RADIUS + 5}
+                    r={CHECKER_RADIUS + 7}
                     fill="none"
-                    stroke={board.highlightSource}
-                    strokeWidth={3}
-                    opacity={0.8}
+                    stroke={board.highlightSelected}
+                    strokeWidth={5}
+                    initial={{ opacity: 0.7 }}
+                    animate={pulse ?? { opacity: 0.95 }}
+                    transition={pulseTransition}
                     style={{ pointerEvents: 'none' }}
                   />
                 )}
-              <Checker
-                geo={geo}
-                id={c.id}
-                player={c.player}
-                style={styleFor(c.player)}
-                cx={pos.cx}
-                cy={pos.cy}
-                scale={pos.scale}
-                shape={pos.shape}
-                ghost={c.ghost}
-                recent={c.recent}
-                hit={c.hit}
-                badge={badge}
-                dragging={dragged}
-                reducedMotion={reducedMotion}
-                testId={tid(`checker-${c.id}`)}
-              />
-            </g>
-          );
-        })}
-      </g>
+                {isTop &&
+                  s.source &&
+                  !highlights.quiet &&
+                  !s.selected &&
+                  !dragged &&
+                  pos.shape === 'disc' && (
+                    <circle
+                      cx={pos.cx}
+                      cy={pos.cy}
+                      r={CHECKER_RADIUS + 5}
+                      fill="none"
+                      stroke={board.highlightSource}
+                      strokeWidth={3}
+                      opacity={0.8}
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+                <Checker
+                  geo={geo}
+                  id={c.id}
+                  player={c.player}
+                  style={styleFor(c.player)}
+                  cx={pos.cx}
+                  cy={pos.cy}
+                  scale={pos.scale}
+                  shape={pos.shape}
+                  ghost={c.ghost}
+                  recent={c.recent}
+                  hit={c.hit}
+                  badge={badge}
+                  dragging={dragged}
+                  reducedMotion={reducedMotion}
+                  testId={tid(`checker-${c.id}`)}
+                />
+              </g>
+            );
+          })}
+        </g>
 
-      {/* Interaction layer: transparent hit areas on top of everything. */}
-      <g data-testid={tid('hit-layer')}>
-        {slots.map((slot) => {
-          const loc: BoardLocation = { kind: 'point', point: slot.abs };
-          const r = pointHitRect(slot);
-          return (
-            <rect
-              key={slot.abs}
-              data-testid={tid(`point-${slot.abs}`)}
-              data-point={slot.abs}
-              data-rel={slot.display}
-              x={r.x}
-              y={r.y}
-              width={r.width}
-              height={r.height}
-              {...hitRectProps(loc, `Point ${slot.display}, ${countLabel(loc)}`)}
+        {/* Interaction layer: transparent hit areas on top of everything. */}
+        <g data-testid={tid('hit-layer')}>
+          {slots.map((slot) => {
+            const loc: BoardLocation = { kind: 'point', point: slot.abs };
+            const r = pointHitRect(slot);
+            return (
+              <rect
+                key={slot.abs}
+                data-testid={tid(`point-${slot.abs}`)}
+                data-point={slot.abs}
+                data-rel={slot.display}
+                x={r.x}
+                y={r.y}
+                width={r.width}
+                height={r.height}
+                {...hitRectProps(loc, `Point ${slot.display}, ${countLabel(loc)}`)}
+              />
+            );
+          })}
+          {(['top', 'bottom'] as const).map((half) => {
+            const player: Player =
+              half === 'top' ? perspective : perspective === 'white' ? 'black' : 'white';
+            const loc: BoardLocation = { kind: 'bar', player };
+            return (
+              <rect
+                key={`bar-${player}`}
+                data-testid={tid(`bar-${player}`)}
+                x={layout.bar.x}
+                y={half === 'top' ? FELT_TOP : MID_Y}
+                width={layout.bar.width}
+                height={MID_Y - FELT_TOP}
+                {...hitRectProps(loc, `${model.names[player]} bar, ${countLabel(loc)}`)}
+              />
+            );
+          })}
+          {(['top', 'bottom'] as const).map((half) => {
+            const player: Player =
+              half === 'bottom' ? perspective : perspective === 'white' ? 'black' : 'white';
+            const loc: BoardLocation = { kind: 'off', player };
+            return (
+              <rect
+                key={`off-${player}`}
+                data-testid={tid(`off-${player}`)}
+                x={Math.min(layout.divider.x, layout.tray.x)}
+                y={half === 'top' ? FELT_TOP : MID_Y}
+                width={layout.divider.width + layout.tray.width}
+                height={MID_Y - FELT_TOP}
+                {...hitRectProps(loc, `${model.names[player]} borne off, ${countLabel(loc)}`)}
+              />
+            );
+          })}
+          {onCubeClick && (
+            <CubeHitArea
+              geo={geo}
+              cube={model.cube}
+              perspective={perspective}
+              homeSide={homeSide}
+              onClick={onCubeClick}
+              testId={tid('cube-hit')}
             />
-          );
-        })}
-        {(['top', 'bottom'] as const).map((half) => {
-          const player: Player =
-            half === 'top' ? perspective : perspective === 'white' ? 'black' : 'white';
-          const loc: BoardLocation = { kind: 'bar', player };
-          return (
-            <rect
-              key={`bar-${player}`}
-              data-testid={tid(`bar-${player}`)}
-              x={layout.bar.x}
-              y={half === 'top' ? FELT_TOP : MID_Y}
-              width={layout.bar.width}
-              height={MID_Y - FELT_TOP}
-              {...hitRectProps(loc, `${model.names[player]} bar, ${countLabel(loc)}`)}
-            />
-          );
-        })}
-        {(['top', 'bottom'] as const).map((half) => {
-          const player: Player =
-            half === 'bottom' ? perspective : perspective === 'white' ? 'black' : 'white';
-          const loc: BoardLocation = { kind: 'off', player };
-          return (
-            <rect
-              key={`off-${player}`}
-              data-testid={tid(`off-${player}`)}
-              x={Math.min(layout.divider.x, layout.tray.x)}
-              y={half === 'top' ? FELT_TOP : MID_Y}
-              width={layout.divider.width + layout.tray.width}
-              height={MID_Y - FELT_TOP}
-              {...hitRectProps(loc, `${model.names[player]} borne off, ${countLabel(loc)}`)}
-            />
-          );
-        })}
-        {onCubeClick && (
-          <CubeHitArea
-            geo={geo}
-            cube={model.cube}
-            perspective={perspective}
-            homeSide={homeSide}
-            onClick={onCubeClick}
-            testId={tid('cube-hit')}
-          />
-        )}
-      </g>
-    </svg>
+          )}
+        </g>
+      </svg>
+      {centerOverlay && (
+        <div
+          data-testid={tid('center-overlay')}
+          style={{
+            position: 'absolute',
+            ...overlayAt,
+            transform: 'translate(-50%, -50%)',
+            zIndex: 4,
+            pointerEvents: 'none',
+          }}
+        >
+          {centerOverlay}
+        </div>
+      )}
+    </>
   );
 }

@@ -67,26 +67,23 @@ describe('SettingsScreen', () => {
     expect(screen.getByTestId('preset-classic')).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('toggles flip board and reduced motion', async () => {
-    renderSettings('backgammon');
-    await userEvent.click(screen.getByRole('switch', { name: 'Flip board' }));
-    await userEvent.click(screen.getByTestId('settings-tab-general'));
+  it('toggles reduced motion', async () => {
+    renderSettings();
     await userEvent.selectOptions(screen.getByTestId('reduced-motion-select'), 'on');
     const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}');
-    expect(stored.flipBoard).toBe(true);
     expect(stored.reducedMotion).toBe('on');
     expect(document.documentElement.dataset.reducedMotion).toBe('true');
   });
 
-  it('defaults the home board side to following the table and persists an override', async () => {
+  it('offers my home board bottom left or bottom right, right by default', async () => {
     renderSettings('backgammon');
-    expect(screen.getByTestId('home-side-table')).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByTestId('home-side-left')).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByTestId('home-side-right')).toHaveAttribute('aria-checked', 'false');
-    await userEvent.click(screen.getByTestId('home-side-right'));
-    const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}');
-    expect(stored.homeSidePreference).toBe('right');
+    expect(screen.queryByTestId('home-side-table')).toBeNull();
     expect(screen.getByTestId('home-side-right')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('home-side-left')).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(screen.getByTestId('home-side-left'));
+    const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}');
+    expect(stored.homeSidePreference).toBe('left');
+    expect(screen.getByTestId('home-side-left')).toHaveAttribute('aria-checked', 'true');
   });
 
   it('edits the player name and avatar, and can remove the player', async () => {
@@ -120,7 +117,7 @@ describe('SettingsScreen tabs', () => {
     expect(screen.getByTestId('settings-tab-ofc')).toBeInTheDocument();
     expect(screen.getByTestId('look-paper')).toBeInTheDocument();
     expect(screen.queryByTestId('board-marine')).toBeNull();
-    expect(screen.queryByTestId('home-side-table')).toBeNull();
+    expect(screen.queryByTestId('home-side-left')).toBeNull();
     expect(screen.queryByTestId('ofc-settings')).toBeNull();
   });
 

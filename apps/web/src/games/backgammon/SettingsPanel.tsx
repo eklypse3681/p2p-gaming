@@ -1,7 +1,6 @@
 import { useSettings } from '../../session/settings';
 import type { HomeSidePreference } from '../../session/settings';
 import { useTheme } from '../../app/ThemeProvider';
-import { Switch } from '../../app/settingsParts';
 import type { BoardSet, PieceSet } from '../../themes/theme';
 import type { HomeSide } from '../../board/contract';
 import styles from '../../app/SettingsScreen.module.css';
@@ -53,46 +52,6 @@ function HomeSidePreview({ side }: { side: HomeSide }) {
 }
 
 /** Two chairs at one table: the same board seen from both sides. */
-function TablePreview() {
-  return (
-    <svg viewBox="0 0 120 60" className={styles.sidePreview} aria-hidden="true">
-      <rect x={0} y={0} width={120} height={60} rx={5} fill="var(--ui-surface-raised)" />
-      <rect x={14} y={12} width={92} height={36} rx={3} fill="var(--ui-bg)" opacity={0.7} />
-      <rect x={57} y={12} width={6} height={36} fill="var(--ui-border)" />
-      <circle cx={22} cy={42} r={4.5} fill="var(--ui-accent)" />
-      <text
-        x={22}
-        y={42}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={6.5}
-        fontWeight={800}
-        fill="var(--ui-accent-text)"
-      >
-        1
-      </text>
-      <circle cx={98} cy={18} r={4.5} fill="var(--ui-text-muted)" />
-      <text
-        x={98}
-        y={18}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={6.5}
-        fontWeight={800}
-        fill="var(--ui-bg)"
-      >
-        1
-      </text>
-      <text x={60} y={55} textAnchor="middle" fontSize={6} fill="var(--ui-text-muted)">
-        you
-      </text>
-      <text x={60} y={8} textAnchor="middle" fontSize={6} fill="var(--ui-text-muted)">
-        opponent
-      </text>
-    </svg>
-  );
-}
-
 /** Frame, felt, a few points on each side of the bar, and a die. */
 function BoardSwatch({ board }: { board: BoardSet }) {
   const cols = [10, 24, 38, 66, 80, 94];
@@ -232,31 +191,29 @@ export function BackgammonSettings() {
       <section className={`card ${styles.section}`} data-testid="backgammon-table-settings">
         <h2>At the table</h2>
         <div className={styles.rowText}>
-          Home board side
+          My home board
           <small>
-            Each match has one table layout, chosen by the host; the player across the table sees
-            the mirror image, like a real board. "Follow the table" shows it that way. Force a side
-            if you always want your home board on the same side.
+            Your home board (your 1 to 6 points) is always drawn at the bottom, on this side,
+            whichever colour you play and whoever hosts.
           </small>
         </div>
-        <div className={styles.sides} role="radiogroup" aria-label="Home board side">
+        <div className={styles.sides} role="radiogroup" aria-label="My home board">
           {(
             [
-              ['table', 'Follow the table', 'as the host laid it out'],
-              ['left', 'Always left', '1 bottom-left · 24 top-left'],
-              ['right', 'Always right', '1 bottom-right · 24 top-right'],
+              ['left', 'Bottom left', 'your 1 bottom-left · 24 top-left'],
+              ['right', 'Bottom right', 'your 1 bottom-right · 24 top-right'],
             ] as const
-          ).map(([pref, label, hint]) => (
+          ).map(([side, label, hint]) => (
             <button
-              key={pref}
+              key={side}
               type="button"
               role="radio"
-              aria-checked={settings.homeSidePreference === pref}
-              className={`${styles.sideCard} ${settings.homeSidePreference === pref ? styles.sideActive : ''}`}
-              onClick={() => update({ homeSidePreference: pref as HomeSidePreference })}
-              data-testid={`home-side-${pref}`}
+              aria-checked={settings.homeSidePreference === side}
+              className={`${styles.sideCard} ${settings.homeSidePreference === side ? styles.sideActive : ''}`}
+              onClick={() => update({ homeSidePreference: side as HomeSidePreference })}
+              data-testid={`home-side-${side}`}
             >
-              {pref === 'table' ? <TablePreview /> : <HomeSidePreview side={pref} />}
+              <HomeSidePreview side={side} />
               <span className={styles.sideLabel}>
                 {label}
                 <small>{hint}</small>
@@ -282,17 +239,6 @@ export function BackgammonSettings() {
                 3D — coming soon
               </option>
             </select>
-          </div>
-          <div className={styles.rowField}>
-            <div className={styles.rowText}>
-              Flip board
-              <small>View the table from the opponent's side.</small>
-            </div>
-            <Switch
-              on={settings.flipBoard}
-              onChange={(v) => update({ flipBoard: v })}
-              label="Flip board"
-            />
           </div>
         </div>
       </section>

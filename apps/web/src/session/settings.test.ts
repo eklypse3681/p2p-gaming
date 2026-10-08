@@ -18,20 +18,31 @@ describe('settings', () => {
   it('keeps players isolated', async () => {
     const { getSettings, updateSettings } = await loadSettings();
     updateSettings('alice', { boardSet: 'walnut-green', pieceSet: 'sky-navy' });
-    updateSettings('bob', { flipBoard: true });
+    updateSettings('bob', { homeSidePreference: 'left' });
     expect(getSettings('alice').boardSet).toBe('walnut-green');
     expect(getSettings('alice').pieceSet).toBe('sky-navy');
-    expect(getSettings('alice').flipBoard).toBe(false);
+    expect(getSettings('alice').homeSidePreference).toBe('right');
     expect(getSettings('bob').boardSet).toBe('midnight-slate');
-    expect(getSettings('bob').flipBoard).toBe(true);
+    expect(getSettings('bob').homeSidePreference).toBe('left');
     expect(JSON.parse(localStorage.getItem('bgf:settings:alice')!).pieceSet).toBe('sky-navy');
-    expect(JSON.parse(localStorage.getItem('bgf:settings:bob')!).flipBoard).toBe(true);
+    expect(JSON.parse(localStorage.getItem('bgf:settings:bob')!).homeSidePreference).toBe('left');
     expect(localStorage.getItem('bgf:settings')).toBeNull();
   });
 
-  it('defaults the home-side preference to following the table', async () => {
+  it('defaults my home board to the bottom right', async () => {
     const { getSettings } = await loadSettings();
-    expect(getSettings('x').homeSidePreference).toBe('table');
+    expect(getSettings('x').homeSidePreference).toBe('right');
+  });
+
+  it('turns the old "follow the table" choice and flip switch into the default side', async () => {
+    localStorage.setItem(
+      'bgf:settings:x',
+      JSON.stringify({ homeSidePreference: 'table', flipBoard: true }),
+    );
+    const { getSettings, sanitizeSettings } = await loadSettings();
+    expect(getSettings('x').homeSidePreference).toBe('right');
+    expect('flipBoard' in getSettings('x')).toBe(false);
+    expect(sanitizeSettings({ homeSidePreference: 'table' }).homeSidePreference).toBe('right');
   });
 
   it('migrates a stored per-viewer homeSide into an explicit preference', async () => {
@@ -104,10 +115,10 @@ describe('settings', () => {
   it('leaves an explicit preference alone even if a legacy value is also present', async () => {
     localStorage.setItem(
       'bgf:settings:x',
-      JSON.stringify({ homeSide: 'right', homeSidePreference: 'table' }),
+      JSON.stringify({ homeSide: 'right', homeSidePreference: 'left' }),
     );
     const { getSettings } = await loadSettings();
-    expect(getSettings('x').homeSidePreference).toBe('table');
+    expect(getSettings('x').homeSidePreference).toBe('left');
   });
 
   it('persists preference changes and resets per player', async () => {
@@ -118,15 +129,7 @@ describe('settings', () => {
       'left',
     );
     resetSettings('x');
-    expect(getSettings('x').homeSidePreference).toBe('table');
-  });
-
-  it('resolves the effective side from the preference and the table', async () => {
-    const { effectiveHomeSide } = await loadSettings();
-    expect(effectiveHomeSide('table', 'left')).toBe('left');
-    expect(effectiveHomeSide('table', 'right')).toBe('right');
-    expect(effectiveHomeSide('left', 'right')).toBe('left');
-    expect(effectiveHomeSide('right', 'left')).toBe('right');
+    expect(getSettings('x').homeSidePreference).toBe('right');
   });
 });
 

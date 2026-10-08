@@ -33,6 +33,33 @@ function SyncDot({ slug }: { slug: string }) {
   );
 }
 
+/** Small line icons for the menu: shown beside the labels in the phone panel, alone in the rail. */
+function Icon({ d }: { d: string }) {
+  return (
+    <span className={styles.icon} aria-hidden="true">
+      <svg viewBox="0 0 20 20" width="18" height="18">
+        <path
+          d={d}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+const ICONS = {
+  games: 'M3.5 3.5h5v5h-5zM11.5 3.5h5v5h-5zM3.5 11.5h5v5h-5zM11.5 11.5h5v5h-5z',
+  history: 'M10 3.5a6.5 6.5 0 1 1-6.1 4.3M3.5 3.8v4.3h4.3M10 6.5V10l2.5 1.8',
+  clubs:
+    'M7 9a2.6 2.6 0 1 0 0-5.2A2.6 2.6 0 0 0 7 9zM2.5 16.5c.4-2.8 2.3-4.5 4.5-4.5s4.1 1.7 4.5 4.5M13.5 8.6a2.3 2.3 0 1 0 0-4.6M13.8 12c1.9.2 3.3 1.8 3.7 4.5',
+  settings:
+    'M10 12.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2zM10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4',
+  switch: 'M4 7h11l-3-3M16 13H5l3 3',
+};
+
 /** A table seen from above with four friends around it: the brand, whatever the game. */
 function Logo() {
   const seats = [
@@ -136,8 +163,9 @@ export function AppBar() {
         <nav className={styles.nav} aria-label="Primary">
           {ctx ? (
             <>
-              <NavLink to={ctx.path('/')} end className={cls} data-testid="nav-games">
-                Games
+              <NavLink to={ctx.path('/')} end className={cls} data-testid="nav-games" title="Games">
+                <Icon d={ICONS.games} />
+                <span className={styles.label}>Games</span>
               </NavLink>
               {game && (
                 <>
@@ -148,22 +176,39 @@ export function AppBar() {
                     data-testid="nav-game"
                     title={`${game.def.name} home`}
                   >
-                    <span aria-hidden="true">{game.def.icon}</span> {game.def.name}
+                    <span className={styles.emoji} aria-hidden="true">
+                      {game.def.icon}
+                    </span>{' '}
+                    <span className={styles.label}>{game.def.name}</span>
                   </NavLink>
-                  <NavLink to={game.routes.history} className={cls} data-testid="nav-history">
-                    History
+                  <NavLink
+                    to={game.routes.history}
+                    className={cls}
+                    data-testid="nav-history"
+                    title="History"
+                  >
+                    <Icon d={ICONS.history} />
+                    <span className={styles.label}>History</span>
                   </NavLink>
                 </>
               )}
-              <NavLink to={ctx.path('/clubs')} className={cls} data-testid="nav-clubs">
-                Clubs
+              <NavLink
+                to={ctx.path('/clubs')}
+                className={cls}
+                data-testid="nav-clubs"
+                title="Clubs"
+              >
+                <Icon d={ICONS.clubs} />
+                <span className={styles.label}>Clubs</span>
               </NavLink>
               <NavLink
                 to={ctx.path(game?.def.Settings ? `/settings/${game.id}` : '/settings')}
                 className={cls}
                 data-testid="nav-settings"
+                title="Settings"
               >
-                Settings
+                <Icon d={ICONS.settings} />
+                <span className={styles.label}>Settings</span>
               </NavLink>
             </>
           ) : (
@@ -205,7 +250,10 @@ export function AppBar() {
               data-testid="switch-player"
               title="Switch player"
             >
-              Switch<span className={styles.panelOnly}>&nbsp;player</span>
+              <Icon d={ICONS.switch} />
+              <span className={styles.label}>
+                Switch<span className={styles.panelOnly}>&nbsp;player</span>
+              </span>
             </NavLink>
           </>
         ) : null}

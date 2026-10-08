@@ -110,7 +110,6 @@ export async function seedProfile(
           boardSet: 'midnight-slate',
           pieceSet: 'pearl-obsidian',
           reducedMotion: 'on',
-          flipBoard: false,
           sync: opts.sync ?? true,
           updatedAt: 1,
         }),

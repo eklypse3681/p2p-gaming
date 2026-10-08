@@ -19,7 +19,7 @@ import { useSession, useSessionRegistry } from '../../session/SessionRegistry';
 import { useClientState } from '../../session/useClientState';
 import { useProfile } from '../../session/ProfileProvider';
 import { useGame } from '../GameProvider';
-import { useSettings, effectiveHomeSide } from '../../session/settings';
+import { useSettings } from '../../session/settings';
 import { getMatchStore } from '../../session/matchStore';
 import { getProvider } from '../../session/providers';
 import { LANDSCAPE_PHONE_QUERY, useMediaQuery } from '../../session/useMediaQuery';
@@ -398,7 +398,9 @@ function LiveGame({
   const isDealer = (state.role ?? 'seat') === 'dealer';
 
   const seat = state.seat;
-  const perspective: Player = settings.flipBoard ? opponent(seat ?? 'white') : (seat ?? 'white');
+  // Always from my own chair, my home board on the side I chose, whatever colour I play.
+  // A dealer (no seat) sees the table as the host laid it out.
+  const perspective: Player = seat ?? 'white';
   // Me on the left, always; a dealer (no seat) sees the board's near side on the left.
   const leftSeat: Player = seat ?? perspective;
   const rightSeat = opponent(leftSeat);
@@ -407,7 +409,7 @@ function LiveGame({
   const { interaction, handlers } = useBoardInteraction(client, state, seat);
   // One table: the host chose which side the home boards are on; the seat across sees the
   // mirror image. Viewing from `perspective` (flipped = the opponent's chair) keeps that true.
-  const homeSide = effectiveHomeSide(settings.homeSidePreference, homeSideFor(state, perspective));
+  const homeSide = seat ? settings.homeSidePreference : homeSideFor(state, perspective);
   const model = useBoardViewModel(state, {
     seat,
     perspective,
@@ -593,6 +595,19 @@ function LiveGame({
           reducedMotion={reducedMotion}
           {...handlers}
           onCubeClick={mayDouble ? () => setDoubleAsked(true) : undefined}
+          centerOverlay={
+            over && !showOverlay && state.seat ? (
+              <div className={styles.resultBadge} data-testid="game-result" aria-live="polite">
+                <strong className={over.winner === state.seat ? styles.resultWon : undefined}>
+                  {over.winner === state.seat ? 'You won' : `${playerName(state, over.winner)} won`}
+                </strong>
+                <span>
+                  {kindLabel(over.kind).toLowerCase()} · {over.points} pt
+                  {over.points === 1 ? '' : 's'}
+                </span>
+              </div>
+            ) : undefined
+          }
         />
         {doubleOpen && (
           <div
@@ -640,16 +655,6 @@ function LiveGame({
             <div className={`card ${styles.waitingCard}`}>
               <RoomCode code={session.code} />
             </div>
-          </div>
-        )}
-        {over && !showOverlay && state.seat && (
-          <div className={styles.resultBadge} data-testid="game-result" aria-live="polite">
-            <strong className={over.winner === state.seat ? styles.resultWon : undefined}>
-              {over.winner === state.seat ? 'You won' : `${playerName(state, over.winner)} won`}
-            </strong>
-            <span>
-              {kindLabel(over.kind).toLowerCase()} · {over.points} pt{over.points === 1 ? '' : 's'}
-            </span>
           </div>
         )}
         {showOverlay && (
@@ -724,8 +729,8 @@ function LiveGame({
               compact={landscape}
               dense={landscape}
               onMore={landscape ? () => setSheetOpen(true) : undefined}
-              // The result is shown over the board; the side column does not repeat it.
-              showStatus={!(landscape && over)}
+              // The result is shown over the board; the dock does not repeat it.
+              showStatus={!over}
               fullscreen={fullscreen}
             />
           )}

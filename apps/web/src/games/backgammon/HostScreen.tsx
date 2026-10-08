@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { Player, RulesMode } from '@bgf/engine';
-import type { HomeSide } from '@bgf/protocol';
 import { useProfile } from '../../session/ProfileProvider';
 import { useGame } from '../GameProvider';
 import { getMatchStore } from '../../session/matchStore';
@@ -28,7 +27,6 @@ export function HostScreen() {
   const [jacoby, setJacoby] = useState(true);
   const [seat, setSeat] = useState<Player>('white');
   const [rules, setRules] = useState<RulesMode>('enforced');
-  const [homeSide, setHomeSide] = useState<HomeSide>('left');
   const [table, setTable] = useHostTableChoice();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +52,6 @@ export function HostScreen() {
           // The cube is set by hand on a free board, so Crawford has nothing to enforce.
           config: { length, crawford: crawford && !free, jacoby, rules },
           hostSeat: seat,
-          homeSide,
           dealer: table.dealer,
           randomness: table.randomness,
           autopilot: !table.manualDealing,
@@ -176,50 +173,6 @@ export function HostScreen() {
               <small>Gammons and backgammons only count if the cube has been turned.</small>
             </span>
           </label>
-        </div>
-
-        <div className="field">
-          <span className="label">Table layout</span>
-          <div className={styles.rules} role="radiogroup" aria-label="Table layout">
-            {(
-              [
-                {
-                  id: 'left',
-                  title: 'Home boards on my left',
-                  icon: '⬅️',
-                  text: '1 bottom-left, 24 top-left. Checkers travel clockwise.',
-                },
-                {
-                  id: 'right',
-                  title: 'Home boards on my right',
-                  icon: '➡️',
-                  text: '1 bottom-right, 24 top-right. Checkers travel counter-clockwise.',
-                },
-              ] as const
-            ).map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                role="radio"
-                aria-checked={homeSide === o.id}
-                className={`${styles.rule} ${homeSide === o.id ? styles.ruleActive : ''}`}
-                onClick={() => setHomeSide(o.id)}
-                data-testid={`home-side-${o.id}`}
-              >
-                <span className={styles.ruleIcon} aria-hidden="true">
-                  {o.icon}
-                </span>
-                <span className={styles.ruleText}>
-                  <strong>{o.title}</strong>
-                  <small>{o.text}</small>
-                </span>
-              </button>
-            ))}
-          </div>
-          <span className="help">
-            Your opponent sees the table from the other side, so their home board is on the opposite
-            side.
-          </span>
         </div>
 
         <HostTableOptions
