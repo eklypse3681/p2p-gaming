@@ -18,6 +18,31 @@
     0 0 0 1px color-mix(in srgb, var(--ui-accent) 40%, transparent),
     0 8px 24px color-mix(in srgb, var(--ui-accent) 15%, transparent);
 }
+/* Seated but their device dropped: faded, avatar in grey, with an "Away" tag. */
+.away {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.away .avatar {
+  filter: grayscale(1);
+}
+/* Nobody in the seat yet. */
+.empty {
+  opacity: 0.5;
+  border-style: dashed;
+  background: transparent;
+}
+.presenceTag {
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+  white-space: nowrap;
+}
 .avatar {
   position: relative;
   width: 40px;
@@ -79,6 +104,7 @@
 }
 .pips {
   font-family: var(--ui-font-mono);
+  white-space: nowrap;
 }
 .score {
   font-family: var(--ui-font-mono);

@@ -10,6 +10,8 @@ export interface CubeProps {
   homeSide: HomeSide;
   board: BoardSet;
   reducedMotion?: boolean;
+  /** The player may double now: the cube is a button, drawn with a soft pulsing ring. */
+  pressable?: boolean;
 }
 
 /** Displayed face: a centred cube at 1 shows 64; an offered cube already shows the new value. */
@@ -18,7 +20,7 @@ export function cubeFace(cube: CubeVM): number {
   return cube.value === 1 && cube.owner === 'center' ? 64 : cube.value;
 }
 
-export function Cube({ cube, perspective, homeSide, board, reducedMotion }: CubeProps) {
+export function Cube({ cube, perspective, homeSide, board, reducedMotion, pressable }: CubeProps) {
   const pos = cubePosition(cube, perspective, homeSide);
   const half = pos.size / 2;
   const face = cubeFace(cube);
@@ -30,11 +32,27 @@ export function Cube({ cube, perspective, homeSide, board, reducedMotion }: Cube
       data-value={face}
       data-owner={cube.owner}
       data-offered={cube.offeredBy ?? undefined}
+      data-pressable={pressable ? 'true' : undefined}
       initial={false}
       animate={{ x: pos.x, y: pos.y, rotate, scale: 1 }}
       transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 24 }}
       style={{ pointerEvents: 'none' }}
     >
+      {pressable && !cube.offeredBy && (
+        <motion.rect
+          x={-half - 7}
+          y={-half - 7}
+          width={pos.size + 14}
+          height={pos.size + 14}
+          rx={pos.size * 0.24}
+          fill="none"
+          stroke={board.highlightSource}
+          strokeWidth={3}
+          initial={{ opacity: 0.5 }}
+          animate={reducedMotion ? { opacity: 0.7 } : { opacity: [0.25, 0.75, 0.25] }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 2.2, repeat: Infinity }}
+        />
+      )}
       {cube.offeredBy && (
         <motion.rect
           x={-half - 10}
@@ -88,5 +106,48 @@ export function Cube({ cube, perspective, homeSide, board, reducedMotion }: Cube
         {face}
       </text>
     </motion.g>
+  );
+}
+
+/** A tap target over the cube, laid on top of the board's other hit areas. */
+export function CubeHitArea({
+  cube,
+  perspective,
+  homeSide,
+  onClick,
+  testId,
+}: {
+  cube: CubeVM;
+  perspective: Player;
+  homeSide: HomeSide;
+  onClick: () => void;
+  testId: string;
+}) {
+  const pos = cubePosition(cube, perspective, homeSide);
+  const pad = 10;
+  return (
+    <rect
+      data-testid={testId}
+      role="button"
+      tabIndex={0}
+      aria-label="Offer a double"
+      x={pos.x - pos.size / 2 - pad}
+      y={pos.y - pos.size / 2 - pad}
+      width={pos.size + pad * 2}
+      height={pos.size + pad * 2}
+      fill="transparent"
+      style={{ cursor: 'pointer', touchAction: 'manipulation' }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    />
   );
 }

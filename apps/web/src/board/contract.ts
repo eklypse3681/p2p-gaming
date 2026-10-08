@@ -168,6 +168,11 @@ export interface BoardRendererProps {
   onDragStart?: (from: BoardLocation) => void;
   /** A drag ended without a valid drop (released outside the board / cancelled). */
   onDragCancel?: () => void;
+  /**
+   * The cube was tapped. Only passed while tapping it means something (the player may double):
+   * the renderer then makes it a button and hints that it can be pressed.
+   */
+  onCubeClick?: () => void;
   /** Reduced motion preference; renderer must respect it. */
   reducedMotion?: boolean;
   /** Test hook: ids are stamped on elements as `data-testid`. */

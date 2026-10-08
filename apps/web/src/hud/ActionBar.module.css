@@ -77,6 +77,14 @@
   padding-left: 10px;
   padding-right: 10px;
 }
+.mainIcon {
+  min-width: 64px;
+}
+/* An action kept beside the split button (Undo), as its own small button. */
+.pinned {
+  margin-left: var(--space-2);
+  border-radius: var(--radius-sm);
+}
 .splitList {
   left: auto;
   right: 0;

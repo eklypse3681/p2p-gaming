@@ -221,12 +221,17 @@ describe('ActionBar in a narrow space', () => {
     expect(client.offerResign).toHaveBeenCalledWith('gammon');
   });
 
-  it('keeps Done as the main action while it is still disabled', () => {
+  it('keeps Done as the main action (a check mark) with Undo as an icon beside it', async () => {
     render(
       <ActionBar state={makeState({ actions: movingWhiteActions() })} client={fakeClient()} />,
     );
     expect(screen.getByTestId('done-button')).toBeDisabled();
-    expect(screen.queryByTestId('undo-button')).not.toBeInTheDocument();
+    expect(screen.getByTestId('done-button')).toHaveAccessibleName('Done');
+    expect(screen.getByTestId('done-button')).not.toHaveTextContent('Done');
+    expect(screen.getByTestId('undo-button')).toHaveAccessibleName('Undo');
+    expect(screen.getByTestId('undo-button')).toBeDisabled();
+    await userEvent.click(screen.getByTestId('more-actions'));
+    expect(screen.getByTestId('more-actions-menu')).not.toHaveTextContent('Undo');
   });
 });
 

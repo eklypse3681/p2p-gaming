@@ -521,10 +521,40 @@ code,
   filter: brightness(1.15);
 }
 
-/* At a table the actions live in a dock along the bottom: toasts drop in from the top instead. */
+/* At a table the actions live in a dock along the bottom: toasts are small notes in the top
+   right corner instead, clear of the dock and of most of the board. */
 :root:has([data-dock]) .toast-region {
   bottom: auto;
-  top: calc(var(--appbar-h) + 12px);
+  top: calc(var(--appbar-h) + 10px);
+  left: auto;
+  right: max(12px, env(safe-area-inset-right));
+  transform: none;
+  width: auto;
+  max-width: min(280px, calc(100% - 24px));
+  align-items: flex-end;
+}
+:root:has([data-dock]) .toast {
+  padding: 7px 12px;
+  font-size: 0.84rem;
+  border-radius: 999px;
+  border-left-width: 1px;
+  animation: toast-drop var(--dur) var(--ease);
+}
+:root:has([data-dock]) .toast-success {
+  border-color: color-mix(in srgb, var(--ui-success) 55%, var(--ui-border));
+}
+:root:has([data-dock]) .toast-danger {
+  border-color: color-mix(in srgb, var(--ui-danger) 55%, var(--ui-border));
+}
+@keyframes toast-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Immersive table (the game's full-screen button): no app bar, the board gets the viewport.

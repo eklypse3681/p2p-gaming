@@ -131,6 +131,26 @@
 .sheet {
   display: none;
 }
+/* "Offer a double?" after tapping the cube: a small card over the board. */
+.confirmDoubleBackdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--ui-bg) 35%, transparent);
+  z-index: 7;
+  animation: fade-up var(--dur) var(--ease);
+}
+.confirmDouble {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+  padding: var(--space-4);
+  width: min(300px, 100%);
+}
 
 /* ------------------------------------------------------- portrait / narrow */
 @media (max-width: 980px) {

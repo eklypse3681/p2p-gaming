@@ -19,7 +19,7 @@ import {
 } from '../geometry';
 import { Checker } from './Checker';
 import { DiceGroup, OpeningDice } from './Dice';
-import { Cube } from './Cube';
+import { Cube, CubeHitArea } from './Cube';
 import { Labels } from './Labels';
 import { Point } from './Point';
 import { Bar } from './Bar';
@@ -92,6 +92,7 @@ export function Board2D(props: BoardRendererProps) {
     onActivate,
     onDragStart,
     onDragCancel,
+    onCubeClick,
     reducedMotion,
     testIdPrefix,
   } = props;
@@ -610,6 +611,7 @@ export function Board2D(props: BoardRendererProps) {
         homeSide={homeSide}
         board={board}
         reducedMotion={reducedMotion}
+        pressable={!!onCubeClick}
       />
       {model.dice && (
         <DiceGroup
@@ -753,6 +755,15 @@ export function Board2D(props: BoardRendererProps) {
             />
           );
         })}
+        {onCubeClick && (
+          <CubeHitArea
+            cube={model.cube}
+            perspective={perspective}
+            homeSide={homeSide}
+            onClick={onCubeClick}
+            testId={tid('cube-hit')}
+          />
+        )}
       </g>
     </svg>
   );

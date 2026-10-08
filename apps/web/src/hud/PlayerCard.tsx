@@ -20,11 +20,15 @@ export interface PlayerCardProps {
 }
 
 export function PlayerCard(p: PlayerCardProps) {
+  // Here, away (seated but their device dropped) or not here yet (nobody in the seat).
+  const presence = !p.present ? 'empty' : p.connected ? 'here' : 'away';
   return (
     <div
-      className={`${styles.card} ${p.onTurn ? styles.active : ''} ${p.compact ? styles.compact : ''} ${p.dock ? styles.dock : ''} ${p.dock === 'right' ? styles.dockRight : ''}`}
+      className={`${styles.card} ${presence === 'away' ? styles.away : ''} ${presence === 'empty' ? styles.empty : ''} ${p.onTurn ? styles.active : ''} ${p.compact ? styles.compact : ''} ${p.dock ? styles.dock : ''} ${p.dock === 'right' ? styles.dockRight : ''}`}
       data-testid={`player-card-${p.seat}`}
       data-on-turn={p.onTurn ? 'true' : 'false'}
+      data-presence={presence}
+      title={presence === 'away' ? `${p.name} is away` : undefined}
     >
       <div className={styles.avatar} aria-hidden="true">
         {p.present ? (p.avatar ?? p.name.slice(0, 1).toUpperCase()) : '…'}
@@ -44,6 +48,11 @@ export function PlayerCard(p: PlayerCardProps) {
           {p.isMe && <span className="muted small"> (you)</span>}
         </div>
         <div className={styles.meta}>
+          {presence !== 'here' && (
+            <span className={styles.presenceTag} data-testid={`presence-${p.seat}`}>
+              {presence === 'away' ? 'Away' : 'Not here yet'}
+            </span>
+          )}
           <span className={styles.pips} data-testid={`card-pips-${p.seat}`} title="Pip count">
             {p.pips}
             <span className={styles.pipsUnit}> pips</span>

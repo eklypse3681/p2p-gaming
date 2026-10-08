@@ -119,7 +119,37 @@ interface ActionItem {
   panel?: (close: () => void) => ReactNode;
   panelTestId?: string;
   attrs?: Record<string, string>;
+  /** Drawn instead of the label where space is short (the split button). */
+  icon?: ReactNode;
+  /** Stays beside the main action as an icon when the rest fold into the split menu. */
+  pinned?: boolean;
 }
+
+const CheckIcon = (
+  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+    <path
+      d="M4 10.5 8.2 14.5 16 6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const UndoIcon = (
+  <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+    <path
+      d="M7.5 5 3.5 9l4 4M4 9h7.5a4.5 4.5 0 0 1 0 9H9"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
 function toneClass(tone: Tone): string {
   if (tone === 'primary') return 'btn-primary';
@@ -288,7 +318,23 @@ function ActionButtons({
     </button>
   );
   const main = overflow ? defaultItem(items) : undefined;
-  const rest = main ? items.filter((i) => i !== main) : [];
+  const pinned = main ? items.filter((i) => i !== main && i.pinned) : [];
+  const rest = main ? items.filter((i) => i !== main && !i.pinned) : [];
+  // Where space is short an action with an icon shows just the icon; the name stays its label.
+  const iconButton = (i: ActionItem, extra = '') => (
+    <button
+      key={i.key}
+      className={`btn ${size} ${toneClass(i.tone)} btn-icon ${styles.action} ${extra}`}
+      data-testid={i.testId}
+      disabled={i.disabled}
+      onClick={i.onSelect}
+      title={i.label}
+      aria-label={i.label}
+      {...i.attrs}
+    >
+      {i.icon}
+    </button>
+  );
   if (main && fullscreen) {
     rest.push({
       key: 'fullscreen',
@@ -326,7 +372,7 @@ function ActionButtons({
           </div>
         ) : (
           <div className={styles.split} data-testid="split-actions" ref={splitRef}>
-            {render(main)}
+            {main.icon && !main.panel ? iconButton(main, styles.mainIcon) : render(main)}
             {rest.length > 0 && (
               <button
                 className={`btn ${size} ${main.tone === 'primary' && !main.disabled ? 'btn-primary' : ''} ${styles.caret}`}
@@ -349,6 +395,7 @@ function ActionButtons({
                 </svg>
               </button>
             )}
+            {pinned.map((i) => iconButton(i, styles.pinned))}
             {splitOpen && (
               <div
                 className={`${styles.menuList} ${styles.splitList}`}
@@ -530,6 +577,7 @@ export function ActionBar({
       key: 'done',
       label: 'Done',
       kbd: '⏎',
+      icon: CheckIcon,
       tone: 'primary',
       disabled: !canCommit(state),
       testId: 'done-button',
@@ -539,6 +587,8 @@ export function ActionBar({
       key: 'undo',
       label: 'Undo',
       kbd: 'U',
+      icon: UndoIcon,
+      pinned: true,
       tone: 'default',
       disabled: !canUndo(state),
       testId: 'undo-button',

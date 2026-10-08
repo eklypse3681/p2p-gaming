@@ -437,7 +437,7 @@ function LiveGame({
     if (prevConnected.current === null) {
       prevConnected.current = connected;
       if (connected)
-        toasts.push(`${playerName(state, opponent(seat ?? 'white'))} joined`, 'success');
+        toasts.push(`${playerName(state, opponent(seat ?? 'white'))} joined`, 'success', 2500);
       return;
     }
     if (prevConnected.current !== connected) {
@@ -447,6 +447,7 @@ function LiveGame({
           ? `${playerName(state, opponent(seat ?? 'white'))} reconnected`
           : `${playerName(state, opponent(seat ?? 'white'))} disconnected — the match is saved`,
         connected ? 'success' : 'info',
+        2500,
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -467,6 +468,12 @@ function LiveGame({
     if (interaction.selected) handlers.onSelect?.(interaction.selected);
   }, [interaction.selected, handlers]);
 
+  // Tapping the cube (centred or mine, on my turn to roll) asks before doubling. The prompt
+  // only shows while doubling is still possible, so it never outlives the chance.
+  const mayDouble = canDouble(state);
+  const [doubleAsked, setDoubleAsked] = useState(false);
+  const doubleOpen = doubleAsked && mayDouble;
+
   const shortcuts = useMemo(
     () => ({
       roll: canOpeningRoll(state)
@@ -479,9 +486,13 @@ function LiveGame({
       double: canDouble(state) ? () => client.double() : undefined,
       done: canCommit(state) ? () => client.commit() : undefined,
       undo: canUndo(state) ? () => client.unstage() : undefined,
-      escape: sheetOpen ? () => setSheetOpen(false) : clearSelection,
+      escape: doubleOpen
+        ? () => setDoubleAsked(false)
+        : sheetOpen
+          ? () => setSheetOpen(false)
+          : clearSelection,
     }),
-    [state, client, clearSelection, sheetOpen],
+    [state, client, clearSelection, sheetOpen, doubleOpen],
   );
   useKeyboardShortcuts(shortcuts, state.status === 'joined');
 
@@ -575,7 +586,54 @@ function LiveGame({
       )}
 
       <div className={styles.boardArea} data-testid="board-area">
-        <Board2D model={model} theme={theme} reducedMotion={reducedMotion} {...handlers} />
+        <Board2D
+          model={model}
+          theme={theme}
+          reducedMotion={reducedMotion}
+          {...handlers}
+          onCubeClick={mayDouble ? () => setDoubleAsked(true) : undefined}
+        />
+        {doubleOpen && (
+          <div
+            className={styles.confirmDoubleBackdrop}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setDoubleAsked(false);
+            }}
+          >
+            <div
+              className={`card ${styles.confirmDouble}`}
+              role="dialog"
+              aria-label="Offer a double"
+              data-testid="double-confirm"
+            >
+              <strong>Offer a double?</strong>
+              <span className="muted small">
+                The cube goes to {(currentGame(state)?.cube.value ?? 1) * 2}.{' '}
+                {playerName(state, opponent(seat ?? 'white'))} takes or drops.
+              </span>
+              <div className="row" style={{ justifyContent: 'center' }}>
+                <button
+                  className="btn btn-primary"
+                  data-testid="confirm-double"
+                  autoFocus
+                  onClick={() => {
+                    setDoubleAsked(false);
+                    client.double();
+                  }}
+                >
+                  Double
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  data-testid="cancel-double"
+                  onClick={() => setDoubleAsked(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {!present && state.status === 'joined' && (
           <div className={styles.waiting}>
             <div className={`card ${styles.waitingCard}`}>

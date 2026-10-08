@@ -307,3 +307,17 @@ describe('Board2D', () => {
     expect(document.querySelector('[data-dragging="true"]')).toBeNull();
   });
 });
+
+describe('the cube as a button', () => {
+  it('is pressable only when a handler is given, and reports the tap', async () => {
+    const onCubeClick = vi.fn();
+    const { rerender } = render(<Board2D model={startingModel('white')} theme={theme} />);
+    expect(screen.queryByTestId('cube-hit')).not.toBeInTheDocument();
+    expect(screen.getByTestId('cube')).not.toHaveAttribute('data-pressable');
+
+    rerender(<Board2D model={startingModel('white')} theme={theme} onCubeClick={onCubeClick} />);
+    expect(screen.getByTestId('cube')).toHaveAttribute('data-pressable', 'true');
+    await userEvent.click(screen.getByTestId('cube-hit'));
+    expect(onCubeClick).toHaveBeenCalledTimes(1);
+  });
+});
