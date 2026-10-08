@@ -1,6 +1,7 @@
 import type { TransportProvider } from '@bgf/protocol';
-import { broadcastChannelProvider, memoryProvider } from '@bgf/protocol';
-import { peerJsProvider } from '@bgf/transport-peerjs';
+import { broadcastChannelProvider } from '@bgf/protocol';
+// Hosting code goes through the published runtime, the same code a club's dealer loads.
+import { memoryProvider, peerJsProvider } from '../runtime';
 import type { Settings } from './settings';
 import { getSettings, parseIceServers } from './settings';
 import type { GameId } from '../games/ids';

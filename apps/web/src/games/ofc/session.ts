@@ -1,5 +1,5 @@
 import type { Action, Command, TableConfig, TableState, TableView } from '@bgf/ofc-engine';
-import { ofcDefinition } from '@bgf/ofc-engine';
+import { ofcDefinition } from '../../runtime';
 import type { PlayerProfile, Signer } from '@bgf/protocol';
 import { getProvider } from '../../session/providers';
 import { getSnapshotStore } from '../../session/matchStore';

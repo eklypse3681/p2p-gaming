@@ -2,7 +2,7 @@ import type { Signer } from '@bgf/protocol';
 import type { MatchConfig, Player } from '@bgf/engine';
 import type { GameClientApi, MatchStore } from '@bgf/client';
 import { GameClient } from '@bgf/client';
-import { GameServer } from '@bgf/server';
+import { GameServer } from '../runtime';
 import type { GameServerOptions } from '@bgf/server';
 import type {
   Listener,

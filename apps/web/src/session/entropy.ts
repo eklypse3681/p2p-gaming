@@ -1,6 +1,6 @@
 import type { RandomnessMode } from '@bgf/protocol';
 import type { EntropySource } from '@bgf/table';
-import { cryptoProvider, drandProvider, randomOrgProvider } from '@bgf/entropy';
+import { cryptoProvider, drandProvider, randomOrgProvider } from '../runtime';
 import type { EntropySourceId, Settings } from './settings';
 
 /**
