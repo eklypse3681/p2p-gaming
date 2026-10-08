@@ -10,6 +10,7 @@ import {
   touchDrag,
   touchTap,
   startGameIfNeeded,
+  pressAction,
 } from './helpers';
 
 test.use({ hasTouch: true });
@@ -77,13 +78,13 @@ test.describe('free board (no rule enforcement)', () => {
     expect(await host.getByTestId('die-0').getAttribute('data-value')).toBe(d0);
 
     // Cube by hand.
-    await host.getByTestId('cube-button').click();
+    await pressAction(host, 'cube-button');
     await host.getByTestId('cube-value-2').click();
     await expect(guest.getByTestId('cube')).toHaveAttribute('data-value', '2');
     await host.keyboard.press('Escape');
 
     // Record the result: white wins a gammon at cube 2 → 4 points for the host, on both pages.
-    await host.getByTestId('record-result-button').click();
+    await pressAction(host, 'record-result-button');
     await host.getByTestId('result-white-gammon').click();
     await host.getByTestId('confirm-result').click();
     await expect(host.getByTestId('game-over')).toBeVisible();

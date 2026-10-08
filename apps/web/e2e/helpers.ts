@@ -363,3 +363,15 @@ export async function approvePairing(page: Page): Promise<void> {
   await page.getByTestId('pair-approve').first().click({ timeout: 20_000 });
   await expect(page.getByTestId('pair-done').first()).toBeVisible({ timeout: 20_000 });
 }
+
+/**
+ * Press a dock action by test id. When the actions do not fit they collapse into a split button,
+ * so open its menu first if the action is not on screen.
+ */
+export async function pressAction(page: Page, testId: string): Promise<void> {
+  const button = page.getByTestId(testId);
+  if (!(await button.isVisible().catch(() => false))) {
+    await page.getByTestId('more-actions').click();
+  }
+  await button.click();
+}

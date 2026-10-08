@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, renderHook, act } from '@testing-library/react';
-import { boardFrom, scriptedDice } from '@bgf/engine';
+import type { Die } from '@bgf/engine';
+import { BAR, boardFrom, scriptedDice, turnOptions } from '@bgf/engine';
+import { makeState } from '../test/state';
 import { createFakeClient } from './testing/fakeClient';
 import { useBoardViewModel } from './useBoardViewModel';
 import { EMPTY_INTERACTION, locationKey } from './contract';
@@ -240,6 +242,75 @@ describe('useBoardViewModel', () => {
       expect(
         hook.result.current.checkers.filter((c) => locationKey(c.location) === 'p8'),
       ).toHaveLength(2);
+    });
+  });
+});
+
+describe('dice that cannot be played', () => {
+  /** A state where `mover` is moving `dice` on `board`, seen from `seat`. */
+  function moving(
+    board: ReturnType<typeof boardFrom>,
+    dice: [number, number],
+    seat: 'white' | 'black',
+    mover: 'white' | 'black' = 'white',
+  ) {
+    const base = makeState({ seat, actions: [{ type: 'start-game' }] });
+    const game = {
+      ...base.snapshot!.match.game!,
+      board,
+      phase: { kind: 'moving' as const, player: mover, dice: dice as [Die, Die] },
+    };
+    const snapshot = { ...base.snapshot!, match: { ...base.snapshot!.match, game } };
+    const t = turnOptions(board, mover, dice as [Die, Die], []);
+    const draft =
+      mover === seat
+        ? {
+            played: [],
+            board,
+            next: t.next,
+            remaining: t.remaining,
+            complete: t.complete,
+            maxMoves: t.maxMoves,
+          }
+        : base.draft;
+    return { ...base, snapshot, draft };
+  }
+  const vmOf = (state: ReturnType<typeof moving>, seat: 'white' | 'black') =>
+    renderHook(() =>
+      useBoardViewModel(state, { seat, perspective: seat, interaction: EMPTY_INTERACTION }),
+    ).result.current;
+
+  it('greys out every die when there is no legal move, for both players', () => {
+    // White on the bar against a closed board.
+    const board = boardFrom({ [BAR]: 1, 13: 14 }, { 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 2, 13: 3 });
+    expect(vmOf(moving(board, [3, 4], 'white'), 'white').dice).toMatchObject({
+      used: [false, false],
+      blocked: [true, true],
+    });
+    expect(vmOf(moving(board, [3, 4], 'black'), 'black').dice!.blocked).toEqual([true, true]);
+  });
+
+  // White has one checker on the bar and the rest on its 1-point (no bearing off while one is
+  // out), so the only thing that can move is the entering checker.
+  const white = { [BAR]: 1, 1: 14 };
+
+  it('greys out the smaller die when only the larger one can be played', () => {
+    // It can enter with the 6 only, and then the 1 is blocked (black holds the next point).
+    const board = boardFrom(white, { 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 7: 2, 13: 3 });
+    expect(turnOptions(board, 'white', [6, 1], []).maxMoves).toBe(1);
+    expect(vmOf(moving(board, [6, 1], 'white'), 'white').dice).toMatchObject({
+      used: [false, false],
+      blocked: [false, true],
+    });
+  });
+
+  it('greys out the doubles that cannot all be played', () => {
+    // It enters with one 2, and every further 2 is blocked.
+    const board = boardFrom(white, { 1: 2, 3: 2, 4: 2, 5: 2, 6: 2, 7: 2, 13: 3 });
+    expect(turnOptions(board, 'white', [2, 2], []).maxMoves).toBe(1);
+    expect(vmOf(moving(board, [2, 2], 'white'), 'white').dice).toMatchObject({
+      used: [false, false, false, false],
+      blocked: [false, true, true, true],
     });
   });
 });

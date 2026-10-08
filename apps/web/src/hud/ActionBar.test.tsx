@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ActionBar } from './ActionBar';
@@ -161,22 +161,83 @@ describe('ActionBar', () => {
       expect(client.resetBoard).toHaveBeenCalled();
     });
 
-    it('column layout uses short labels with full names as tooltips and offers More', async () => {
+    it('offers More as an action', async () => {
       const onMore = vi.fn();
       render(
         <ActionBar
           state={freeBoardState()}
           client={fakeClient()}
-          layout="column"
           showStatus={false}
           onMore={onMore}
         />,
       );
       expect(screen.queryByTestId('status-text')).not.toBeInTheDocument();
-      expect(screen.getByTestId('record-result-button')).toHaveTextContent('Score');
-      expect(screen.getByTestId('record-result-button')).toHaveAttribute('title', 'Record result…');
       await userEvent.click(screen.getByTestId('more-button'));
       expect(onMore).toHaveBeenCalled();
     });
+  });
+});
+
+describe('ActionBar in a narrow space', () => {
+  // jsdom has no layout: give the room 120px and the full row 400px, so it cannot fit.
+  beforeEach(() => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.className.includes('room') ? 120 : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.className.includes('ruler') ? 400 : 0;
+    });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('shows the main action with an arrow that opens the others', async () => {
+    const client = fakeClient();
+    render(
+      <ActionBar
+        state={makeState({ seat: 'black', actions: blackToRollActions() })}
+        client={client}
+        onLeave={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('split-actions')).toBeInTheDocument();
+    expect(screen.getByTestId('roll-button')).toBeVisible();
+    expect(screen.queryByTestId('double-button')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId('more-actions'));
+    expect(screen.getByTestId('more-actions-menu')).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId('double-button'));
+    expect(client.double).toHaveBeenCalled();
+    expect(screen.queryByTestId('more-actions-menu')).not.toBeInTheDocument();
+
+    // An action with choices opens them inside the same menu.
+    await userEvent.click(screen.getByTestId('more-actions'));
+    await userEvent.click(screen.getByTestId('resign-button'));
+    expect(screen.getByTestId('resign-menu')).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId('resign-gammon'));
+    expect(client.offerResign).toHaveBeenCalledWith('gammon');
+  });
+
+  it('keeps Done as the main action while it is still disabled', () => {
+    render(
+      <ActionBar state={makeState({ actions: movingWhiteActions() })} client={fakeClient()} />,
+    );
+    expect(screen.getByTestId('done-button')).toBeDisabled();
+    expect(screen.queryByTestId('undo-button')).not.toBeInTheDocument();
+  });
+});
+
+describe('a roll with no legal move', () => {
+  it('enables Done straight away so the player can end the turn', async () => {
+    const client = fakeClient();
+    const base = makeState({ actions: movingWhiteActions() });
+    const state = { ...base, draft: { ...base.draft, next: [], complete: true, maxMoves: 0 } };
+    render(<ActionBar state={state} client={client} />);
+    expect(screen.getByTestId('status-text')).toHaveTextContent(/no legal moves/i);
+    await userEvent.click(screen.getByTestId('done-button'));
+    expect(client.commit).toHaveBeenCalled();
   });
 });

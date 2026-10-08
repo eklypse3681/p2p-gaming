@@ -520,3 +520,18 @@ code,
 .btn-link:hover {
   filter: brightness(1.15);
 }
+
+/* At a table the actions live in a dock along the bottom: toasts drop in from the top instead. */
+:root:has([data-dock]) .toast-region {
+  bottom: auto;
+  top: calc(var(--appbar-h) + 12px);
+}
+
+/* Immersive table (the game's full-screen button): no app bar, the board gets the viewport.
+   Comes last so it wins over the landscape-phone bar height above. */
+:root[data-immersive] {
+  --appbar-h: 0px;
+}
+:root[data-immersive] [data-appbar] {
+  display: none;
+}

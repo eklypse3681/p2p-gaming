@@ -89,7 +89,7 @@ export function backgammonBot(
     case 'moving': {
       if (ph.player !== player) return null;
       const plays = legalPlays(game.board, player, ph.dice);
-      if (plays.length === 0) return null; // the engine auto-skips; nothing to send
+      if (plays.length === 0) return { type: 'play', play: [] }; // no legal move: end the turn
       return { type: 'play', play: bestPlay(game.board, player, plays, opts.rng) };
     }
     case 'resign-offered':

@@ -824,8 +824,8 @@ function GeneralSettings() {
           <div className={styles.rowText}>
             Connection log
             <small>
-              What this device's connections did lately. Copy it and send it along when tables
-              will not connect. It holds no keys or game state.
+              What this device's connections did lately. Copy it and send it along when tables will
+              not connect. It holds no keys or game state.
             </small>
           </div>
         </div>

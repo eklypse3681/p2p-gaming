@@ -45,7 +45,7 @@ function simulateMatch(seed: number, length: number): { actions: Action[]; final
         break;
       case 'moving': {
         const plays = legalPlays(g.board, ph.player, ph.dice);
-        step({ type: 'play', player: ph.player, play: plays[0]! });
+        step({ type: 'play', player: ph.player, play: plays[0] ?? [] }); // [] ends a blocked turn
         break;
       }
       case 'resign-offered':
@@ -79,6 +79,19 @@ describe('replay', () => {
       expect(final.gameNumber).toBe(final.games.length + 1);
       for (const g of final.games) expect(g.result.points).toBeGreaterThan(0);
     }
+  });
+
+  it('replays logs from before blocked turns waited for Done', () => {
+    // Older engines skipped a turn with no legal move on the spot, so their logs have no empty
+    // play: the opponent's next action follows the roll directly. They must still replay.
+    let blocked = 0;
+    for (const seed of [1, 7, 99, 2024]) {
+      const { actions, final } = simulateMatch(seed, 5);
+      const old = actions.filter((a) => !(a.type === 'play' && a.play.length === 0));
+      blocked += actions.length - old.length;
+      expect(replay({ length: 5, crawford: true, jacoby: true }, old)).toEqual(final);
+    }
+    expect(blocked).toBeGreaterThan(0);
   });
 
   it('a truncated or corrupted log fails to replay', () => {

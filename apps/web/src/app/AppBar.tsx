@@ -73,6 +73,7 @@ export function AppBar() {
   return (
     <header
       className={styles.bar}
+      data-appbar
       data-testid="app-bar"
       data-profile={ctx?.slug ?? ''}
       data-game={game?.id ?? ''}

@@ -28,7 +28,8 @@ import { Board2D } from '../../board/svg/Board2D';
 import { useBoardViewModel } from '../../board/useBoardViewModel';
 import { useBoardInteraction } from '../../board/useBoardInteraction';
 import { PlayerCard } from '../../hud/PlayerCard';
-import { ActionBar, StatusLine } from '../../hud/ActionBar';
+import { ActionBar } from '../../hud/ActionBar';
+import { FullscreenIcon, useFullscreen } from '../../hud/useFullscreen';
 import { MatchPanel } from '../../hud/MatchPanel';
 import { Chat } from '../../hud/Chat';
 import { RoomCode } from '../../hud/RoomCode';
@@ -397,8 +398,10 @@ function LiveGame({
 
   const seat = state.seat;
   const perspective: Player = settings.flipBoard ? opponent(seat ?? 'white') : (seat ?? 'white');
-  const topSeat = opponent(perspective);
-  const bottomSeat = perspective;
+  // Me on the left, always; a dealer (no seat) sees the board's near side on the left.
+  const leftSeat: Player = seat ?? perspective;
+  const rightSeat = opponent(leftSeat);
+  const fullscreen = useFullscreen();
 
   const { interaction, handlers } = useBoardInteraction(client, state, seat);
   // One table: the host chose which side the home boards are on; the seat across sees the
@@ -494,8 +497,9 @@ function LiveGame({
     !free &&
     (seat === s ? myTurn(state) : !myTurn(state) && present);
 
-  const cardFor = (s: Player) => (
+  const cardFor = (s: Player, dock: 'left' | 'right') => (
     <PlayerCard
+      dock={dock}
       seat={s}
       name={playerName(state, s)}
       avatar={state.snapshot?.players[s]?.avatar}
@@ -507,8 +511,21 @@ function LiveGame({
       onTurn={onTurn(s)}
       cubeValue={game && game.cube.owner === s ? game.cube.value : undefined}
       latencyMs={s === seat && session.role === 'guest' ? state.latencyMs : null}
-      compact={landscape}
     />
+  );
+
+  const fullscreenButton = (
+    <button
+      className="btn btn-ghost btn-sm btn-icon"
+      onClick={fullscreen.toggle}
+      data-testid="fullscreen-button"
+      data-on={fullscreen.on ? 'true' : 'false'}
+      aria-pressed={fullscreen.on}
+      aria-label={fullscreen.on ? 'Exit full screen' : 'Full screen'}
+      title={fullscreen.on ? 'Exit full screen' : 'Full screen'}
+    >
+      <FullscreenIcon on={fullscreen.on} />
+    </button>
   );
 
   const rail = (
@@ -557,19 +574,6 @@ function LiveGame({
         </div>
       )}
 
-      <div className={styles.opponentSlot}>{cardFor(topSeat)}</div>
-
-      {landscape && (
-        <div className={styles.sideStatus}>
-          <StatusLine state={state} className={styles.sideStatusLine} />
-          {state.opponentPreview && state.opponentPreview.length > 0 && (
-            <div className={styles.opponentPreview} data-testid="opponent-preview">
-              {playerName(state, opponent(seat ?? 'white'))} is arranging a move…
-            </div>
-          )}
-        </div>
-      )}
-
       <div className={styles.boardArea} data-testid="board-area">
         <Board2D model={model} theme={theme} reducedMotion={reducedMotion} {...handlers} />
         {!present && state.status === 'joined' && (
@@ -589,72 +593,78 @@ function LiveGame({
         )}
       </div>
 
-      <div className={styles.mySlot}>{cardFor(bottomSeat)}</div>
-
-      <div className={styles.actions} data-testid={isDealer ? 'dealer-bar' : undefined}>
-        {isDealer ? (
-          <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
-            {!landscape && (
-              <span className="muted small" data-testid="status-text">
+      {/* The dock: me on the left, the opponent on the right, what to do in the middle. */}
+      <div className={styles.dock} data-testid="dock" data-dock>
+        <div className={styles.dockLeft}>{cardFor(leftSeat, 'left')}</div>
+        <div className={styles.dockCenter} data-testid={isDealer ? 'dealer-bar' : undefined}>
+          {isDealer ? (
+            <>
+              <span className={styles.dealerStatus} data-testid="status-text">
                 {!present
                   ? 'Waiting for both players to sit down'
                   : isAutopilot(state) && state.snapshot?.match.game?.phase.kind === 'over'
                     ? `Game over — next game when both are ready (${[state.ready?.white, state.ready?.black].filter(Boolean).length}/2)`
                     : `Dealing for ${playerName(state, 'white')} and ${playerName(state, 'black')}`}
               </span>
-            )}
-            <span className="row">
-              {isAutopilot(state) && (
-                <details className={styles.advanced} data-testid="dealer-advanced">
-                  <summary className="btn btn-ghost btn-sm">Advanced</summary>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => client.startGame()}
-                    disabled={!canStartGame(state)}
-                    data-testid="start-game-button"
-                    title="The table starts games by itself; this forces it now"
-                  >
-                    Start now
-                  </button>
-                </details>
-              )}
-              <button
-                className="btn btn-sm"
-                onClick={() => setFairnessOpen(true)}
-                data-testid="fairness-button-bar"
-              >
-                Fairness
-              </button>
-              {landscape && (
+              <span className={styles.dealerButtons}>
+                {isAutopilot(state) && (
+                  <details className={styles.advanced} data-testid="dealer-advanced">
+                    <summary className="btn btn-ghost btn-sm">Advanced</summary>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => client.startGame()}
+                      disabled={!canStartGame(state)}
+                      data-testid="start-game-button"
+                      title="The table starts games by itself; this forces it now"
+                    >
+                      Start now
+                    </button>
+                  </details>
+                )}
                 <button
                   className="btn btn-sm"
-                  onClick={() => setSheetOpen(true)}
-                  data-testid="more-button"
+                  onClick={() => setFairnessOpen(true)}
+                  data-testid="fairness-button-bar"
                 >
-                  More
+                  Fairness
                 </button>
-              )}
-              <button className="btn btn-ghost btn-sm" onClick={onLeave} data-testid="leave-button">
-                Leave (resume later)
-              </button>
-            </span>
-          </div>
-        ) : (
-          <ActionBar
-            state={state}
-            client={client}
-            onLeave={onLeave}
-            compact={landscape}
-            layout={landscape ? 'column' : 'row'}
-            showStatus={!landscape}
-            onMore={landscape ? () => setSheetOpen(true) : undefined}
-          />
-        )}
-        {!landscape && state.opponentPreview && state.opponentPreview.length > 0 && (
-          <div className={styles.opponentPreview} data-testid="opponent-preview">
-            {playerName(state, opponent(seat ?? 'white'))} is arranging a move…
-          </div>
-        )}
+                {landscape && (
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => setSheetOpen(true)}
+                    data-testid="more-button"
+                  >
+                    More
+                  </button>
+                )}
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={onLeave}
+                  data-testid="leave-button"
+                >
+                  Leave
+                </button>
+                {fullscreenButton}
+              </span>
+            </>
+          ) : (
+            <ActionBar
+              state={state}
+              client={client}
+              onLeave={onLeave}
+              compact={landscape}
+              dense={landscape}
+              onMore={landscape ? () => setSheetOpen(true) : undefined}
+              fullscreen={fullscreen}
+            />
+          )}
+          {!landscape && state.opponentPreview && state.opponentPreview.length > 0 && (
+            <div className={styles.opponentPreview} data-testid="opponent-preview">
+              {playerName(state, opponent(seat ?? 'white'))} is arranging a move…
+            </div>
+          )}
+        </div>
+        <div className={styles.dockRight}>{cardFor(rightSeat, 'right')}</div>
       </div>
 
       {!landscape && (

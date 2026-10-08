@@ -144,6 +144,7 @@ export function applyAction(match: MatchState, action: Action): MatchState {
   if (free && ENFORCED_ONLY_ACTIONS.has(action.type)) {
     throw new RuleError('wrong-phase', 'dice and cube actions are not available on a free board');
   }
+  match = passImplicitly(match, action);
   switch (action.type) {
     case 'start-game':
       return startGame(match);
@@ -185,6 +186,19 @@ export function applyAction(match: MatchState, action: Action): MatchState {
         G.freeResult(requireGame(match), action.player, action.winner, action.kind),
       );
   }
+}
+
+/**
+ * Older logs never ended a blocked turn (the engine skipped it at once), so the opponent's next
+ * action arrives while the blocked player is still "moving". End that turn first, as they would
+ * have by pressing Done; the resulting history is identical to what the old engine recorded.
+ */
+function passImplicitly(match: MatchState, action: Action): MatchState {
+  const game = match.game;
+  if (!game || game.phase.kind !== 'moving') return match;
+  if (!('player' in action) || action.player === game.phase.player) return match;
+  if (!G.isBlockedTurn(game)) return match;
+  return settle(match, G.passBlockedTurn(game));
 }
 
 /** Rebuild a match from its action log. Throws if the log is inconsistent. */

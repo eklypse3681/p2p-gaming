@@ -49,13 +49,16 @@ test('landscape phone: board fills the screen, controls are reachable, nothing s
   // The board uses most of the height available under the app bar.
   expect(board!.height).toBeGreaterThan(viewport.height * 0.6);
 
-  // Compact cards on the left, vertical action bar on the right, status in the side column.
-  await expect(host.getByTestId('player-card-black')).toBeVisible();
-  await expect(host.getByTestId('player-card-white')).toBeVisible();
-  await expect(host.getByTestId('action-bar')).toHaveAttribute('data-layout', 'column');
+  // The dock under the board: me on the left, the opponent on the right, actions between.
+  const me = await host.getByTestId('player-card-white').boundingBox();
+  const them = await host.getByTestId('player-card-black').boundingBox();
+  const bar = await host.getByTestId('action-bar').boundingBox();
+  expect(me!.y).toBeGreaterThan(board!.y + board!.height - 1);
+  expect(me!.x + me!.width).toBeLessThanOrEqual(bar!.x + 1);
+  expect(them!.x).toBeGreaterThanOrEqual(bar!.x + bar!.width - 1);
   await expect(host.getByTestId('status-text')).toBeVisible();
 
-  // Start the game from the vertical bar; the roll button is tappable.
+  // Start the game from the dock; the roll button is tappable.
   await startGameIfNeeded(host);
   await expect(host.getByTestId('roll-button')).toBeVisible();
   const roll = await host.getByTestId('roll-button').boundingBox();
@@ -69,13 +72,34 @@ test('landscape phone: board fills the screen, controls are reachable, nothing s
   await expect(checkersAt(host, 'p9')).toHaveCount(1);
   await expect(checkersAt(guest, 'p9')).toHaveCount(1);
 
-  // The rail lives in a sheet: open, read the score, close.
+  // The rail lives in a sheet: open, read the score, close. In a narrow dock it sits behind
+  // the split button's arrow.
+  if (await host.getByTestId('more-actions').isVisible()) {
+    await host.getByTestId('more-actions').tap();
+  }
   await host.getByTestId('more-button').tap();
   await expect(host.getByTestId('rail-sheet')).toBeVisible();
   await expect(host.getByTestId('score-white')).toBeVisible();
   await host.getByTestId('sheet-close').tap();
   await expect(host.getByTestId('rail-sheet')).toHaveCount(0);
   await noPageScroll(host);
+
+  // Full screen hides the app bar and gives the board the height; the same control undoes it.
+  const before = (await host.getByTestId('board').boundingBox())!.height;
+  const openFullscreen = async () => {
+    if (await host.getByTestId('more-actions').isVisible()) {
+      await host.getByTestId('more-actions').tap();
+    }
+    await host.getByTestId('fullscreen-button').tap();
+  };
+  await openFullscreen();
+  await expect(host.getByTestId('app-bar')).toBeHidden();
+  await expect
+    .poll(async () => (await host.getByTestId('board').boundingBox())!.height)
+    .toBeGreaterThan(before);
+  await noPageScroll(host);
+  await openFullscreen();
+  await expect(host.getByTestId('app-bar')).toBeVisible();
 });
 
 test('portrait phone: board never overflows and the action bar sits under it', async ({
@@ -101,4 +125,12 @@ test('portrait phone: board never overflows and the action bar sits under it', a
   expect(bar!.y).toBeGreaterThan(board!.y + board!.height - 1);
   await startGameIfNeeded(host);
   await expect(host.getByTestId('opening-roll-button')).toBeVisible();
+  // Me on the left of the dock, the opponent on the right, both under the board.
+  const me = await host.getByTestId('player-card-white').boundingBox();
+  const them = await host.getByTestId('player-card-black').boundingBox();
+  expect(me!.x).toBeLessThan(them!.x);
+  expect(me!.y).toBeGreaterThan(board!.y + board!.height - 1);
+  const g = await guest.getByTestId('player-card-black').boundingBox();
+  const o = await guest.getByTestId('player-card-white').boundingBox();
+  expect(g!.x).toBeLessThan(o!.x);
 });

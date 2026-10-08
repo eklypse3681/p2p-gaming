@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import type { Board, GamePhase, Player, SubMove } from '@bgf/engine';
+import type { Board, DiceRoll, GamePhase, Player, SubMove } from '@bgf/engine';
 import {
   BAR as REL_BAR,
   destinationsFrom,
   opponent,
   pipCount,
   startingBoard,
+  turnOptions,
   turnStartBoard,
 } from '@bgf/engine';
 import type { ClientState } from '@bgf/client';
@@ -216,6 +217,7 @@ function diceVM(state: ClientState, seat: Player | null): DiceVM | null {
       player: d.player,
       values: d.dice,
       used: doubles ? [false, false, false, false] : [false, false],
+      blocked: doubles ? [false, false, false, false] : [false, false],
       rollToken: gameNumber * 100000 + rolls,
     };
   }
@@ -223,26 +225,54 @@ function diceVM(state: ClientState, seat: Player | null): DiceVM | null {
   const { player, dice } = game.phase;
   const doubles = dice[0] === dice[1];
   const slots = doubles ? 4 : 2;
-  let usedCount = 0;
+  // Moves made so far this turn: my draft, or what the opponent is previewing.
+  const mine = player === seat;
+  const played: readonly SubMove[] = mine ? state.draft.played : (state.opponentPreview ?? []);
+  const opts = mine
+    ? { next: state.draft.next, maxMoves: state.draft.maxMoves }
+    : opponentOptions(game.board, player, dice, played);
   let used: boolean[];
-  if (player === seat) {
-    used = doubles
-      ? Array.from({ length: 4 }, (_, i) => i < 4 - state.draft.remaining.length)
-      : [!state.draft.remaining.includes(dice[0]), !state.draft.remaining.includes(dice[1])];
+  let blocked: boolean[];
+  if (doubles) {
+    const usedCount = Math.min(played.length, 4);
+    // Every legal play has the same length, so of the dice left only that many can be played.
+    const playable = opts ? Math.max(0, opts.maxMoves - played.length) : 4;
+    used = Array.from({ length: 4 }, (_, i) => i < usedCount);
+    blocked = Array.from({ length: 4 }, (_, i) => i >= usedCount + playable);
   } else {
-    const preview = state.opponentPreview ?? [];
-    usedCount = preview.length;
-    used = doubles
-      ? Array.from({ length: 4 }, (_, i) => i < usedCount)
-      : [preview.some((m) => m.die === dice[0]), preview.some((m) => m.die === dice[1])];
+    used = mine
+      ? [!state.draft.remaining.includes(dice[0]), !state.draft.remaining.includes(dice[1])]
+      : [played.some((m) => m.die === dice[0]), played.some((m) => m.die === dice[1])];
+    blocked = used.map((u, i) => !u && !!opts && !opts.next.some((m) => m.die === dice[i]));
   }
   const gameNumber = state.snapshot?.match.gameNumber ?? 0;
   return {
     player,
     values: dice,
     used: used.slice(0, slots),
+    blocked: blocked.slice(0, slots),
     rollToken: gameNumber * 1000 + game.turnCount,
   };
+}
+
+/**
+ * The opponent's options from their preview, or null when the preview is not a legal start of a
+ * play (it is provisional and may run ahead of the rules): then nothing is shown as blocked.
+ */
+function opponentOptions(
+  board: Board,
+  player: Player,
+  dice: DiceRoll,
+  preview: readonly SubMove[],
+): { next: SubMove[]; maxMoves: number } | null {
+  // The snapshot's board is still the turn's starting position: previews are not applied to it.
+  try {
+    const opts = turnOptions(board, player, dice, preview);
+    if (opts.next.length === 0 && preview.length < opts.maxMoves) return null;
+    return opts;
+  } catch {
+    return null;
+  }
 }
 
 function openingVM(state: ClientState): OpeningDiceVM | null {

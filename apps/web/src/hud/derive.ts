@@ -110,7 +110,8 @@ export function isMoving(state: ClientState): boolean {
 }
 
 export function canCommit(state: ClientState): boolean {
-  return isMoving(state) && state.draft.complete && state.draft.maxMoves > 0;
+  // A roll with no legal move is complete at once: Done ends the turn.
+  return isMoving(state) && state.draft.complete && !state.draft.pending;
 }
 
 export function canUndo(state: ClientState): boolean {
@@ -246,7 +247,7 @@ export function phaseSummary(state: ClientState): PhaseSummary {
     case 'moving':
       if (ph.player === seat) {
         if (state.draft.maxMoves === 0)
-          return { text: 'No legal moves', waitingOn: seat, mine: true };
+          return { text: 'No legal moves — tap Done', waitingOn: seat, mine: true };
         if (state.draft.complete)
           return { text: 'Tap Done to end your turn', waitingOn: seat, mine: true };
         return {

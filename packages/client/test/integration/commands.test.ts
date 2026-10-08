@@ -255,7 +255,7 @@ describe('commands', () => {
     h.close();
   });
 
-  it('auto-skips a turn with no legal move and the clients see the roll action', async () => {
+  it('a roll with no legal move waits for Done, then passes the turn', async () => {
     // White on the bar against a closed board.
     const board = boardFrom({ [BAR]: 1, 13: 14 }, { 1: 2, 2: 2, 3: 2, 4: 2, 5: 2, 6: 2, 13: 3 });
     const h = await makeHarness({
@@ -264,6 +264,12 @@ describe('commands', () => {
     });
     h.host.roll();
     await flush();
+    expect(currentGame(h.guest).phase).toMatchObject({ kind: 'moving', player: 'white' });
+    const draft = h.host.getState().draft;
+    expect(draft).toMatchObject({ maxMoves: 0, complete: true, next: [], remaining: [3, 4] });
+
+    h.host.commit();
+    await flush();
     const g = currentGame(h.guest);
     expect(g.phase).toMatchObject({ kind: 'to-roll', player: 'black' });
     expect(g.history.at(-1)).toMatchObject({
@@ -271,10 +277,6 @@ describe('commands', () => {
       player: 'white',
       dice: [3, 4],
       play: [],
-    });
-    expect(h.guest.getState().lastAction).toMatchObject({
-      action: { type: 'roll', player: 'white' },
-      by: 'white',
     });
     expect(h.host.getState().draft.played).toEqual([]);
     expect(h.host.getState().draft.board).toEqual(g.board);

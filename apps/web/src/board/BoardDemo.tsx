@@ -23,6 +23,16 @@ function combinedFor(selected: BoardLocation | null): BoardLocation[] {
   return point >= 1 ? [{ kind: 'point', point }] : [];
 }
 
+type DemoDice = 'fresh' | 'one-used' | 'one-blocked' | 'blocked';
+
+/** The dice treatments the demo can show (the position stays the same). */
+const DEMO_DICE: Record<DemoDice, { used: boolean[]; blocked: boolean[] }> = {
+  fresh: { used: [false, false], blocked: [false, false] },
+  'one-used': { used: [true, false], blocked: [false, false] },
+  'one-blocked': { used: [false, false], blocked: [false, true] },
+  blocked: { used: [false, false], blocked: [true, true] },
+};
+
 /** A fixed mid-game position with dice, cube and highlights — no client required. */
 export function sampleViewModel(
   perspective: Player,
@@ -67,7 +77,13 @@ export function sampleViewModel(
     perspective,
     homeSide,
     checkers,
-    dice: { player: 'white', values: [4, 3], used: [false, false], rollToken: 1 },
+    dice: {
+      player: 'white',
+      values: [4, 3],
+      used: [false, false],
+      blocked: [false, false],
+      rollToken: 1,
+    },
     openingDice: null,
     cube: { value: 2, owner: 'black' },
     highlights: {
@@ -110,6 +126,7 @@ export function BoardDemo({
   const [homeSide, setHomeSide] = useState<HomeSide>(initialHomeSide);
   const [selected, setSelected] = useState<BoardLocation | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [diceState, setDiceState] = useState<DemoDice>('fresh');
   const [log, setLog] = useState<string[]>([]);
   const theme = composeTheme({ look, board: boardId, pieces: pieceId });
   const presetId = PRESETS.some((p) => p.id === theme.id) ? theme.id : '';
@@ -120,10 +137,10 @@ export function BoardDemo({
     setBoardId(p.board);
     setPieceId(p.pieces);
   };
-  const model = useMemo(
-    () => sampleViewModel(perspective, selected, homeSide),
-    [perspective, selected, homeSide],
-  );
+  const model = useMemo(() => {
+    const m = sampleViewModel(perspective, selected, homeSide);
+    return m.dice ? { ...m, dice: { ...m.dice, ...DEMO_DICE[diceState] } } : m;
+  }, [perspective, selected, homeSide, diceState]);
   const vars = themeToCssVars(theme) as CSSProperties;
 
   const note = (s: string) => setLog((l) => [s, ...l].slice(0, 6));
@@ -210,6 +227,19 @@ export function BoardDemo({
         >
           Home board: {homeSide}
         </button>
+        <label>
+          Dice{' '}
+          <select
+            value={diceState}
+            onChange={(e) => setDiceState(e.target.value as DemoDice)}
+            data-testid="demo-dice"
+          >
+            <option value="fresh">Both to play</option>
+            <option value="one-used">One played</option>
+            <option value="one-blocked">One cannot be played</option>
+            <option value="blocked">No legal move</option>
+          </select>
+        </label>
         <label>
           <input
             type="checkbox"

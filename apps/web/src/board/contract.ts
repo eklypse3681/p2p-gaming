@@ -54,6 +54,11 @@ export interface DiceVM {
   values: [number, number];
   /** Per die (and per repeat for doubles): true once consumed by the draft/turn. */
   used: boolean[];
+  /**
+   * Per die: true when it is not used yet but can no longer be played (blocked, or the rules
+   * say the other die must be played). Every die blocked means the turn can only be ended.
+   */
+  blocked: boolean[];
   /** Renderer may play a roll animation when this token changes. */
   rollToken: number;
 }

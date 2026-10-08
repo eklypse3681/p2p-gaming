@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { CubeOwner, Player, ResultKind } from '@bgf/engine';
 import { opponent } from '@bgf/engine';
 import type { ClientState, GameClientApi } from '@bgf/client';
 import styles from './ActionBar.module.css';
+import { FullscreenIcon } from './useFullscreen';
 import {
   canCommit,
   canDouble,
@@ -30,8 +31,6 @@ import {
   readyState,
 } from './derive';
 
-export type ActionBarLayout = 'row' | 'column';
-
 export interface ActionBarProps {
   state: ClientState;
   client: Pick<
@@ -57,17 +56,19 @@ export interface ActionBarProps {
   onLeave?: () => void;
   /** Hide keyboard hints (small screens). */
   compact?: boolean;
-  /** 'column' stacks short-labelled buttons vertically (landscape phones). */
-  layout?: ActionBarLayout;
+  /** Smaller buttons, for the short dock of a landscape phone. */
+  dense?: boolean;
   /** Render the status line inside the bar (default true). */
   showStatus?: boolean;
-  /** When set, a "More" button is shown that calls this (opens the match/chat sheet). */
+  /** When set, a "More" action is offered that calls this (opens the match/chat sheet). */
   onMore?: () => void;
+  /** Full screen toggle: an icon after the actions, or an item in the menu once they split. */
+  fullscreen?: { on: boolean; toggle: () => void };
 }
 
 const CUBE_VALUES = [1, 2, 4, 8, 16, 32, 64] as const;
 
-/** The one-line phase summary; also usable on its own (landscape layout). */
+/** The one-line phase summary; also usable on its own. */
 export function StatusLine({ state, className }: { state: ClientState; className?: string }) {
   const summary = phaseSummary(state);
   return (
@@ -103,53 +104,292 @@ function useOutsideClose(open: boolean, close: () => void) {
   return ref;
 }
 
-function Menu({
-  open,
-  onClose,
-  children,
-  testId,
-  trigger,
-  anchor = 'above',
-}: {
-  open: boolean;
-  onClose: () => void;
-  children: ReactNode;
+type Tone = 'primary' | 'danger' | 'default' | 'quiet';
+
+/** One thing the player can do now. Either an immediate action or a panel of choices. */
+interface ActionItem {
+  key: string;
+  label: string;
+  kbd?: string;
+  tone: Tone;
+  disabled?: boolean;
   testId: string;
-  trigger: ReactNode;
-  /** 'above' pops over the button; 'left' floats beside a vertical column (fixed position). */
-  anchor?: 'above' | 'left';
-}) {
-  const ref = useOutsideClose(open, onClose);
-  const [fixed, setFixed] = useState<CSSProperties | null>(null);
-  useLayoutEffect(() => {
-    if (!open || anchor !== 'left' || !ref.current) {
-      setFixed(null);
+  onSelect?: () => void;
+  /** Opens a panel of further choices (resign stakes, cube, result, reset). */
+  panel?: (close: () => void) => ReactNode;
+  panelTestId?: string;
+  attrs?: Record<string, string>;
+}
+
+function toneClass(tone: Tone): string {
+  if (tone === 'primary') return 'btn-primary';
+  if (tone === 'danger') return 'btn-danger';
+  if (tone === 'quiet') return 'btn-ghost';
+  return '';
+}
+
+/**
+ * The action a split button shows: the first enabled primary one; else the first primary one even
+ * while disabled (Done before the move is complete says what comes next); else anything enabled.
+ */
+function defaultItem(items: ActionItem[]): ActionItem | undefined {
+  return (
+    items.find((i) => i.tone === 'primary' && !i.disabled) ??
+    items.find((i) => i.tone === 'primary') ??
+    items.find((i) => !i.disabled && i.tone !== 'quiet') ??
+    items.find((i) => !i.disabled) ??
+    items[0]
+  );
+}
+
+/**
+ * True when the actions do not fit on one line in the space given. A hidden copy of the full
+ * row is measured, so the answer never depends on which mode is showing (no flip-flopping).
+ * Without layout (jsdom) or a ResizeObserver everything is shown.
+ */
+function useOverflow(signature: string) {
+  const room = useRef<HTMLDivElement>(null);
+  const ruler = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(false);
+  const measure = useCallback(() => {
+    const r = room.current;
+    const m = ruler.current;
+    if (!r || !m || r.clientWidth === 0) {
+      setOverflow(false);
       return;
     }
-    const r = ref.current.getBoundingClientRect();
-    const top = Math.max(8, Math.min(r.top, window.innerHeight - 220));
-    setFixed({
-      position: 'fixed',
-      top,
-      right: Math.max(8, window.innerWidth - r.left + 8),
-      left: 'auto',
-      bottom: 'auto',
-      maxHeight: window.innerHeight - top - 8,
-    });
-  }, [open, anchor, ref]);
+    setOverflow(m.scrollWidth > r.clientWidth + 0.5);
+  }, []);
+  useLayoutEffect(measure, [measure, signature]);
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined' || !room.current) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(room.current);
+    return () => ro.disconnect();
+  }, [measure]);
+  return { room, ruler, overflow };
+}
+
+function PanelButton({
+  item,
+  className,
+  open,
+  onToggle,
+  onClose,
+  children,
+}: {
+  item: ActionItem;
+  className: string;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  children?: ReactNode;
+}) {
+  const ref = useOutsideClose(open, onClose);
   return (
     <div className={styles.menu} ref={ref}>
-      {trigger}
-      {open && (
-        <div
-          className={styles.menuList}
-          role="menu"
-          data-testid={testId}
-          style={anchor === 'left' ? (fixed ?? { visibility: 'hidden' }) : undefined}
-        >
-          {children}
+      <button
+        className={className}
+        data-testid={item.testId}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={item.disabled}
+        onClick={onToggle}
+        title={item.label}
+        {...item.attrs}
+      >
+        {children ?? item.label}
+      </button>
+      {open && item.panel && (
+        <div className={styles.menuList} role="menu" data-testid={item.panelTestId}>
+          {item.panel(onClose)}
         </div>
       )}
+    </div>
+  );
+}
+
+function ActionButtons({
+  items,
+  compact,
+  dense,
+  fullscreen,
+}: {
+  items: ActionItem[];
+  compact?: boolean;
+  dense?: boolean;
+  fullscreen?: { on: boolean; toggle: () => void };
+}) {
+  const signature = items.map((i) => `${i.key}:${i.label}`).join('|');
+  const { room, ruler, overflow } = useOverflow(signature);
+  // A panel or menu belongs to the actions on screen: once they change, it counts as closed.
+  const context = `${signature}#${overflow ? 'split' : 'row'}`;
+  const [openState, setOpenState] = useState<{ key: string; context: string } | null>(null);
+  const [splitState, setSplitState] = useState<{ panel: string | null; context: string } | null>(
+    null,
+  );
+  const open = openState?.context === context ? openState.key : null;
+  const splitOpen = splitState?.context === context;
+  const splitPanel = splitOpen ? splitState!.panel : null;
+  const setOpen = (key: string | null) => setOpenState(key ? { key, context } : null);
+  const setSplitPanel = (panel: string | null) => setSplitState({ panel, context });
+  const close = useCallback(() => setOpenState(null), []);
+  const closeSplit = useCallback(() => setSplitState(null), []);
+  const splitRef = useOutsideClose(splitOpen, closeSplit);
+
+  const size = dense ? 'btn-sm' : '';
+  // Quiet actions (resign, leave) are small everywhere: they leave room for the ones that matter.
+  const cls = (i: ActionItem) =>
+    `btn ${i.tone === 'quiet' ? 'btn-sm' : size} ${toneClass(i.tone)} ${styles.action}`;
+  const content = (i: ActionItem) => (
+    <>
+      {i.label}
+      {!compact && !dense && i.kbd && <kbd className={styles.kbd}>{i.kbd}</kbd>}
+    </>
+  );
+  const render = (i: ActionItem) =>
+    i.panel ? (
+      <PanelButton
+        key={i.key}
+        item={i}
+        className={cls(i)}
+        open={open === i.key}
+        onToggle={() => setOpen(open === i.key ? null : i.key)}
+        onClose={close}
+      >
+        {content(i)}
+      </PanelButton>
+    ) : (
+      <button
+        key={i.key}
+        className={cls(i)}
+        data-testid={i.testId}
+        disabled={i.disabled}
+        onClick={i.onSelect}
+        title={i.label}
+        {...i.attrs}
+      >
+        {content(i)}
+      </button>
+    );
+
+  const fsLabel = fullscreen?.on ? 'Exit full screen' : 'Full screen';
+  const fsIcon = fullscreen && (
+    <button
+      className={`btn btn-ghost btn-sm btn-icon ${styles.action}`}
+      onClick={fullscreen.toggle}
+      data-testid="fullscreen-button"
+      data-on={fullscreen.on ? 'true' : 'false'}
+      aria-pressed={fullscreen.on}
+      aria-label={fsLabel}
+      title={fsLabel}
+    >
+      <FullscreenIcon on={fullscreen.on} />
+    </button>
+  );
+  const main = overflow ? defaultItem(items) : undefined;
+  const rest = main ? items.filter((i) => i !== main) : [];
+  if (main && fullscreen) {
+    rest.push({
+      key: 'fullscreen',
+      label: fsLabel,
+      tone: 'quiet',
+      testId: 'fullscreen-button',
+      attrs: { 'data-on': fullscreen.on ? 'true' : 'false' },
+      onSelect: fullscreen.toggle,
+    });
+  }
+  const panelItem = splitPanel ? rest.find((i) => i.key === splitPanel) : undefined;
+
+  return (
+    <div className={styles.row}>
+      <div className={styles.room} ref={room}>
+        {/* The full row, invisible, for measuring. */}
+        <div className={styles.rulerBox} aria-hidden="true">
+          <div className={styles.ruler} ref={ruler}>
+            {items.map((i) => (
+              <span key={i.key} className={cls(i)}>
+                {content(i)}
+              </span>
+            ))}
+            {fullscreen && (
+              <span className={`btn btn-ghost btn-sm btn-icon ${styles.action}`}>
+                <FullscreenIcon on={fullscreen.on} />
+              </span>
+            )}
+          </div>
+        </div>
+        {!main ? (
+          <div className={styles.buttons}>
+            {items.map(render)}
+            {fsIcon}
+          </div>
+        ) : (
+          <div className={styles.split} data-testid="split-actions" ref={splitRef}>
+            {render(main)}
+            {rest.length > 0 && (
+              <button
+                className={`btn ${size} ${main.tone === 'primary' && !main.disabled ? 'btn-primary' : ''} ${styles.caret}`}
+                data-testid="more-actions"
+                aria-haspopup="menu"
+                aria-expanded={splitOpen}
+                aria-label="More actions"
+                title="More actions"
+                onClick={() => (splitOpen ? closeSplit() : setSplitPanel(null))}
+              >
+                <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+                  <path
+                    d="M2 4.5 6 8.5 10 4.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
+            {splitOpen && (
+              <div
+                className={`${styles.menuList} ${styles.splitList}`}
+                role="menu"
+                data-testid={panelItem?.panelTestId ?? 'more-actions-menu'}
+              >
+                {panelItem ? (
+                  <>
+                    <button className={styles.menuBack} onClick={() => setSplitPanel(null)}>
+                      ‹ {panelItem.label}
+                    </button>
+                    {panelItem.panel!(closeSplit)}
+                  </>
+                ) : (
+                  rest.map((i) => (
+                    <button
+                      key={i.key}
+                      className={`${styles.menuItem} ${i.tone === 'danger' ? styles.menuDanger : ''}`}
+                      role="menuitem"
+                      data-testid={i.testId}
+                      disabled={i.disabled}
+                      onClick={() => {
+                        if (i.panel) {
+                          setSplitPanel(i.key);
+                          return;
+                        }
+                        closeSplit();
+                        i.onSelect?.();
+                      }}
+                      {...i.attrs}
+                    >
+                      {i.label}
+                      {i.panel && <span className={styles.menuChevron}>›</span>}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -159,28 +399,17 @@ export function ActionBar({
   client,
   onLeave,
   compact,
-  layout = 'row',
+  dense,
   showStatus = true,
   onMore,
+  fullscreen,
 }: ActionBarProps) {
   const match = currentMatch(state);
   const game = currentGame(state);
   const over = gameOver(state);
-  const column = layout === 'column';
-  const [menu, setMenu] = useState<'resign' | 'cube' | 'result' | 'reset' | null>(null);
   const [pendingResult, setPendingResult] = useState<{ winner: Player; kind: ResultKind } | null>(
     null,
   );
-  const closeMenu = () => {
-    setMenu(null);
-    setPendingResult(null);
-  };
-  const toggle = (m: NonNullable<typeof menu>) => setMenu((cur) => (cur === m ? null : m));
-
-  const resign = (stakes: ResultKind) => {
-    closeMenu();
-    client.offerResign(stakes);
-  };
 
   const auto = isAutopilot(state);
   const readiness = readyState(state);
@@ -198,167 +427,136 @@ export function ActionBar({
     client.setCube(v, v === 1 ? 'center' : owner);
   };
 
-  /** Label helper: full text in row layout, short text in column layout (full text as tooltip). */
-  const lbl = (full: string, short: string, kbd?: string) => ({
-    children: (
-      <>
-        {column ? short : full}
-        {!compact && !column && kbd && <kbd className={styles.kbd}>{kbd}</kbd>}
-      </>
-    ),
-    title: full,
-    'aria-label': full,
-  });
-  const btn = (extra = '') => `btn ${column ? `btn-sm ${styles.vbtn}` : ''} ${extra}`;
+  const items: ActionItem[] = [];
+  const add = (i: ActionItem | false | null | undefined) => {
+    if (i) items.push(i);
+  };
 
-  return (
-    <div
-      className={`${styles.bar} ${column ? styles.column : ''}`}
-      data-testid="action-bar"
-      data-layout={layout}
-    >
-      {showStatus && <StatusLine state={state} />}
-      <div className={styles.buttons}>
-        {showStart && (
-          <button
-            className={btn('btn-primary')}
-            data-testid="start-game-button"
-            onClick={() => client.startGame()}
-            {...lbl(
-              over || (match && match.games.length > 0) ? 'Next game' : 'Start game',
-              over || (match && match.games.length > 0) ? 'Next' : 'Start',
-            )}
-          />
-        )}
-        {showReady && (
-          <>
-            <button
-              className={btn(readiness.mine ? '' : 'btn-primary')}
-              data-testid="ready-button"
-              data-ready={readiness.mine ? 'true' : 'false'}
-              onClick={() => client.ready(!readiness.mine)}
-              {...lbl(
-                readiness.mine ? 'Not ready' : 'Ready for the next game',
-                readiness.mine ? 'Unready' : 'Ready',
-              )}
-            />
-            <span
-              className="muted small"
-              data-testid="ready-indicator"
-              data-opponent-ready={readiness.opponent ? 'true' : 'false'}
-            >
-              {readiness.opponent
-                ? `${playerName(state, opponent(seat ?? 'white'))} is ready`
-                : `Waiting for ${playerName(state, opponent(seat ?? 'white'))}`}
-            </span>
-          </>
-        )}
-        {waitingToStart && (
-          <span className="muted small" data-testid="auto-start-note">
-            The game starts as soon as both players are here.
-          </span>
-        )}
-        {canOpeningRoll(state) && (
-          <button
-            className={btn('btn-primary')}
-            data-testid="opening-roll-button"
-            onClick={() => client.openingRoll()}
-            {...lbl('Roll for start', 'Roll', 'R')}
-          />
-        )}
-        {canRoll(state) && (
-          <button
-            className={btn('btn-primary')}
-            data-testid="roll-button"
-            onClick={() => client.roll()}
-            {...lbl('Roll', 'Roll', 'R')}
-          />
-        )}
-        {free && canFreeRoll(state) && (
-          <button
-            className={btn('btn-primary')}
-            data-testid="roll-button"
-            onClick={() => client.freeRoll()}
-            {...lbl('Roll', 'Roll', 'R')}
-          />
-        )}
-        {canDouble(state) && (
-          <button
-            className={btn()}
-            data-testid="double-button"
-            onClick={() => client.double()}
-            {...lbl('Double', 'Dbl', 'D')}
-          />
-        )}
-        {canRespondToDouble(state) && (
-          <>
-            <button
-              className={btn('btn-primary')}
-              data-testid="take-button"
-              onClick={() => client.take()}
-              {...lbl('Take', 'Take')}
-            />
-            <button
-              className={btn('btn-danger')}
-              data-testid="drop-button"
-              onClick={() => client.drop()}
-              {...lbl('Drop', 'Drop')}
-            />
-          </>
-        )}
-        {canRespondToResign(state) && (
-          <>
-            <button
-              className={btn('btn-primary')}
-              data-testid="accept-resign-button"
-              onClick={() => client.acceptResign()}
-              {...lbl('Accept resignation', 'Accept')}
-            />
-            <button
-              className={btn()}
-              data-testid="decline-resign-button"
-              onClick={() => client.declineResign()}
-              {...lbl('Decline', 'Decline')}
-            />
-          </>
-        )}
-        {moving && (
-          <>
-            <button
-              className={btn('btn-primary')}
-              data-testid="done-button"
-              disabled={!canCommit(state)}
-              onClick={() => client.commit()}
-              {...lbl('Done', 'Done', '⏎')}
-            />
-            <button
-              className={btn()}
-              data-testid="undo-button"
-              disabled={!canUndo(state)}
-              onClick={() => client.unstage()}
-              {...lbl('Undo', 'Undo', 'U')}
-            />
-          </>
-        )}
+  const later = over || (match && match.games.length > 0);
+  add(
+    showStart && {
+      key: 'start',
+      label: later ? 'Next game' : 'Start game',
+      tone: 'primary',
+      testId: 'start-game-button',
+      onSelect: () => client.startGame(),
+    },
+  );
+  add(
+    showReady && {
+      key: 'ready',
+      label: readiness.mine ? 'Not ready' : 'Ready',
+      tone: readiness.mine ? 'default' : 'primary',
+      testId: 'ready-button',
+      attrs: { 'data-ready': readiness.mine ? 'true' : 'false' },
+      onSelect: () => client.ready(!readiness.mine),
+    },
+  );
+  add(
+    canOpeningRoll(state) && {
+      key: 'opening',
+      label: 'Roll for start',
+      kbd: 'R',
+      tone: 'primary',
+      testId: 'opening-roll-button',
+      onSelect: () => client.openingRoll(),
+    },
+  );
+  add(
+    canRoll(state) && {
+      key: 'roll',
+      label: 'Roll',
+      kbd: 'R',
+      tone: 'primary',
+      testId: 'roll-button',
+      onSelect: () => client.roll(),
+    },
+  );
+  add(
+    free &&
+      canFreeRoll(state) && {
+        key: 'free-roll',
+        label: 'Roll',
+        kbd: 'R',
+        tone: 'primary',
+        testId: 'roll-button',
+        onSelect: () => client.freeRoll(),
+      },
+  );
+  add(
+    canDouble(state) && {
+      key: 'double',
+      label: 'Double',
+      kbd: 'D',
+      tone: 'default',
+      testId: 'double-button',
+      onSelect: () => client.double(),
+    },
+  );
+  if (canRespondToDouble(state)) {
+    add({
+      key: 'take',
+      label: 'Take',
+      tone: 'primary',
+      testId: 'take-button',
+      onSelect: () => client.take(),
+    });
+    add({
+      key: 'drop',
+      label: 'Drop',
+      tone: 'danger',
+      testId: 'drop-button',
+      onSelect: () => client.drop(),
+    });
+  }
+  if (canRespondToResign(state)) {
+    add({
+      key: 'accept-resign',
+      label: 'Accept resignation',
+      tone: 'primary',
+      testId: 'accept-resign-button',
+      onSelect: () => client.acceptResign(),
+    });
+    add({
+      key: 'decline-resign',
+      label: 'Decline',
+      tone: 'default',
+      testId: 'decline-resign-button',
+      onSelect: () => client.declineResign(),
+    });
+  }
+  if (moving) {
+    add({
+      key: 'done',
+      label: 'Done',
+      kbd: '⏎',
+      tone: 'primary',
+      disabled: !canCommit(state),
+      testId: 'done-button',
+      onSelect: () => client.commit(),
+    });
+    add({
+      key: 'undo',
+      label: 'Undo',
+      kbd: 'U',
+      tone: 'default',
+      disabled: !canUndo(state),
+      testId: 'undo-button',
+      onSelect: () => client.unstage(),
+    });
+  }
 
-        {/* ---- free board controls ---- */}
-        {free && canSetCube(state) && (
-          <Menu
-            open={menu === 'cube'}
-            onClose={closeMenu}
-            anchor={column ? 'left' : 'above'}
-            testId="cube-menu"
-            trigger={
-              <button
-                className={btn()}
-                data-testid="cube-button"
-                aria-haspopup="menu"
-                aria-expanded={menu === 'cube'}
-                onClick={() => toggle('cube')}
-                {...lbl(`Cube ×${cube.value}`, `×${cube.value}`)}
-              />
-            }
-          >
+  // ---- free board controls ----
+  add(
+    free &&
+      canSetCube(state) && {
+        key: 'cube',
+        label: `Cube ×${cube.value}`,
+        tone: 'default',
+        testId: 'cube-button',
+        panelTestId: 'cube-menu',
+        panel: () => (
+          <>
             <div className={styles.menuHeading}>Cube owner</div>
             <div className={styles.chipRow}>
               {(['center', 'white', 'black'] as const).map((owner) => (
@@ -389,183 +587,182 @@ export function ActionBar({
                 </button>
               ))}
             </div>
-          </Menu>
-        )}
-        {free && canRecordResult(state) && seat && (
-          <Menu
-            open={menu === 'result'}
-            onClose={closeMenu}
-            anchor={column ? 'left' : 'above'}
-            testId="record-result-menu"
-            trigger={
-              <button
-                className={btn()}
-                data-testid="record-result-button"
-                aria-haspopup="menu"
-                aria-expanded={menu === 'result'}
-                onClick={() => toggle('result')}
-                {...lbl('Record result…', 'Score')}
-              />
-            }
-          >
-            {pendingResult ? (
-              <div className={styles.confirm} data-testid="confirm-result-panel">
-                <div>
-                  <strong>{playerName(state, pendingResult.winner)}</strong> wins a{' '}
-                  {kindLabel(pendingResult.kind).toLowerCase()}
-                  {cube.value > 1 ? ` · cube ×${cube.value}` : ''}. End the game?
-                </div>
-                <div className={styles.confirmRow}>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    data-testid="confirm-result"
-                    onClick={() => {
-                      const r = pendingResult;
-                      closeMenu();
-                      client.recordResult(r.winner, r.kind);
-                    }}
-                  >
-                    Record
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    data-testid="cancel-result"
-                    onClick={() => setPendingResult(null)}
-                  >
-                    Back
-                  </button>
-                </div>
+          </>
+        ),
+      },
+  );
+  add(
+    free &&
+      canRecordResult(state) &&
+      seat && {
+        key: 'result',
+        label: 'Record result…',
+        tone: 'default',
+        testId: 'record-result-button',
+        panelTestId: 'record-result-menu',
+        panel: (close) =>
+          pendingResult ? (
+            <div className={styles.confirm} data-testid="confirm-result-panel">
+              <div>
+                <strong>{playerName(state, pendingResult.winner)}</strong> wins a{' '}
+                {kindLabel(pendingResult.kind).toLowerCase()}
+                {cube.value > 1 ? ` · cube ×${cube.value}` : ''}. End the game?
               </div>
-            ) : (
-              [seat, opponent(seat)].map((w) => (
-                <div key={w}>
-                  <div className={styles.menuHeading}>
-                    {w === seat ? `${playerName(state, w)} (you)` : playerName(state, w)} wins…
-                  </div>
-                  <div className={styles.chipRow}>
-                    {(['single', 'gammon', 'backgammon'] as const).map((kind) => (
-                      <button
-                        key={kind}
-                        className={styles.chip}
-                        role="menuitem"
-                        data-testid={`result-${w}-${kind}`}
-                        onClick={() => setPendingResult({ winner: w, kind })}
-                      >
-                        {kindLabel(kind)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
-          </Menu>
-        )}
-        {free && canResetBoard(state) && (
-          <Menu
-            open={menu === 'reset'}
-            onClose={closeMenu}
-            anchor={column ? 'left' : 'above'}
-            testId="reset-menu"
-            trigger={
-              <button
-                className={btn()}
-                data-testid="reset-board-button"
-                aria-haspopup="menu"
-                aria-expanded={menu === 'reset'}
-                onClick={() => toggle('reset')}
-                {...lbl('Reset board', 'Reset')}
-              />
-            }
-          >
-            <div className={styles.confirm}>
-              <div>Put every checker back to the starting position?</div>
               <div className={styles.confirmRow}>
                 <button
-                  className="btn btn-danger btn-sm"
-                  data-testid="confirm-reset"
+                  className="btn btn-primary btn-sm"
+                  data-testid="confirm-result"
                   onClick={() => {
-                    closeMenu();
-                    client.resetBoard();
+                    const r = pendingResult;
+                    setPendingResult(null);
+                    close();
+                    client.recordResult(r.winner, r.kind);
                   }}
                 >
-                  Reset
+                  Record
                 </button>
                 <button
                   className="btn btn-ghost btn-sm"
-                  data-testid="cancel-reset"
-                  onClick={closeMenu}
+                  data-testid="cancel-result"
+                  onClick={() => setPendingResult(null)}
                 >
-                  Cancel
+                  Back
                 </button>
               </div>
             </div>
-          </Menu>
-        )}
-
-        {!column && <span className={styles.spacer} />}
-        {canOfferResign(state) && (
-          <Menu
-            open={menu === 'resign'}
-            onClose={closeMenu}
-            anchor={column ? 'left' : 'above'}
-            testId="resign-menu"
-            trigger={
+          ) : (
+            [seat, opponent(seat)].map((w) => (
+              <div key={w}>
+                <div className={styles.menuHeading}>
+                  {w === seat ? `${playerName(state, w)} (you)` : playerName(state, w)} wins…
+                </div>
+                <div className={styles.chipRow}>
+                  {(['single', 'gammon', 'backgammon'] as const).map((kind) => (
+                    <button
+                      key={kind}
+                      className={styles.chip}
+                      role="menuitem"
+                      data-testid={`result-${w}-${kind}`}
+                      onClick={() => setPendingResult({ winner: w, kind })}
+                    >
+                      {kindLabel(kind)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))
+          ),
+      },
+  );
+  add(
+    free &&
+      canResetBoard(state) && {
+        key: 'reset',
+        label: 'Reset board',
+        tone: 'default',
+        testId: 'reset-board-button',
+        panelTestId: 'reset-menu',
+        panel: (close) => (
+          <div className={styles.confirm}>
+            <div>Put every checker back to the starting position?</div>
+            <div className={styles.confirmRow}>
               <button
-                className={column ? `btn btn-sm ${styles.vbtn}` : 'btn btn-ghost btn-sm'}
-                data-testid="resign-button"
-                aria-haspopup="menu"
-                aria-expanded={menu === 'resign'}
-                onClick={() => toggle('resign')}
-                {...lbl('Resign…', 'Resign')}
-              />
-            }
-          >
+                className="btn btn-danger btn-sm"
+                data-testid="confirm-reset"
+                onClick={() => {
+                  close();
+                  client.resetBoard();
+                }}
+              >
+                Reset
+              </button>
+              <button className="btn btn-ghost btn-sm" data-testid="cancel-reset" onClick={close}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ),
+      },
+  );
+
+  add(
+    canOfferResign(state) && {
+      key: 'resign',
+      label: 'Resign…',
+      tone: 'quiet',
+      testId: 'resign-button',
+      panelTestId: 'resign-menu',
+      panel: (close) => (
+        <>
+          {(
+            [
+              ['single', 'Resign single game', 'Opponent scores the cube value'],
+              ['gammon', 'Resign gammon', 'Twice the cube'],
+              ['backgammon', 'Resign backgammon', 'Three times the cube'],
+            ] as const
+          ).map(([stakes, title, note]) => (
             <button
+              key={stakes}
               className={styles.menuItem}
               role="menuitem"
-              data-testid="resign-single"
-              onClick={() => resign('single')}
+              data-testid={`resign-${stakes}`}
+              onClick={() => {
+                close();
+                client.offerResign(stakes);
+              }}
             >
-              Resign single game
-              <small>Opponent scores the cube value</small>
+              {title}
+              <small>{note}</small>
             </button>
-            <button
-              className={styles.menuItem}
-              role="menuitem"
-              data-testid="resign-gammon"
-              onClick={() => resign('gammon')}
-            >
-              Resign gammon
-              <small>Twice the cube</small>
-            </button>
-            <button
-              className={styles.menuItem}
-              role="menuitem"
-              data-testid="resign-backgammon"
-              onClick={() => resign('backgammon')}
-            >
-              Resign backgammon
-              <small>Three times the cube</small>
-            </button>
-          </Menu>
-        )}
-        {onMore && (
-          <button
-            className={`btn btn-sm ${styles.vbtn}`}
-            data-testid="more-button"
-            onClick={onMore}
-            {...lbl('Match, chat and room code', 'More')}
-          />
-        )}
-        {onLeave && (
-          <button
-            className={column ? `btn btn-sm ${styles.vbtn}` : 'btn btn-ghost btn-sm'}
-            data-testid="leave-button"
-            onClick={onLeave}
-            {...lbl('Leave (resume later)', 'Leave')}
-          />
-        )}
-      </div>
+          ))}
+        </>
+      ),
+    },
+  );
+  add(
+    !!onMore && {
+      key: 'more',
+      label: 'Match & chat',
+      tone: 'quiet',
+      testId: 'more-button',
+      onSelect: onMore,
+    },
+  );
+  add(
+    !!onLeave && {
+      key: 'leave',
+      label: 'Leave',
+      tone: 'quiet',
+      testId: 'leave-button',
+      onSelect: onLeave,
+    },
+  );
+
+  const note = showReady ? (
+    <span
+      className={styles.note}
+      data-testid="ready-indicator"
+      data-opponent-ready={readiness.opponent ? 'true' : 'false'}
+    >
+      {readiness.opponent
+        ? `${playerName(state, opponent(seat ?? 'white'))} is ready`
+        : `Waiting for ${playerName(state, opponent(seat ?? 'white'))}`}
+    </span>
+  ) : waitingToStart ? (
+    <span className={styles.note} data-testid="auto-start-note">
+      The game starts as soon as both players are here.
+    </span>
+  ) : null;
+
+  return (
+    <div className={`${styles.bar} ${dense ? styles.dense : ''}`} data-testid="action-bar">
+      {(showStatus || note) && (
+        <div className={styles.statusRow}>
+          {showStatus && <StatusLine state={state} />}
+          {note}
+        </div>
+      )}
+      <ActionButtons items={items} compact={compact} dense={dense} fullscreen={fullscreen} />
     </div>
   );
 }

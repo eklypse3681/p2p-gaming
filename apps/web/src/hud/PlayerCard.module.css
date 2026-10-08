@@ -150,3 +150,104 @@
   padding: 3px 8px;
   min-width: 0;
 }
+
+/* ---- dock (bottom bar): small, the right-hand card mirrored ---- */
+.dock {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'avatar body score';
+  gap: 4px 10px;
+  padding: 8px 10px;
+}
+.dock .avatar {
+  grid-area: avatar;
+  width: 34px;
+  height: 34px;
+  font-size: 1.05rem;
+}
+.dock .checker {
+  width: 13px;
+  height: 13px;
+}
+.dock .body {
+  grid-area: body;
+}
+.dock .score {
+  grid-area: score;
+  font-size: 1.25rem;
+  padding: 5px 8px;
+  min-width: 40px;
+}
+.dockRight {
+  grid-template-areas: 'score body avatar';
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  text-align: right;
+}
+.dockRight .meta {
+  justify-content: flex-end;
+}
+.dockRight .presence {
+  left: auto;
+  right: -2px;
+}
+.dockRight .checker {
+  right: auto;
+  left: -3px;
+}
+@media (max-width: 640px) {
+  .dock {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'avatar body'
+      'score score';
+    padding: 6px 8px;
+    gap: 4px 6px;
+  }
+  .dockRight {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'body avatar'
+      'score score';
+  }
+  .dock .avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.9rem;
+  }
+  .dock .name {
+    font-size: 0.85rem;
+  }
+  .dock .meta {
+    font-size: 0.72rem;
+    gap: 6px;
+  }
+  .dock .score {
+    font-size: 1rem;
+    padding: 2px 6px;
+    min-width: 0;
+  }
+  .dock .pipsUnit {
+    display: none;
+  }
+}
+@media (max-height: 480px) and (orientation: landscape) {
+  .dock {
+    padding: 4px 8px;
+    gap: 2px 8px;
+  }
+  .dock .avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.9rem;
+  }
+  .dock .name {
+    font-size: 0.85rem;
+  }
+  .dock .meta {
+    font-size: 0.72rem;
+  }
+  .dock .score {
+    font-size: 1.05rem;
+    padding: 3px 7px;
+  }
+}

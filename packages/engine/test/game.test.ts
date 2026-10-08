@@ -73,11 +73,14 @@ describe('opening roll', () => {
     expect(code(() => game.openingRoll(s, 'white', 1))).toBe('wrong-phase');
   });
 
-  it('skips the winner\'s turn when the opening roll has no legal move', () => {
+  it('waits for the winner to end the turn when the opening roll has no legal move', () => {
     const b = boardFrom({ 13: 1, 6: 14 }, { 18: 2, 13: 5, 20: 2, 6: 6 });
     let s = newGame({ board: b });
     s = game.openingRoll(s, 'white', 6);
     s = game.openingRoll(s, 'black', 1);
+    expect(s.phase).toEqual({ kind: 'moving', player: 'white', dice: [6, 1] });
+    expect(game.isBlockedTurn(s)).toBe(true);
+    s = game.play(s, 'white', []);
     expect(s.phase).toEqual({ kind: 'to-roll', player: 'black' });
     expect(s.history).toEqual([
       { type: 'opening', white: 6, black: 1 },
@@ -99,9 +102,12 @@ describe('roll', () => {
     expect(code(() => game.roll(newGame(), 'white', [4, 2]))).toBe('wrong-phase');
   });
 
-  it('auto-passes when the roll has no legal move', () => {
+  it('waits for an empty play when the roll has no legal move', () => {
     const b = boardFrom({ 13: 1, 6: 14 }, { 18: 2, 13: 5, 20: 2, 6: 6 });
-    const s = game.roll(toRollGame(b, 'white'), 'white', [6, 1]);
+    const blocked = game.roll(toRollGame(b, 'white'), 'white', [6, 1]);
+    expect(blocked.phase).toEqual({ kind: 'moving', player: 'white', dice: [6, 1] });
+    expect(game.isBlockedTurn(blocked)).toBe(true);
+    const s = game.play(blocked, 'white', []);
     expect(s.phase).toEqual({ kind: 'to-roll', player: 'black' });
     expect(s.history.at(-1)).toEqual({ type: 'move', player: 'white', dice: [6, 1], play: [] });
     expect(s.turnCount).toBe(1);

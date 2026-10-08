@@ -117,17 +117,29 @@ export function openingRoll(state: GameState, player: Player, die: Die): GameSta
   return startMoving(withRecord, winner, dice);
 }
 
-/** Enter the moving phase, or skip the turn if there is no legal move. */
+/**
+ * Enter the moving phase. A roll with no legal move still waits for the player to end the turn
+ * (an empty `play`), so they see the dice they could not use rather than the turn vanishing.
+ */
 function startMoving(state: GameState, player: Player, dice: DiceRoll): GameState {
-  if (!hasLegalMove(state.board, player, dice)) {
-    return {
-      ...state,
-      turnCount: state.turnCount + 1,
-      history: [...state.history, { type: 'move', player, dice, play: [] }],
-      phase: { kind: 'to-roll', player: opponent(player) },
-    };
-  }
   return { ...state, phase: { kind: 'moving', player, dice } };
+}
+
+/**
+ * True while `player` is moving with dice that allow no legal move: the only thing left is to
+ * end the turn. Logs written before such turns waited for the player skipped them on the spot;
+ * the match reducer passes them implicitly when the next action comes from the opponent.
+ */
+export function isBlockedTurn(state: GameState): boolean {
+  const ph = state.phase;
+  return ph.kind === 'moving' && !hasLegalMove(state.board, ph.player, ph.dice);
+}
+
+/** End a blocked turn with no move, exactly as the player pressing Done would. */
+export function passBlockedTurn(state: GameState): GameState {
+  const ph = state.phase;
+  if (ph.kind !== 'moving' || !isBlockedTurn(state)) fail('wrong-phase', 'there is a legal move');
+  return play(state, ph.player, []);
 }
 
 export function roll(state: GameState, player: Player, dice: DiceRoll): GameState {
@@ -150,7 +162,10 @@ export function resultKind(board: Board, winner: Player): ResultKind {
 export function play(state: GameState, player: Player, moves: readonly SubMove[]): GameState {
   const ph = expectPhase(state, 'moving');
   if (ph.player !== player) fail('not-your-turn', `it is ${ph.player}'s turn to move`);
-  const canonical = findLegalPlay(state.board, player, ph.dice, moves);
+  const canonical =
+    moves.length === 0 && !hasLegalMove(state.board, player, ph.dice)
+      ? []
+      : findLegalPlay(state.board, player, ph.dice, moves);
   if (!canonical) fail('illegal-play', 'that is not a legal play');
   const board = applyPlay(state.board, player, canonical);
   const history = [

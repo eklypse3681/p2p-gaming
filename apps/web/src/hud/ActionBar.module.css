@@ -1,10 +1,118 @@
 .bar {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: var(--space-3);
+  min-width: 0;
+}
+.note {
+  font-size: 0.8rem;
+  color: var(--ui-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+/* The space the actions may use; the ruler inside measures the full row without showing it. */
+.room {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+.rulerBox {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+.ruler {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+  width: max-content;
+}
+.action {
+  white-space: nowrap;
+}
+.split {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+.split > :first-child,
+.split > .menu:first-child > .btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.split > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.caret {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: 1px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.splitList {
+  left: auto;
+  right: 0;
+  min-width: 200px;
+}
+.menuBack {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-muted);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.menuDanger {
+  color: var(--ui-danger);
+}
+.menuChevron {
+  float: right;
+  color: var(--ui-text-muted);
+}
+.menuItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.dense {
+  gap: 4px;
+}
+.dense .statusRow {
+  font-size: 0.8rem;
 }
 .status {
   display: flex;
+  justify-content: center;
   align-items: center;
   gap: var(--space-2);
   font-weight: 600;
@@ -13,6 +121,7 @@
 }
 .statusText {
   min-width: 0;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -32,13 +141,11 @@
 }
 .buttons {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  justify-content: center;
   gap: var(--space-2);
   align-items: center;
   touch-action: manipulation;
-}
-.spacer {
-  flex: 1 1 auto;
 }
 .menu {
   position: relative;
@@ -134,35 +241,9 @@
   margin-left: 4px;
 }
 
-/* ---- column layout (landscape phones): short labels, stacked ---- */
-.column {
-  height: 100%;
-  min-height: 0;
-}
-.column .buttons {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  align-items: stretch;
-  gap: 6px;
-  height: 100%;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-.column .menu {
-  display: flex;
-}
-.column .menu > .vbtn {
-  flex: 1 1 auto;
-}
-.column .menuList {
-  overflow-y: auto;
-  z-index: 45;
-}
-.vbtn {
-  padding: 4px 4px;
-  min-height: 36px;
-  font-size: 0.74rem;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-  width: 100%;
+/* Keyboard hints only where there is a keyboard and the room for them. */
+@media (pointer: coarse), (max-width: 640px) {
+  .kbd {
+    display: none;
+  }
 }

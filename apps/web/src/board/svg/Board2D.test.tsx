@@ -29,7 +29,13 @@ function startingModel(
     perspective,
     homeSide: 'right',
     checkers,
-    dice: { player: 'white', values: [3, 1], used: [false, false], rollToken: 7 },
+    dice: {
+      player: 'white',
+      values: [3, 1],
+      used: [false, false],
+      blocked: [false, false],
+      rollToken: 7,
+    },
     openingDice: null,
     cube: { value: 1, owner: 'center' },
     highlights: {
@@ -100,7 +106,13 @@ describe('Board2D', () => {
     render(
       <Board2D
         model={startingModel('white', {
-          dice: { player: 'black', values: [4, 4], used: [true, true, false, false], rollToken: 9 },
+          dice: {
+            player: 'black',
+            values: [4, 4],
+            used: [true, true, false, false],
+            blocked: [false, false, false, true],
+            rollToken: 9,
+          },
           cube: { value: 2, owner: 'white', offeredBy: 'white' },
         })}
         theme={theme}
@@ -109,6 +121,8 @@ describe('Board2D', () => {
     expect(screen.getByTestId('die-3')).toHaveAttribute('data-value', '4');
     expect(screen.getByTestId('die-0')).toHaveAttribute('data-used', 'true');
     expect(screen.getByTestId('die-2')).not.toHaveAttribute('data-used');
+    expect(screen.getByTestId('die-2')).not.toHaveAttribute('data-blocked');
+    expect(screen.getByTestId('die-3')).toHaveAttribute('data-blocked', 'true');
     expect(screen.getByTestId('cube')).toHaveAttribute('data-value', '4');
     expect(screen.getByTestId('cube')).toHaveAttribute('data-offered', 'white');
   });

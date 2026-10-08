@@ -15,12 +15,14 @@ export interface PlayerCardProps {
   latencyMs?: number | null;
   /** Narrow, stacked layout for the landscape side column. */
   compact?: boolean;
+  /** Small card for the bottom dock; `right` mirrors it so the score sits on the outer edge. */
+  dock?: 'left' | 'right';
 }
 
 export function PlayerCard(p: PlayerCardProps) {
   return (
     <div
-      className={`${styles.card} ${p.onTurn ? styles.active : ''} ${p.compact ? styles.compact : ''}`}
+      className={`${styles.card} ${p.onTurn ? styles.active : ''} ${p.compact ? styles.compact : ''} ${p.dock ? styles.dock : ''} ${p.dock === 'right' ? styles.dockRight : ''}`}
       data-testid={`player-card-${p.seat}`}
       data-on-turn={p.onTurn ? 'true' : 'false'}
     >
@@ -43,14 +45,15 @@ export function PlayerCard(p: PlayerCardProps) {
         </div>
         <div className={styles.meta}>
           <span className={styles.pips} data-testid={`card-pips-${p.seat}`} title="Pip count">
-            {p.pips} pips
+            {p.pips}
+            <span className={styles.pipsUnit}> pips</span>
           </span>
           {p.cubeValue !== undefined && (
             <span className={styles.cube} title="Owns the cube">
               ×{p.cubeValue}
             </span>
           )}
-          {p.onTurn && <span className={styles.turn}>On turn</span>}
+          {p.onTurn && !p.dock && <span className={styles.turn}>On turn</span>}
           {p.isMe && p.latencyMs != null && (
             <span className="mono" title="Round trip to host">
               {p.latencyMs} ms
