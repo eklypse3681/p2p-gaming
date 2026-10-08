@@ -1,16 +1,20 @@
 import type { Player } from '@bgf/engine';
 import type { BoardSet } from '../../themes/theme';
 import type { HomeSide } from '../contract';
-import { LABEL_BOTTOM_Y, LABEL_TOP_Y, allPointSlots } from '../geometry';
+import type { Geometry } from '../geometry';
+import { DEFAULT_GEOMETRY } from '../geometry';
 
 export interface LabelsProps {
+  /** Board layout; the classic 3:2 board when omitted. */
+  geo?: Geometry;
   perspective: Player;
   homeSide: HomeSide;
   board: BoardSet;
 }
 
 /** Point numbers printed on the frame in the perspective player's numbering. */
-export function Labels({ perspective, homeSide, board }: LabelsProps) {
+export function Labels({ perspective, homeSide, board, geo = DEFAULT_GEOMETRY }: LabelsProps) {
+  const { LABEL_BOTTOM_Y, LABEL_TOP_Y, allPointSlots } = geo;
   return (
     <g data-testid="point-labels" aria-hidden="true">
       {allPointSlots(perspective, homeSide).map((slot) => (

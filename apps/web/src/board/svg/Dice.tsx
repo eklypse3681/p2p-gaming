@@ -1,7 +1,8 @@
 import { motion } from 'motion/react';
 import type { Player } from '@bgf/engine';
 import type { BoardSet } from '../../themes/theme';
-import { dicePositions, openingDiePosition } from '../geometry';
+import type { Geometry } from '../geometry';
+import { DEFAULT_GEOMETRY } from '../geometry';
 import type { DiceVM, HomeSide, OpeningDiceVM } from '../contract';
 
 const PIPS: Record<number, Array<[number, number]>> = {
@@ -165,6 +166,8 @@ export function Die({
 }
 
 export interface DiceGroupProps {
+  /** Board layout; the classic 3:2 board when omitted. */
+  geo?: Geometry;
   dice: DiceVM;
   perspective: Player;
   homeSide: HomeSide;
@@ -173,7 +176,15 @@ export interface DiceGroupProps {
 }
 
 /** The mover's dice; doubles show four dice so each consumed move is visible. */
-export function DiceGroup({ dice, perspective, homeSide, board, reducedMotion }: DiceGroupProps) {
+export function DiceGroup({
+  dice,
+  perspective,
+  homeSide,
+  board,
+  reducedMotion,
+  geo = DEFAULT_GEOMETRY,
+}: DiceGroupProps) {
+  const { dicePositions } = geo;
   const count = dice.used.length;
   const positions = dicePositions(dice.player, perspective, count, homeSide);
   return (
@@ -198,6 +209,8 @@ export function DiceGroup({ dice, perspective, homeSide, board, reducedMotion }:
 }
 
 export interface OpeningDiceProps {
+  /** Board layout; the classic 3:2 board when omitted. */
+  geo?: Geometry;
   opening: OpeningDiceVM;
   perspective: Player;
   homeSide: HomeSide;
@@ -212,7 +225,9 @@ export function OpeningDice({
   homeSide,
   board,
   reducedMotion,
+  geo = DEFAULT_GEOMETRY,
 }: OpeningDiceProps) {
+  const { openingDiePosition } = geo;
   return (
     <g data-testid="dice" data-opening="true">
       {(['white', 'black'] as const).map((player) => {

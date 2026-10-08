@@ -557,6 +557,13 @@ code,
   }
 }
 
+/* A table on a landscape phone has no app bar, only a floating menu button (AppBar.module.css). */
+@media (max-height: 480px) and (orientation: landscape) {
+  :root:has([data-dock]) {
+    --appbar-h: 0px;
+  }
+}
+
 /* Immersive table (the game's full-screen button): no app bar, the board gets the viewport.
    Comes last so it wins over the landscape-phone bar height above. */
 :root[data-immersive] {

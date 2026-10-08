@@ -2,9 +2,12 @@ import { motion } from 'motion/react';
 import type { Player } from '@bgf/engine';
 import type { BoardSet } from '../../themes/theme';
 import type { CubeVM, HomeSide } from '../contract';
-import { cubePosition } from '../geometry';
+import type { Geometry } from '../geometry';
+import { DEFAULT_GEOMETRY } from '../geometry';
 
 export interface CubeProps {
+  /** Board layout; the classic 3:2 board when omitted. */
+  geo?: Geometry;
   cube: CubeVM;
   perspective: Player;
   homeSide: HomeSide;
@@ -20,8 +23,16 @@ export function cubeFace(cube: CubeVM): number {
   return cube.value === 1 && cube.owner === 'center' ? 64 : cube.value;
 }
 
-export function Cube({ cube, perspective, homeSide, board, reducedMotion, pressable }: CubeProps) {
-  const pos = cubePosition(cube, perspective, homeSide);
+export function Cube({
+  cube,
+  perspective,
+  homeSide,
+  board,
+  reducedMotion,
+  pressable,
+  geo = DEFAULT_GEOMETRY,
+}: CubeProps) {
+  const pos = geo.cubePosition(cube, perspective, homeSide);
   const half = pos.size / 2;
   const face = cubeFace(cube);
   // The cube is drawn upright for whoever it faces; when it faces the opponent, flip it.
@@ -116,14 +127,16 @@ export function CubeHitArea({
   homeSide,
   onClick,
   testId,
+  geo = DEFAULT_GEOMETRY,
 }: {
+  geo?: Geometry;
   cube: CubeVM;
   perspective: Player;
   homeSide: HomeSide;
   onClick: () => void;
   testId: string;
 }) {
-  const pos = cubePosition(cube, perspective, homeSide);
+  const pos = geo.cubePosition(cube, perspective, homeSide);
   const pad = 10;
   return (
     <rect

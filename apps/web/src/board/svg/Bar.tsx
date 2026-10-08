@@ -1,8 +1,18 @@
 import type { BoardSet } from '../../themes/theme';
 import type { HomeSide } from '../contract';
-import { FELT_BOTTOM, FELT_TOP, boardLayout } from '../geometry';
+import type { Geometry } from '../geometry';
+import { DEFAULT_GEOMETRY } from '../geometry';
 
-export function Bar({ board, homeSide }: { board: BoardSet; homeSide: HomeSide }) {
+export function Bar({
+  board,
+  homeSide,
+  geo = DEFAULT_GEOMETRY,
+}: {
+  board: BoardSet;
+  homeSide: HomeSide;
+  geo?: Geometry;
+}) {
+  const { FELT_BOTTOM, FELT_TOP, boardLayout } = geo;
   const { bar } = boardLayout(homeSide);
   return (
     <g data-testid="bar">

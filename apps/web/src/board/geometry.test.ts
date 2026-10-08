@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  boardSizeFor,
+  createGeometry,
   BAR,
   CHECKER_RADIUS,
   FELT_BOTTOM,
@@ -252,5 +254,47 @@ describe('geometry', () => {
         point: 12,
       });
     });
+  });
+});
+
+describe('boards of other shapes', () => {
+  it('the default is the classic 3:2 board', () => {
+    const g = createGeometry();
+    expect(g.VIEWBOX).toEqual({ width: 1500, height: 1000 });
+    expect(g.POINT_WIDTH).toBe(96);
+    expect(g.CHECKER_RADIUS).toBe(42);
+    expect(g.MAX_VISIBLE_STACK).toBe(5);
+    expect(g.TRAY.x + g.TRAY.width).toBe(1440);
+  });
+
+  it('a wider board widens the points, grows the checkers and stacks fewer before overlapping', () => {
+    const g = createGeometry(1900, 1000);
+    expect(g.POINT_WIDTH).toBeGreaterThan(96);
+    expect(g.CHECKER_RADIUS).toBeGreaterThan(42);
+    expect(g.CHECKER_RADIUS * 2).toBeLessThan(g.POINT_WIDTH);
+    expect(g.MAX_VISIBLE_STACK).toBe(4);
+    expect(g.BAR.width).toBeGreaterThanOrEqual(g.CHECKER_RADIUS * 2 * 0.92);
+    // The pieces still add up to the board: frame + felts + bar + divider + tray + frame.
+    expect(g.TRAY.x + g.TRAY.width + 60).toBeCloseTo(1900);
+    // A stack of five still stays inside its half of the board.
+    const top = g.checkerPosition({ kind: 'point', point: 1 }, 4, 5, 'white');
+    expect(top.cy - g.CHECKER_RADIUS).toBeGreaterThanOrEqual(g.MID_Y - 1);
+  });
+
+  it('a taller board lengthens the points', () => {
+    const g = createGeometry(1500, 1200);
+    expect(g.MID_Y).toBe(600);
+    expect(g.FELT_BOTTOM).toBe(1142);
+    expect(g.POINT_HEIGHT).toBeGreaterThan(380);
+    expect(g.MAX_VISIBLE_STACK).toBeGreaterThanOrEqual(5);
+  });
+
+  it('sizes itself to the space within limits', () => {
+    expect(boardSizeFor(0, 0)).toEqual({ width: 1500, height: 1000 });
+    expect(boardSizeFor(600, 400)).toEqual({ width: 1500, height: 1000 });
+    expect(boardSizeFor(900, 450)).toEqual({ width: 2000, height: 1000 });
+    expect(boardSizeFor(2000, 400)).toEqual({ width: 2100, height: 1000 });
+    expect(boardSizeFor(500, 400)).toEqual({ width: 1500, height: 1200 });
+    expect(boardSizeFor(300, 400)).toEqual({ width: 1500, height: 1240 });
   });
 });

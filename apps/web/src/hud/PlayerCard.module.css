@@ -256,10 +256,20 @@
     display: none;
   }
 }
+/* Landscape phone: both cards sit in the narrow column beside the board, stacked alike. */
 @media (max-height: 480px) and (orientation: landscape) {
-  .dock {
-    padding: 4px 8px;
-    gap: 2px 8px;
+  .dock,
+  .dockRight {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'avatar body'
+      'score score';
+    text-align: left;
+    padding: 6px 8px;
+    gap: 4px 8px;
+  }
+  .dockRight .meta {
+    justify-content: flex-start;
   }
   .dock .avatar {
     width: 28px;
@@ -271,6 +281,8 @@
   }
   .dock .meta {
     font-size: 0.72rem;
+    gap: 6px;
+    flex-wrap: wrap;
   }
   .dock .score {
     font-size: 1.05rem;

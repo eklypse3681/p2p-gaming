@@ -46,17 +46,28 @@ test('landscape phone: board fills the screen, controls are reachable, nothing s
   expect(board!.y).toBeGreaterThanOrEqual(0);
   expect(board!.x + board!.width).toBeLessThanOrEqual(viewport.width + 1);
   expect(board!.y + board!.height).toBeLessThanOrEqual(viewport.height + 1);
-  // The board uses most of the height available under the app bar.
-  expect(board!.height).toBeGreaterThan(viewport.height * 0.6);
+  // No app bar, just a menu button: the board takes nearly the whole height.
+  await expect(host.getByTestId('menu-button')).toBeVisible();
+  expect(board!.height).toBeGreaterThan(viewport.height * 0.9);
 
-  // The dock under the board: me on the left, the opponent on the right, actions between.
+  // One column beside the board: the opponent, then me, then the actions at the bottom.
   const me = await host.getByTestId('player-card-white').boundingBox();
   const them = await host.getByTestId('player-card-black').boundingBox();
   const bar = await host.getByTestId('action-bar').boundingBox();
-  expect(me!.y).toBeGreaterThan(board!.y + board!.height - 1);
-  expect(me!.x + me!.width).toBeLessThanOrEqual(bar!.x + 1);
-  expect(them!.x).toBeGreaterThanOrEqual(bar!.x + bar!.width - 1);
+  for (const box of [me!, them!, bar!]) {
+    expect(box.x).toBeGreaterThanOrEqual(board!.x + board!.width - 1);
+  }
+  expect(me!.y).toBeGreaterThan(them!.y);
+  expect(bar!.y).toBeGreaterThan(me!.y + me!.height - 1);
+  // The board stretches into the space: wider than a 3:2 board of the same height.
+  expect(board!.width / board!.height).toBeGreaterThan(1.55);
   await expect(host.getByTestId('status-text')).toBeVisible();
+
+  // The menu button opens the side panel with the app's links.
+  await host.getByTestId('menu-button').tap();
+  await expect(host.getByTestId('nav-settings')).toBeVisible();
+  await host.getByTestId('menu-scrim').tap({ position: { x: viewport.width - 20, y: 20 } });
+  await expect(host.getByTestId('nav-settings')).toBeHidden();
 
   // Start the game from the dock; the roll button is tappable.
   await startGameIfNeeded(host);
@@ -84,8 +95,7 @@ test('landscape phone: board fills the screen, controls are reachable, nothing s
   await expect(host.getByTestId('rail-sheet')).toHaveCount(0);
   await noPageScroll(host);
 
-  // Full screen hides the app bar and gives the board the height; the same control undoes it.
-  const before = (await host.getByTestId('board').boundingBox())!.height;
+  // Full screen hides even the menu button; the same control undoes it.
   const openFullscreen = async () => {
     if (await host.getByTestId('more-actions').isVisible()) {
       await host.getByTestId('more-actions').tap();
@@ -93,13 +103,10 @@ test('landscape phone: board fills the screen, controls are reachable, nothing s
     await host.getByTestId('fullscreen-button').tap();
   };
   await openFullscreen();
-  await expect(host.getByTestId('app-bar')).toBeHidden();
-  await expect
-    .poll(async () => (await host.getByTestId('board').boundingBox())!.height)
-    .toBeGreaterThan(before);
+  await expect(host.getByTestId('menu-button')).toBeHidden();
   await noPageScroll(host);
   await openFullscreen();
-  await expect(host.getByTestId('app-bar')).toBeVisible();
+  await expect(host.getByTestId('menu-button')).toBeVisible();
 });
 
 test('portrait phone: board never overflows and the action bar sits under it', async ({

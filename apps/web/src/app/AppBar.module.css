@@ -126,3 +126,128 @@
   opacity: 1;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-success) 25%, transparent);
 }
+
+/* ---- menu button and side panel (phones) ---- */
+.menuButton {
+  display: none;
+}
+.panel {
+  display: contents;
+}
+.scrim {
+  display: none;
+}
+.panelOnly {
+  display: none;
+}
+
+@media (max-width: 760px), (max-height: 480px) and (orientation: landscape) {
+  /* A blur would make the bar the containing block of the fixed side panel: no blur here. */
+  .bar {
+    backdrop-filter: none;
+    background: var(--ui-bg);
+  }
+  .menuButton {
+    display: inline-flex;
+    margin-left: -6px;
+  }
+  .logo span {
+    display: inline;
+    font-size: 0.95rem;
+  }
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: color-mix(in srgb, var(--ui-bg) 55%, transparent);
+    backdrop-filter: blur(2px);
+    animation: fade-up var(--dur) var(--ease);
+  }
+  .panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 61;
+    width: min(300px, 84vw);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+    padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4)
+      calc(var(--space-4) + env(safe-area-inset-bottom))
+      max(var(--space-4), env(safe-area-inset-left));
+    background: var(--ui-surface);
+    border-right: 1px solid var(--ui-border);
+    box-shadow: var(--shadow-md);
+    overflow-y: auto;
+    transform: translateX(-105%);
+    visibility: hidden;
+    transition:
+      transform var(--dur) var(--ease),
+      visibility 0s linear var(--dur);
+  }
+  .panelOpen {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--dur) var(--ease);
+  }
+  .panel .nav {
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    order: 1;
+  }
+  .panel .link {
+    padding: 12px 14px;
+    font-size: 1rem;
+  }
+  .panel .spacer {
+    display: none;
+  }
+  .panel .chip {
+    order: 0;
+    max-width: none;
+    padding: 6px 12px 6px 6px;
+  }
+  .panel .chipName {
+    display: inline;
+  }
+  .panel > :global(.btn) {
+    order: 2;
+    justify-content: flex-start;
+    gap: 10px;
+    padding-left: 14px;
+    font-weight: 600;
+  }
+  .panelOnly {
+    display: inline;
+  }
+}
+
+/* A table on a landscape phone: no bar at all, only a floating menu button at the top of the
+   side column. */
+@media (max-height: 480px) and (orientation: landscape) {
+  :global(:root:has([data-dock])) .bar {
+    position: fixed;
+    top: max(6px, env(safe-area-inset-top));
+    left: auto;
+    right: max(8px, env(safe-area-inset-right));
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    backdrop-filter: none;
+    overflow: visible;
+  }
+  :global(:root:has([data-dock])) .logo {
+    display: none;
+  }
+  :global(:root:has([data-dock])) .menuButton {
+    margin: 0;
+    background: color-mix(in srgb, var(--ui-surface) 85%, transparent);
+    border: 1px solid var(--ui-border);
+    border-radius: 50%;
+  }
+}

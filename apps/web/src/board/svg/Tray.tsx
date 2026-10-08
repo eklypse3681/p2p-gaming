@@ -1,9 +1,12 @@
 import type { Player } from '@bgf/engine';
 import type { BoardSet } from '../../themes/theme';
 import type { HomeSide } from '../contract';
-import { FELT_BOTTOM, FELT_TOP, MID_Y, boardLayout, halfFor, trayX } from '../geometry';
+import type { Geometry } from '../geometry';
+import { DEFAULT_GEOMETRY } from '../geometry';
 
 export interface TrayProps {
+  /** Board layout; the classic 3:2 board when omitted. */
+  geo?: Geometry;
   board: BoardSet;
   perspective: Player;
   homeSide: HomeSide;
@@ -12,7 +15,15 @@ export interface TrayProps {
 }
 
 /** Bear-off trays (one half per player) with pip counts near the middle. */
-export function Tray({ board, perspective, homeSide, pips, names }: TrayProps) {
+export function Tray({
+  board,
+  perspective,
+  homeSide,
+  pips,
+  names,
+  geo = DEFAULT_GEOMETRY,
+}: TrayProps) {
+  const { FELT_BOTTOM, FELT_TOP, MID_Y, boardLayout, halfFor, trayX } = geo;
   const x = trayX(homeSide);
   const { divider, tray } = boardLayout(homeSide);
   const height = FELT_BOTTOM - FELT_TOP;

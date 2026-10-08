@@ -118,6 +118,19 @@
 .dense .statusRow {
   font-size: 0.8rem;
 }
+/* In the narrow side column the status may take two lines rather than be cut off. */
+.dense .statusText {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.25;
+}
+.dense .statusRow {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
 .status {
   display: flex;
   justify-content: center;

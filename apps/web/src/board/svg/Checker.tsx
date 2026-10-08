@@ -1,9 +1,12 @@
 import { motion } from 'motion/react';
 import type { Player } from '@bgf/engine';
 import type { CheckerStyle } from '../../themes/theme';
-import { CHECKER_RADIUS, CHIP } from '../geometry';
+import type { Geometry } from '../geometry';
+import { DEFAULT_GEOMETRY } from '../geometry';
 
 export interface CheckerProps {
+  /** Board layout; the classic 3:2 board when omitted. */
+  geo?: Geometry;
   id: string;
   player: Player;
   style: CheckerStyle;
@@ -42,6 +45,7 @@ export function Checker(props: CheckerProps) {
     testId,
   } = props;
   const scale = (props.scale ?? 1) * (dragging ? 1.08 : 1);
+  const { CHECKER_RADIUS, CHIP } = props.geo ?? DEFAULT_GEOMETRY;
   const r = CHECKER_RADIUS;
   const gradId = `checker-${player}`;
   const animate =

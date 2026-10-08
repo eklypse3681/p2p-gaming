@@ -214,17 +214,21 @@
 }
 
 /* --------------------------------------------------------- landscape phones */
-/* The board takes all the height it can; the dock is one short row under it. */
+/* Height is what a landscape phone lacks. The board fills everything but one column on the
+   right, and stretches to that space's shape (wider points) instead of keeping 3:2 margins.
+   The column holds the opponent's card, mine, then the status and actions at the bottom where
+   the right thumb is; the menu button floats at its top. */
 @media (max-height: 480px) and (orientation: landscape) {
   .screen {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
+    --side: clamp(132px, 19vw, 200px);
+    grid-template-columns: minmax(0, 1fr) var(--side);
+    grid-template-rows: minmax(0, 1fr);
     height: calc(100dvh - var(--appbar-h));
     min-height: 0;
     max-width: none;
-    gap: 4px;
-    padding: 4px max(8px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom))
-      max(8px, env(safe-area-inset-left));
+    gap: 8px;
+    padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
     overflow: hidden;
   }
   .boardArea {
@@ -235,10 +239,30 @@
     border-radius: var(--radius-md);
   }
   .dock {
-    grid-column: 1;
-    grid-row: 2;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr);
-    gap: 8px;
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    min-height: 0;
+    /* a grid item may not grow past its column, or the actions never learn they must fold */
+    min-width: 0;
+    /* clear of the floating menu button */
+    padding-top: 44px;
+  }
+  .dockRight {
+    order: 1;
+  }
+  .dockLeft {
+    order: 2;
+  }
+  .dockCenter {
+    order: 3;
+    margin-top: auto;
+  }
+  .opponentPreview {
+    display: none;
   }
   .banner {
     grid-column: 1;
@@ -259,7 +283,8 @@
     justify-content: flex-end;
     position: fixed;
     inset: var(--appbar-h) 0 0 0;
-    z-index: 40;
+    /* over the floating menu button (50), under the menu's own panel (60) */
+    z-index: 55;
     background: color-mix(in srgb, var(--ui-bg) 55%, transparent);
     backdrop-filter: blur(2px);
   }

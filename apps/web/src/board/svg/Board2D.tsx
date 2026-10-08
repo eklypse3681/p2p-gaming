@@ -1,22 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { motion } from 'motion/react';
 import type { Player } from '@bgf/engine';
 import type { BoardLocation, BoardRendererProps, CheckerVM } from '../contract';
 import { locationKey, sameLocation } from '../contract';
-import {
-  CHECKER_RADIUS,
-  FELT_BOTTOM,
-  FELT_TOP,
-  MID_Y,
-  VIEWBOX,
-  allPointSlots,
-  boardLayout,
-  checkerPosition,
-  clientToViewBox,
-  nearestLocation,
-  pointHitRect,
-} from '../geometry';
+import { boardSizeFor, createGeometry } from '../geometry';
 import { Checker } from './Checker';
 import { DiceGroup, OpeningDice } from './Dice';
 import { Cube, CubeHitArea } from './Cube';
@@ -106,7 +94,37 @@ export function Board2D(props: BoardRendererProps) {
   const [drag, setDrag] = useState<DragState | null>(null);
   const { perspective, highlights, homeSide } = model;
   const board = theme.board;
-  const layout = useMemo(() => boardLayout(homeSide), [homeSide]);
+
+  // The board takes the shape of the space it is given (within limits): a wide space gets wider
+  // points, a tall one longer points, instead of empty margins around a fixed 3:2 board.
+  const [space, setSpace] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      setSpace((cur) => (cur.width === width && cur.height === height ? cur : { width, height }));
+    });
+    ro.observe(svg);
+    return () => ro.disconnect();
+  }, []);
+  const size = boardSizeFor(space.width, space.height);
+  const geo = useMemo(() => createGeometry(size.width, size.height), [size.width, size.height]);
+  const {
+    CHECKER_RADIUS,
+    FELT_BOTTOM,
+    FELT_TOP,
+    MID_Y,
+    VIEWBOX,
+    allPointSlots,
+    boardLayout,
+    checkerPosition,
+    clientToViewBox,
+    nearestLocation,
+    pointHitRect,
+  } = geo;
+  const layout = useMemo(() => boardLayout(homeSide), [boardLayout, homeSide]);
 
   const sourceKeys = useMemo(
     () => new Set(highlights.sources.map(locationKey)),
@@ -132,11 +150,14 @@ export function Board2D(props: BoardRendererProps) {
   // the interaction hook clears its own `dragging` when the snapshot changes).
   if (!model.interactive && drag) setDrag(null);
 
-  const toViewBox = useCallback((clientX: number, clientY: number) => {
-    const svg = svgRef.current;
-    if (!svg) return null;
-    return clientToViewBox(svg.getBoundingClientRect(), clientX, clientY);
-  }, []);
+  const toViewBox = useCallback(
+    (clientX: number, clientY: number) => {
+      const svg = svgRef.current;
+      if (!svg) return null;
+      return clientToViewBox(svg.getBoundingClientRect(), clientX, clientY);
+    },
+    [clientToViewBox],
+  );
 
   const handlePointerDown = useCallback(
     (loc: BoardLocation) => (e: ReactPointerEvent<SVGElement>) => {
@@ -187,7 +208,7 @@ export function Board2D(props: BoardRendererProps) {
       setDrag({ from: t.from, checkerId: t.checkerId, x: p.x, y: p.y });
       onHover?.(nearestLocation(p.x, p.y, perspective, homeSide));
     },
-    [model.interactive, onDragStart, onHover, perspective, homeSide, toViewBox],
+    [model.interactive, onDragStart, onHover, perspective, homeSide, toViewBox, nearestLocation],
   );
 
   const finishPointer = useCallback(
@@ -234,7 +255,17 @@ export function Board2D(props: BoardRendererProps) {
         onSelect?.(t.from);
       }
     },
-    [onActivate, onDrop, onDragCancel, onHover, onSelect, perspective, homeSide, toViewBox],
+    [
+      onActivate,
+      onDrop,
+      onDragCancel,
+      onHover,
+      onSelect,
+      perspective,
+      homeSide,
+      toViewBox,
+      nearestLocation,
+    ],
   );
 
   const handlePointerUp = useCallback(
@@ -266,7 +297,10 @@ export function Board2D(props: BoardRendererProps) {
     if (!tracking.current?.active) onHover?.(null);
   }, [onHover]);
 
-  const slots = useMemo(() => allPointSlots(perspective, homeSide), [perspective, homeSide]);
+  const slots = useMemo(
+    () => allPointSlots(perspective, homeSide),
+    [allPointSlots, perspective, homeSide],
+  );
   const checkersByLoc = useMemo(() => {
     const m = new Map<string, CheckerVM[]>();
     for (const c of model.checkers) {
@@ -584,6 +618,7 @@ export function Board2D(props: BoardRendererProps) {
           const s = stateOf({ kind: 'point', point: slot.abs });
           return (
             <Point
+              geo={geo}
               key={slot.abs}
               slot={slot}
               board={board}
@@ -594,18 +629,20 @@ export function Board2D(props: BoardRendererProps) {
         })}
       </g>
 
-      <Bar board={board} homeSide={homeSide} />
+      <Bar board={board} homeSide={homeSide} geo={geo} />
       <Tray
+        geo={geo}
         board={board}
         perspective={perspective}
         homeSide={homeSide}
         pips={model.pips}
         names={model.names}
       />
-      <Labels perspective={perspective} homeSide={homeSide} board={board} />
+      <Labels perspective={perspective} homeSide={homeSide} board={board} geo={geo} />
 
       {/* Cube & dice (under checkers so a hit checker can cross them) */}
       <Cube
+        geo={geo}
         cube={model.cube}
         perspective={perspective}
         homeSide={homeSide}
@@ -615,6 +652,7 @@ export function Board2D(props: BoardRendererProps) {
       />
       {model.dice && (
         <DiceGroup
+          geo={geo}
           dice={model.dice}
           perspective={perspective}
           homeSide={homeSide}
@@ -624,6 +662,7 @@ export function Board2D(props: BoardRendererProps) {
       )}
       {!model.dice && model.openingDice && (
         <OpeningDice
+          geo={geo}
           opening={model.openingDice}
           perspective={perspective}
           homeSide={homeSide}
@@ -684,6 +723,7 @@ export function Board2D(props: BoardRendererProps) {
                   />
                 )}
               <Checker
+                geo={geo}
                 id={c.id}
                 player={c.player}
                 style={styleFor(c.player)}
@@ -757,6 +797,7 @@ export function Board2D(props: BoardRendererProps) {
         })}
         {onCubeClick && (
           <CubeHitArea
+            geo={geo}
             cube={model.cube}
             perspective={perspective}
             homeSide={homeSide}

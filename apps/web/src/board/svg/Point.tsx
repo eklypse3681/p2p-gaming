@@ -1,8 +1,11 @@
 import type { BoardSet } from '../../themes/theme';
 import type { PointSlot } from '../geometry';
-import { pointPath } from '../geometry';
+import type { Geometry } from '../geometry';
+import { DEFAULT_GEOMETRY } from '../geometry';
 
 export interface PointProps {
+  /** Board layout; the classic 3:2 board when omitted. */
+  geo?: Geometry;
   slot: PointSlot;
   board: BoardSet;
   /** Visual emphasis states. */
@@ -11,7 +14,8 @@ export interface PointProps {
 }
 
 /** The triangle only; hit-testing lives in the interaction layer. */
-export function Point({ slot, board, source, selected }: PointProps) {
+export function Point({ slot, board, source, selected, geo = DEFAULT_GEOMETRY }: PointProps) {
+  const { pointPath } = geo;
   const fill = slot.abs % 2 === 1 ? board.pointA : board.pointB;
   return (
     <g data-testid={`point-shape-${slot.abs}`} data-point={slot.abs} data-rel={slot.display}>
