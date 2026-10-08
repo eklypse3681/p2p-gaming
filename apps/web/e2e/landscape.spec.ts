@@ -9,6 +9,7 @@ import {
   touchDrag,
   checkersAt,
   startGameIfNeeded,
+  pressAction,
 } from './helpers';
 
 test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
@@ -147,3 +148,41 @@ test('portrait phone: board never overflows and the action bar sits under it', a
   const o = await guest.getByTestId('player-card-white').boundingBox();
   expect(g!.x).toBeLessThan(o!.x);
 });
+
+for (const size of [
+  { width: 412, height: 700 },
+  { width: 390, height: 844 },
+  { width: 360, height: 640 },
+]) {
+  test(`portrait ${size.width}x${size.height}: the game-over card fits on the board`, async ({
+    page: host,
+    context,
+  }) => {
+    await host.setViewportSize(size);
+    const guest = await context.newPage();
+    await seedProfile(host, 'alice', { id: 'e2e-host-0001', name: 'Steve Phone' });
+    await seedProfile(guest, 'bob', { id: 'e2e-guest-0002', name: 'Breeze Longname' });
+    const code = await hostMatch(host, 'alice', { length: 0, rules: 'free' });
+    await joinMatch(guest, 'bob', code);
+    await startGameIfNeeded(host, [guest]);
+    await pressAction(host, 'record-result-button');
+    await host.getByTestId('result-white-gammon').click();
+    await host.getByTestId('confirm-result').click();
+    await expect(host.getByTestId('game-over')).toBeVisible();
+
+    const area = (await host.getByTestId('board-area').boundingBox())!;
+    const card = (await host.locator('[data-testid="game-over"] > .card').boundingBox())!;
+    expect(card.y).toBeGreaterThanOrEqual(area.y - 1);
+    expect(card.y + card.height).toBeLessThanOrEqual(area.y + area.height + 1);
+    expect(card.x).toBeGreaterThanOrEqual(area.x - 1);
+    expect(card.x + card.width).toBeLessThanOrEqual(area.x + area.width + 1);
+    // Every control on it is reachable.
+    for (const id of ['overlay-ready-button', 'game-over-dismiss']) {
+      const b = (await host.getByTestId(id).boundingBox())!;
+      expect(b.y + b.height).toBeLessThanOrEqual(area.y + area.height + 1);
+    }
+    await host.screenshot({
+      path: test.info().outputPath(`game-over-${size.width}x${size.height}.png`),
+    });
+  });
+}

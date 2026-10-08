@@ -32,6 +32,8 @@
   grid-column: 1;
   grid-row: 1;
   position: relative;
+  /* overlays (the game-over card) size themselves against the board, not the screen */
+  container: board / size;
   min-height: 0;
   min-width: 0;
   display: grid;
