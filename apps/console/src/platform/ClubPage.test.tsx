@@ -139,6 +139,7 @@ describe('ClubPage', () => {
     expect(screen.getByTestId('stat-minted')).toHaveTextContent('6,200.00 USDC');
     expect(screen.getByTestId('stat-burned')).toHaveTextContent('0.00 USDC');
     expect(screen.getByTestId('stat-members')).toHaveTextContent('1 active · 1 pending · 1 online');
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
     expect(FakeEventSource.instances[0]!.url).toBe('/api/clubs/c1/events?token=tok-1');
     FakeEventSource.instances[0]!.onopen?.();
     await waitFor(() =>

@@ -53,6 +53,8 @@ describe('OperatorPage', () => {
     render(<PlatformApp status={platformStatus()} />);
     expect(await screen.findByTestId('operator-page')).toBeInTheDocument();
     expect(screen.getByTestId('nav-operator')).toBeInTheDocument();
+    // The feed opens in an effect after the page renders: wait for it rather than race it.
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
     expect(FakeEventSource.instances[0]!.url).toBe('/api/operator/events?token=tok-1');
 
     const club = await screen.findByTestId('operator-club-c1');
