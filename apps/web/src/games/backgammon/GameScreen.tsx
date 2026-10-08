@@ -48,6 +48,7 @@ import {
   canUndo,
   currentGame,
   gameOver,
+  kindLabel,
   isFreeBoard,
   myTurn,
   opponentConnected,
@@ -641,6 +642,16 @@ function LiveGame({
             </div>
           </div>
         )}
+        {over && !showOverlay && state.seat && (
+          <div className={styles.resultBadge} data-testid="game-result" aria-live="polite">
+            <strong className={over.winner === state.seat ? styles.resultWon : undefined}>
+              {over.winner === state.seat ? 'You won' : `${playerName(state, over.winner)} won`}
+            </strong>
+            <span>
+              {kindLabel(over.kind).toLowerCase()} · {over.points} pt{over.points === 1 ? '' : 's'}
+            </span>
+          </div>
+        )}
         {showOverlay && (
           <GameOverOverlay
             state={state}
@@ -713,6 +724,8 @@ function LiveGame({
               compact={landscape}
               dense={landscape}
               onMore={landscape ? () => setSheetOpen(true) : undefined}
+              // The result is shown over the board; the side column does not repeat it.
+              showStatus={!(landscape && over)}
               fullscreen={fullscreen}
             />
           )}

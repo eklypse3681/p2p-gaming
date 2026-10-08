@@ -40,7 +40,9 @@ export function GameOverOverlay({ state, onNextGame, onLeave, onDismiss }: GameO
       data-testid="game-over"
     >
       <div className={`card ${styles.card}`}>
-        <div className="eyebrow">{m.winner ? 'Match over' : `Game ${m.games.length}`}</div>
+        <div className={`eyebrow ${styles.extra}`}>
+          {m.winner ? 'Match over' : `Game ${m.games.length}`}
+        </div>
         <h2 id="game-over-title" className={`${styles.title} ${won ? styles.won : ''}`}>
           {m.winner
             ? m.winner === state.seat
@@ -59,7 +61,7 @@ export function GameOverOverlay({ state, onNextGame, onLeave, onDismiss }: GameO
           {playerName(state, 'black')}
         </div>
         {m.config.length > 0 && !m.winner && (
-          <div className="muted small">First to {m.config.length}</div>
+          <div className={`muted small ${styles.extra}`}>First to {m.config.length}</div>
         )}
         <div className={styles.actions}>
           {m.winner ? (

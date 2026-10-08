@@ -45,7 +45,7 @@ export function PlayerCard(p: PlayerCardProps) {
       <div className={styles.body}>
         <div className={styles.name} data-testid={`player-name-${p.seat}`}>
           {p.present ? p.name : 'Waiting for opponent'}
-          {p.isMe && <span className="muted small"> (you)</span>}
+          {p.isMe && <span className={`muted small ${styles.you}`}> (you)</span>}
         </div>
         <div className={styles.meta}>
           {presence !== 'here' && (

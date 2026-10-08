@@ -226,14 +226,13 @@
   }
 }
 
-/* A table on a landscape phone: no bar at all, only a floating menu button at the top of the
-   side column. */
+/* A table on a landscape phone: no bar at all, only a small menu button floating over the
+   board's top-left corner (the frame). */
 @media (max-height: 480px) and (orientation: landscape) {
   :global(:root:has([data-dock])) .bar {
     position: fixed;
-    top: max(6px, env(safe-area-inset-top));
-    left: auto;
-    right: max(8px, env(safe-area-inset-right));
+    top: max(10px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
     height: auto;
     padding: 0;
     border: 0;
@@ -246,8 +245,12 @@
   }
   :global(:root:has([data-dock])) .menuButton {
     margin: 0;
-    background: color-mix(in srgb, var(--ui-surface) 85%, transparent);
+    min-width: 32px;
+    min-height: 32px;
+    padding: 6px;
+    background: color-mix(in srgb, var(--ui-surface) 70%, transparent);
     border: 1px solid var(--ui-border);
     border-radius: 50%;
+    opacity: 0.85;
   }
 }

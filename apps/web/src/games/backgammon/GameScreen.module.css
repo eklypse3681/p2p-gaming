@@ -131,6 +131,37 @@
 .sheet {
   display: none;
 }
+/* After the game-over card is dismissed, the result stays over the middle of the board. */
+.resultBadge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ui-border);
+  background: color-mix(in srgb, var(--ui-surface) 88%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  color: var(--ui-text-muted);
+  animation: fade-up var(--dur) var(--ease);
+}
+.resultBadge strong {
+  font-size: 1.1rem;
+  color: var(--ui-text);
+}
+.resultWon {
+  color: var(--ui-accent) !important;
+}
 /* "Offer a double?" after tapping the cube: a small card over the board. */
 .confirmDoubleBackdrop {
   position: absolute;
@@ -217,10 +248,10 @@
 /* Height is what a landscape phone lacks. The board fills everything but one column on the
    right, and stretches to that space's shape (wider points) instead of keeping 3:2 margins.
    The column holds the opponent's card, mine, then the status and actions at the bottom where
-   the right thumb is; the menu button floats at its top. */
+   the right thumb is; the menu button floats over the board's corner. */
 @media (max-height: 480px) and (orientation: landscape) {
   .screen {
-    --side: clamp(132px, 19vw, 200px);
+    --side: clamp(150px, 21vw, 210px);
     grid-template-columns: minmax(0, 1fr) var(--side);
     grid-template-rows: minmax(0, 1fr);
     height: calc(100dvh - var(--appbar-h));
@@ -248,8 +279,6 @@
     min-height: 0;
     /* a grid item may not grow past its column, or the actions never learn they must fold */
     min-width: 0;
-    /* clear of the floating menu button */
-    padding-top: 44px;
   }
   .dockRight {
     order: 1;

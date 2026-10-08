@@ -256,36 +256,62 @@
     display: none;
   }
 }
-/* Landscape phone: both cards sit in the narrow column beside the board, stacked alike. */
+/* Landscape phone: both cards sit in the narrow column beside the board: one tight row each,
+   avatar | name over pips | score. */
 @media (max-height: 480px) and (orientation: landscape) {
   .dock,
   .dockRight {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas:
-      'avatar body'
-      'score score';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'avatar body score';
     text-align: left;
-    padding: 6px 8px;
-    gap: 4px 8px;
+    padding: 5px 7px;
+    gap: 0 7px;
   }
   .dockRight .meta {
     justify-content: flex-start;
   }
-  .dock .avatar {
-    width: 28px;
-    height: 28px;
-    font-size: 0.9rem;
+  .dockRight .presence {
+    left: -2px;
+    right: auto;
   }
-  .dock .name {
+  .dockRight .checker {
+    left: auto;
+    right: -3px;
+  }
+  .dock .avatar {
+    width: 26px;
+    height: 26px;
     font-size: 0.85rem;
   }
+  .dock .checker {
+    width: 11px;
+    height: 11px;
+  }
+  .dock .name {
+    font-size: 0.8rem;
+    line-height: 1.2;
+  }
   .dock .meta {
-    font-size: 0.72rem;
-    gap: 6px;
-    flex-wrap: wrap;
+    font-size: 0.68rem;
+    gap: 5px;
+    flex-wrap: nowrap;
+    line-height: 1.2;
+  }
+  .dock .pipsUnit,
+  .dock .you {
+    display: none;
+  }
+  .dock .cube {
+    font-size: 0.68rem;
+    padding: 0 5px;
+  }
+  .dock .presenceTag {
+    font-size: 0.58rem;
+    padding: 0 4px;
   }
   .dock .score {
-    font-size: 1.05rem;
-    padding: 3px 7px;
+    font-size: 1rem;
+    padding: 2px 6px;
+    min-width: 28px;
   }
 }

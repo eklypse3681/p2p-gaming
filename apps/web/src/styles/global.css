@@ -562,6 +562,14 @@ code,
   :root:has([data-dock]) {
     --appbar-h: 0px;
   }
+  /* toasts over the top of the board, clear of the side column's cards */
+  :root:has([data-dock]) .toast-region {
+    top: 10px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-60%);
+    align-items: center;
+  }
 }
 
 /* Immersive table (the game's full-screen button): no app bar, the board gets the viewport.

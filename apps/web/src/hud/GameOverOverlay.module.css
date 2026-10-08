@@ -37,3 +37,31 @@
   justify-content: center;
   flex-wrap: wrap;
 }
+
+/* Short screens (landscape phones): a compact card that fits over the board. */
+@media (max-height: 480px) {
+  .overlay {
+    padding: var(--space-2);
+  }
+  .card {
+    gap: 6px;
+    padding: 12px 16px;
+    width: min(340px, 100%);
+  }
+  .title {
+    font-size: 1.25rem;
+  }
+  .detail {
+    font-size: 0.85rem;
+  }
+  .score {
+    font-size: 1.05rem;
+  }
+  .extra {
+    display: none;
+  }
+  .actions :global(.btn) {
+    min-height: 36px;
+    padding: 6px 14px;
+  }
+}
