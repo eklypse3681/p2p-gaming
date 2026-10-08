@@ -425,7 +425,8 @@
 @media (max-width: 640px) {
   .table {
     --card-w-sm: 34px;
-    --card-w-md: 50px;
+    /* five cards and the row label must fit the narrowest phones (360px) */
+    --card-w-md: min(50px, calc((100vw - 132px) / 5.5));
     --slot-gap: 4px;
   }
   .opponents {
@@ -436,26 +437,38 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .row {
-    grid-template-columns: 70px minmax(0, 1fr) auto;
+    grid-template-columns: 62px minmax(0, 1fr) auto;
+  }
+  /* My board and the cards to place come first; the opponents' boards follow. */
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .mine {
+    order: -1;
   }
   .seatBlocks {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-height: 480px) and (orientation: landscape) {
+  /* My board, the cards to place and Confirm must all fit the height at once: no header (the
+     status and Ledger sit in the screen's side column), smaller cards, smaller still for the
+     opponents. */
   .table {
-    --card-w-sm: 28px;
-    --card-w-md: 40px;
+    --card-w-sm: 24px;
+    --card-w-md: 31px;
     --slot-gap: 3px;
     gap: var(--space-2);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
   .header {
-    padding: 4px 8px;
+    display: none;
   }
   .body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
     gap: var(--space-2);
     min-height: 0;
   }
@@ -489,12 +502,48 @@
   .mine {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
+    /* keep the tray right under my board however tall the opponents' column is */
+    align-content: start;
   }
+  /* The tray in two lines: what is placed and the buttons, then the cards. The turn text is in
+     the side column already; the sort is the setting's. */
   .tray {
     padding: 6px 8px;
+    gap: 4px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'head actions'
+      'cards cards';
+    align-items: center;
+  }
+  .trayHead {
+    grid-area: head;
+  }
+  .trayHead > [data-testid='tray-hint'],
+  .tray .sortButtons {
+    display: none;
+  }
+  /* My name and "to act" are in the side column; the board itself is what matters here. */
+  .mine .seat[data-me='true'] .seatHead {
+    display: none;
+  }
+  .trayActions {
+    grid-area: actions;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .trayActions :global(.btn) {
+    min-height: 28px;
+    padding: 3px 9px;
+    font-size: 0.8rem;
   }
   .trayCards {
+    grid-area: cards;
     min-height: calc(var(--card-w-md) * 1.4);
+    gap: 6px;
+  }
+  .discards {
+    grid-column: 1 / -1;
   }
 }
 @media (prefers-reduced-motion: reduce) {

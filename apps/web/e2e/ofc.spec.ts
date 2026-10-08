@@ -193,3 +193,47 @@ test.describe('Open Face Chinese Poker', () => {
     await expect(host.getByTestId('leave-button')).toBeVisible();
   });
 });
+
+for (const size of [
+  { width: 360, height: 700 },
+  { width: 760, height: 300 },
+]) {
+  test(`on a ${size.width}x${size.height} phone the player on turn sees their cards and Confirm without scrolling`, async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({ viewport: size, isMobile: true, hasTouch: true });
+    const host = await ctx.newPage();
+    await seedProfile(host, 'alice', HOST);
+    const code = await hostTable(host, 'alice', { seats: 3, preset: 'standard-pineapple' });
+    const bob = await ctx.newPage();
+    await seedProfile(bob, 'bob', GUEST);
+    await joinTable(bob, 'bob', code);
+    const carol = await ctx.newPage();
+    await seedProfile(carol, 'carol', THIRD);
+    await joinTable(carol, 'carol', code);
+    await expect(host.getByTestId('ofc-table')).toHaveAttribute('data-phase', 'setting', {
+      timeout: 15_000,
+    });
+    let actor: typeof host | null = null;
+    for (const p of [host, bob, carol]) {
+      if ((await p.getByTestId('ofc-table').getAttribute('data-my-turn')) === 'true') actor = p;
+    }
+    expect(actor).not.toBeNull();
+    const p = actor!;
+    await p.locator('[data-testid^="pending-card-"]').first().waitFor();
+    const inView = async (testId: string) => {
+      const b = (await p.getByTestId(testId).first().boundingBox())!;
+      expect(b.y, `${testId} top`).toBeGreaterThanOrEqual(0);
+      expect(b.y + b.height, `${testId} bottom`).toBeLessThanOrEqual(size.height + 1);
+      expect(b.x + b.width, `${testId} right`).toBeLessThanOrEqual(size.width + 1);
+    };
+    await inView('confirm-placement');
+    await inView('pending-cards');
+    const scroll = await p.evaluate(() => ({
+      sw: document.documentElement.scrollWidth,
+      cw: document.documentElement.clientWidth,
+    }));
+    expect(scroll.sw).toBeLessThanOrEqual(scroll.cw + 1);
+    await ctx.close();
+  });
+}

@@ -6,6 +6,31 @@
 }
 .compact {
   grid-template-columns: 1fr;
+  gap: 4px;
+}
+/* The narrow column beside the table on a landscape phone: one tight line per seat. */
+.compact .seat {
+  padding: 4px 8px;
+  gap: 6px;
+}
+.compact .avatar {
+  width: 26px;
+  height: 26px;
+  font-size: 0.85rem;
+}
+.compact .name {
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+.compact .name :global(.small) {
+  display: none;
+}
+.compact .meta {
+  font-size: 0.68rem;
+  gap: 5px;
+  flex-wrap: nowrap;
+  line-height: 1.2;
+  overflow: hidden;
 }
 .seat {
   display: flex;
@@ -106,4 +131,35 @@
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+/* Phones in portrait: up to three seats across, one tight line each. */
+@media (max-width: 640px) {
+  .strip {
+    grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+    gap: 4px;
+  }
+  .seat {
+    padding: 4px 7px;
+    gap: 6px;
+  }
+  .avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 0.85rem;
+  }
+  .name {
+    font-size: 0.8rem;
+    line-height: 1.2;
+  }
+  .name :global(.small) {
+    display: none;
+  }
+  .meta {
+    font-size: 0.68rem;
+    gap: 5px;
+    flex-wrap: nowrap;
+    line-height: 1.2;
+    overflow: hidden;
+  }
 }

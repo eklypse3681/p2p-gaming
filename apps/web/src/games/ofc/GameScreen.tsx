@@ -39,7 +39,7 @@ import type { OfcSession } from './session';
 import { ofcDeps, resumeOfcTable } from './session';
 import type { OfcSnapshot } from './history';
 import { describeRules } from './rules/describe';
-import styles from '../backgammon/GameScreen.module.css';
+import styles from './GameScreen.module.css';
 
 interface Inflight {
   promise: Promise<OfcSession | null>;
@@ -661,6 +661,8 @@ function LiveTable({
       data-seat={seat ?? ''}
       data-layout={landscape ? 'landscape' : 'default'}
       data-status={tableView?.status ?? ''}
+      // A table: toasts keep clear of the actions, and on a landscape phone the app bar is a rail.
+      data-dock
     >
       {(state.status === 'disconnected' || state.status === 'rejected') && (
         <div className={styles.banner} role="alert" data-testid="disconnected-banner">
@@ -837,8 +839,13 @@ function LiveTable({
                 More
               </button>
             )}
-            <button className="btn btn-ghost btn-sm" onClick={onLeave} data-testid="leave-button">
-              Leave (resume later)
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={onLeave}
+              data-testid="leave-button"
+              title="Leave (resume later)"
+            >
+              {landscape ? 'Leave' : 'Leave (resume later)'}
             </button>
           </span>
         </div>
