@@ -21,6 +21,10 @@ import { toAbs, toRel } from './contract';
  */
 
 export const MIN_BOARD_WIDTH = 1500;
+/** Point-number sizes (viewBox units): small is the classic look. */
+export const LABEL_SIZES = { small: 24, medium: 34, large: 44 } as const;
+export type LabelSizeName = keyof typeof LABEL_SIZES;
+export const DEFAULT_LABEL_SIZE = LABEL_SIZES.small;
 export const MIN_BOARD_HEIGHT = 1000;
 /** Tallest a board may grow in a tall space: longer points, more checkers before stacks overlap. */
 export const MAX_BOARD_HEIGHT = 1250;
@@ -83,11 +87,19 @@ export type Row = 'top' | 'bottom';
  * 1500 wide (3:2); a wider one, for a wide space such as a landscape phone, widens the points and
  * keeps the frame, bar, tray, checkers and dice the same size.
  */
-export function createGeometry(width: number = MIN_BOARD_WIDTH, height: number = MIN_BOARD_HEIGHT) {
+export function createGeometry(
+  width: number = MIN_BOARD_WIDTH,
+  height: number = MIN_BOARD_HEIGHT,
+  /** Point-number font size; bigger numbers get a deeper frame above and below the felt. */
+  labelSize: number = DEFAULT_LABEL_SIZE,
+) {
   const VIEWBOX = { width, height } as const;
+  const LABEL_SIZE = labelSize;
+  // The frame band above and below the felt holds the point numbers: deep enough for them.
+  const frameY = Math.max(58, Math.round(labelSize * 1.6 + 14));
   // Vertical layout: the felt runs frame to frame, split at the middle; points take most of it.
-  const FELT_TOP = 58;
-  const FELT_BOTTOM = height - 58;
+  const FELT_TOP = frameY;
+  const FELT_BOTTOM = height - frameY;
   const MID_Y = height / 2;
   const halfFelt = MID_Y - FELT_TOP;
   const FRAME = 58;
@@ -109,8 +121,8 @@ export function createGeometry(width: number = MIN_BOARD_WIDTH, height: number =
   const CHIP = { width: 84, height: 14, spacing: 18 } as const;
   const DIE_SIZE = 76;
   const CUBE_SIZE = 72;
-  const LABEL_TOP_Y = 34;
-  const LABEL_BOTTOM_Y = height - 22;
+  const LABEL_TOP_Y = frameY / 2 + 5;
+  const LABEL_BOTTOM_Y = height - frameY / 2 + 7;
 
   /** Mirror an x coordinate for the left-handed layout. */
   function mirrorX(x: number, homeSide: HomeSide = 'right'): number {
@@ -413,6 +425,7 @@ export function createGeometry(width: number = MIN_BOARD_WIDTH, height: number =
   }
 
   return {
+    LABEL_SIZE,
     FRAME,
     POINT_HEIGHT,
     CHECKER_RADIUS,
@@ -465,6 +478,7 @@ export type Geometry = ReturnType<typeof createGeometry>;
 export const DEFAULT_GEOMETRY: Geometry = createGeometry();
 
 export const {
+  LABEL_SIZE,
   FRAME,
   POINT_HEIGHT,
   CHECKER_RADIUS,

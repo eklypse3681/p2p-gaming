@@ -179,6 +179,13 @@ export interface BoardRendererProps {
    * its tray). Positioned absolutely: the board's container must be the positioning context.
    */
   centerOverlay?: ReactNode;
+  /** Point-number font size in viewBox units (see `LABEL_SIZES`); the frame deepens to fit. */
+  labelSize?: number;
+  /**
+   * Whose numbering the point numbers follow; the viewer's own by default. The opponent's is
+   * the mirror image (their 1 is my 24), handy for reading their position.
+   */
+  numbering?: Player;
   /** Reduced motion preference; renderer must respect it. */
   reducedMotion?: boolean;
   /** Test hook: ids are stamped on elements as `data-testid`. */

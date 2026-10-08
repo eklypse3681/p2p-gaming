@@ -298,3 +298,15 @@ describe('boards of other shapes', () => {
     expect(boardSizeFor(300, 400)).toEqual({ width: 1500, height: 1240 });
   });
 });
+
+describe('point-number size', () => {
+  it('deepens the frame for bigger numbers and keeps them inside it', () => {
+    const small = createGeometry();
+    const large = createGeometry(1500, 1000, 44);
+    expect(small.FELT_TOP).toBe(58);
+    expect(large.FELT_TOP).toBeGreaterThan(small.FELT_TOP);
+    expect(large.LABEL_TOP_Y + 44 / 2).toBeLessThanOrEqual(large.FELT_TOP);
+    expect(large.LABEL_BOTTOM_Y - 44 / 2).toBeGreaterThanOrEqual(large.FELT_BOTTOM);
+    expect(large.LABEL_BOTTOM_Y + 44 / 2).toBeLessThanOrEqual(1000);
+  });
+});

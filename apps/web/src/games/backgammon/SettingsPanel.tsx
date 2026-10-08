@@ -1,5 +1,5 @@
 import { useSettings } from '../../session/settings';
-import type { HomeSidePreference } from '../../session/settings';
+import type { HomeSidePreference, PointNumbering, PointNumberSize } from '../../session/settings';
 import { useTheme } from '../../app/ThemeProvider';
 import type { BoardSet, PieceSet } from '../../themes/theme';
 import type { HomeSide } from '../../board/contract';
@@ -222,6 +222,42 @@ export function BackgammonSettings() {
           ))}
         </div>
         <div>
+          <div className={styles.rowField}>
+            <div className={styles.rowText}>
+              Point numbers
+              <small>How big the 1 to 24 on the frame are; the frame grows to fit them.</small>
+            </div>
+            <select
+              className="select"
+              style={{ width: 'auto' }}
+              value={settings.pointNumberSize}
+              onChange={(e) => update({ pointNumberSize: e.target.value as PointNumberSize })}
+              data-testid="point-number-size"
+            >
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+              <option value="large">Large</option>
+            </select>
+          </div>
+          <div className={styles.rowField}>
+            <div className={styles.rowText}>
+              Number the points from
+              <small>
+                Your opponent's numbers are the mirror of yours (their 1 is your 24). Hold their
+                name to see their numbers any time.
+              </small>
+            </div>
+            <select
+              className="select"
+              style={{ width: 'auto' }}
+              value={settings.pointNumbering}
+              onChange={(e) => update({ pointNumbering: e.target.value as PointNumbering })}
+              data-testid="point-numbering"
+            >
+              <option value="mine">My side, always</option>
+              <option value="mover">Whoever is on turn</option>
+            </select>
+          </div>
           <div className={styles.rowField}>
             <div className={styles.rowText}>
               Renderer

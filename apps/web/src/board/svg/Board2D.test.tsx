@@ -321,3 +321,22 @@ describe('the cube as a button', () => {
     expect(onCubeClick).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('point numbers', () => {
+  it('prints mine by default and the mirror image for the other player', () => {
+    const { rerender } = render(<Board2D model={startingModel('white')} theme={theme} />);
+    const label = (abs: number) => screen.getByTestId(`point-label-${abs}`);
+    expect(screen.getByTestId('point-labels')).toHaveAttribute('data-numbering', 'white');
+    expect(label(1)).toHaveTextContent('1');
+    expect(label(24)).toHaveTextContent('24');
+    rerender(<Board2D model={startingModel('white')} theme={theme} numbering="black" />);
+    expect(screen.getByTestId('point-labels')).toHaveAttribute('data-numbering', 'black');
+    expect(label(1)).toHaveTextContent('24');
+    expect(label(24)).toHaveTextContent('1');
+  });
+
+  it('draws bigger numbers when asked', () => {
+    render(<Board2D model={startingModel('white')} theme={theme} labelSize={44} />);
+    expect(screen.getByTestId('point-label-1')).toHaveAttribute('font-size', '44');
+  });
+});

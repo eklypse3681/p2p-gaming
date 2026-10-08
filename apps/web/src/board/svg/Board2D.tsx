@@ -82,6 +82,8 @@ export function Board2D(props: BoardRendererProps) {
     onDragCancel,
     onCubeClick,
     centerOverlay,
+    labelSize,
+    numbering,
     reducedMotion,
     testIdPrefix,
   } = props;
@@ -111,7 +113,10 @@ export function Board2D(props: BoardRendererProps) {
     return () => ro.disconnect();
   }, []);
   const size = boardSizeFor(space.width, space.height);
-  const geo = useMemo(() => createGeometry(size.width, size.height), [size.width, size.height]);
+  const geo = useMemo(
+    () => createGeometry(size.width, size.height, labelSize),
+    [size.width, size.height, labelSize],
+  );
   const {
     CHECKER_RADIUS,
     FELT_BOTTOM,
@@ -658,7 +663,13 @@ export function Board2D(props: BoardRendererProps) {
           pips={model.pips}
           names={model.names}
         />
-        <Labels perspective={perspective} homeSide={homeSide} board={board} geo={geo} />
+        <Labels
+          numbering={numbering ?? perspective}
+          perspective={perspective}
+          homeSide={homeSide}
+          board={board}
+          geo={geo}
+        />
 
         {/* Cube & dice (under checkers so a hit checker can cross them) */}
         <Cube

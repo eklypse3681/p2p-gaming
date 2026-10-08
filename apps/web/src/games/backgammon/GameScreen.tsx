@@ -29,6 +29,7 @@ import { useBoardViewModel } from '../../board/useBoardViewModel';
 import { useBoardInteraction } from '../../board/useBoardInteraction';
 import { PlayerCard } from '../../hud/PlayerCard';
 import { ActionBar } from '../../hud/ActionBar';
+import { LABEL_SIZES } from '../../board/geometry';
 import { FullscreenIcon, useFullscreen } from '../../hud/useFullscreen';
 import { MatchPanel } from '../../hud/MatchPanel';
 import { Chat } from '../../hud/Chat';
@@ -410,6 +411,32 @@ function LiveGame({
   // One table: the host chose which side the home boards are on; the seat across sees the
   // mirror image. Viewing from `perspective` (flipped = the opponent's chair) keeps that true.
   const homeSide = seat ? settings.homeSidePreference : homeSideFor(state, perspective);
+
+  // Point numbers: mine, or the opponent's (the mirror image) while I hold their card or, if I
+  // chose so, while they are on turn. Releasing anywhere ends the hold.
+  const [peek, setPeek] = useState(false);
+  useEffect(() => {
+    if (!peek) return;
+    const end = () => setPeek(false);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    window.addEventListener('blur', end);
+    return () => {
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      window.removeEventListener('blur', end);
+    };
+  }, [peek]);
+  const turnPhase = state.snapshot?.match.game?.phase;
+  const turnHolder =
+    turnPhase && (turnPhase.kind === 'to-roll' || turnPhase.kind === 'moving')
+      ? turnPhase.player
+      : null;
+  const numbering: Player | undefined = !seat
+    ? undefined
+    : peek || (settings.pointNumbering === 'mover' && turnHolder === opponent(seat))
+      ? opponent(seat)
+      : seat;
   const model = useBoardViewModel(state, {
     seat,
     perspective,
@@ -514,6 +541,8 @@ function LiveGame({
   const cardFor = (s: Player, dock: 'left' | 'right') => (
     <PlayerCard
       dock={dock}
+      onHoldStart={seat && s !== seat ? () => setPeek(true) : undefined}
+      holding={peek && s !== seat}
       seat={s}
       name={playerName(state, s)}
       avatar={state.snapshot?.players[s]?.avatar}
@@ -595,6 +624,8 @@ function LiveGame({
           reducedMotion={reducedMotion}
           {...handlers}
           onCubeClick={mayDouble ? () => setDoubleAsked(true) : undefined}
+          labelSize={LABEL_SIZES[settings.pointNumberSize]}
+          numbering={numbering}
           centerOverlay={
             over && !showOverlay && state.seat ? (
               <div className={styles.resultBadge} data-testid="game-result" aria-live="polite">

@@ -12,6 +12,19 @@
     box-shadow var(--dur) var(--ease);
   min-width: 0;
 }
+/* Hold to see the board numbered from this player's side: no text selection or callout. */
+.holdable {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  /* a long press must stay ours: if the browser took it as a scroll it would cancel the hold */
+  touch-action: none;
+}
+.holding {
+  border-color: var(--ui-accent);
+  border-style: solid;
+}
 .active {
   border-color: color-mix(in srgb, var(--ui-accent) 60%, var(--ui-border));
   box-shadow:

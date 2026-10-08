@@ -49,7 +49,16 @@ export interface Settings {
   ofcFourColor: boolean;
   /** OFC: how dealt cards start out in the tray; the buttons there still change it per hand. */
   ofcTraySort: OfcTraySort;
+  /** Backgammon: how big the point numbers on the frame are. */
+  pointNumberSize: PointNumberSize;
+  /** Backgammon: number the points from my side always, or from whoever is on turn. */
+  pointNumbering: PointNumbering;
 }
+
+export type PointNumberSize = 'small' | 'medium' | 'large';
+export const POINT_NUMBER_SIZES: readonly PointNumberSize[] = ['small', 'medium', 'large'];
+export type PointNumbering = 'mine' | 'mover';
+export const POINT_NUMBERINGS: readonly PointNumbering[] = ['mine', 'mover'];
 
 export type OfcTraySort = 'dealt' | 'low' | 'high' | 'suit';
 export const OFC_TRAY_SORTS: readonly OfcTraySort[] = ['dealt', 'low', 'high', 'suit'];
@@ -82,6 +91,8 @@ export const DEFAULT_SETTINGS: Settings = {
   entropyFallback: false,
   ofcFourColor: false,
   ofcTraySort: 'dealt',
+  pointNumberSize: 'small',
+  pointNumbering: 'mine',
 };
 
 /** What is actually persisted: the settings plus when they last changed (for device sync). */
@@ -172,6 +183,10 @@ export function sanitizeSettings(value: unknown): Settings {
   if (!RANDOMNESS_MODES.includes(out.randomnessMode))
     out.randomnessMode = DEFAULT_SETTINGS.randomnessMode;
   if (!OFC_TRAY_SORTS.includes(out.ofcTraySort)) out.ofcTraySort = DEFAULT_SETTINGS.ofcTraySort;
+  if (!POINT_NUMBER_SIZES.includes(out.pointNumberSize))
+    out.pointNumberSize = DEFAULT_SETTINGS.pointNumberSize;
+  if (!POINT_NUMBERINGS.includes(out.pointNumbering))
+    out.pointNumbering = DEFAULT_SETTINGS.pointNumbering;
   if (out.homeSidePreference !== 'left' && out.homeSidePreference !== 'right')
     out.homeSidePreference = DEFAULT_SETTINGS.homeSidePreference;
   return out;

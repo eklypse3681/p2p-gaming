@@ -17,6 +17,13 @@ export interface PlayerCardProps {
   compact?: boolean;
   /** Small card for the bottom dock; `right` mirrors it so the score sits on the outer edge. */
   dock?: 'left' | 'right';
+  /**
+   * Press and hold (mouse or touch): called on the press; the caller ends it on release anywhere.
+   * Used to show the board from this player's side while held.
+   */
+  onHoldStart?: () => void;
+  /** True while that hold is in effect. */
+  holding?: boolean;
 }
 
 export function PlayerCard(p: PlayerCardProps) {
@@ -24,10 +31,20 @@ export function PlayerCard(p: PlayerCardProps) {
   const presence = !p.present ? 'empty' : p.connected ? 'here' : 'away';
   return (
     <div
-      className={`${styles.card} ${presence === 'away' ? styles.away : ''} ${presence === 'empty' ? styles.empty : ''} ${p.onTurn ? styles.active : ''} ${p.compact ? styles.compact : ''} ${p.dock ? styles.dock : ''} ${p.dock === 'right' ? styles.dockRight : ''}`}
+      className={`${styles.card} ${p.onHoldStart ? styles.holdable : ''} ${p.holding ? styles.holding : ''} ${presence === 'away' ? styles.away : ''} ${presence === 'empty' ? styles.empty : ''} ${p.onTurn ? styles.active : ''} ${p.compact ? styles.compact : ''} ${p.dock ? styles.dock : ''} ${p.dock === 'right' ? styles.dockRight : ''}`}
       data-testid={`player-card-${p.seat}`}
       data-on-turn={p.onTurn ? 'true' : 'false'}
       data-presence={presence}
+      data-holding={p.holding ? 'true' : undefined}
+      onPointerDown={
+        p.onHoldStart
+          ? (e) => {
+              if (e.button !== 0) return;
+              p.onHoldStart!();
+            }
+          : undefined
+      }
+      onContextMenu={p.onHoldStart ? (e) => e.preventDefault() : undefined}
       title={presence === 'away' ? `${p.name} is away` : undefined}
     >
       <div className={styles.avatar} aria-hidden="true">
