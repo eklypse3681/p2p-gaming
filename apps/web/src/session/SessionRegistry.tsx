@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from 'react';
 import type { Session } from './session';
 import type { GameId } from '../games/ids';
+import { connLog } from './connLog';
 
 /**
  * What every live session looks like to the registry, whatever game runs on it: a backgammon
@@ -38,7 +39,8 @@ export interface SessionRegistry {
    * resume attempt must not tear down the table the player is already playing on.
    */
   add(slug: string, game: GameId, session: BaseSession): 'added' | 'kept';
-  remove(slug: string, game: GameId, matchId: string, dispose?: boolean): void;
+  /** `reason` goes to the connection log, so a closed game can always be explained. */
+  remove(slug: string, game: GameId, matchId: string, dispose?: boolean, reason?: string): void;
   all(): BaseSession[];
   /** The live session (any player/game) currently hosting or joined under a room code. */
   liveByCode(code: string): BaseSession | undefined;
@@ -91,7 +93,10 @@ export function SessionRegistryProvider({
       }
       return 'kept';
     }
-    if (prev) prev.dispose();
+    if (prev) {
+      connLog(`${prev.code} session closed`, { reason: 'replaced by a new session' });
+      prev.dispose();
+    }
     map.current.set(k, s);
     bump((n) => n + 1);
     return 'added';
@@ -100,19 +105,26 @@ export function SessionRegistryProvider({
     (code: string) => Array.from(map.current.values()).find((s) => s.code === code && isLive(s)),
     [],
   );
-  const remove = useCallback((slug: string, game: GameId, id: string, dispose = true) => {
-    const k = keyOf(slug, game, id);
-    const s = map.current.get(k);
-    if (s && dispose) s.dispose();
-    map.current.delete(k);
-    bump((n) => n + 1);
-  }, []);
+  const remove = useCallback(
+    (slug: string, game: GameId, id: string, dispose = true, reason = 'removed') => {
+      const k = keyOf(slug, game, id);
+      const s = map.current.get(k);
+      if (s && dispose) {
+        connLog(`${s.code} session closed`, { reason });
+        s.dispose();
+      }
+      map.current.delete(k);
+      bump((n) => n + 1);
+    },
+    [],
+  );
   const all = useCallback(() => Array.from(map.current.values()), []);
 
   // Closing the tab: say goodbye so the peer learns immediately instead of via a timeout.
   useEffect(() => {
-    const onHide = () => {
+    const onHide = (e: PageTransitionEvent) => {
       for (const s of map.current.values()) {
+        connLog(`${s.code} session closed`, { reason: 'page hidden', persisted: e.persisted });
         try {
           s.dispose();
         } catch {

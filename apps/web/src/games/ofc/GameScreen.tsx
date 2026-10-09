@@ -80,8 +80,9 @@ export function GameScreen() {
   const existingStatus = existing?.client.getState().status;
   const stale = !!existing && (existingStatus === 'disconnected' || existingStatus === 'rejected');
   useEffect(() => {
-    if (stale && matchId) registry.remove(slug, gameId, matchId, true);
-  }, [stale, matchId, registry, slug, gameId]);
+    if (stale && matchId)
+      registry.remove(slug, gameId, matchId, true, `stale: ${existingStatus ?? 'unknown'}`);
+  }, [stale, matchId, registry, slug, gameId, existingStatus]);
   const session = stale ? undefined : existing;
   const leaving = useRef(false);
   type Resume = { status: 'loading' | 'missing' | 'error' | 'host-offline'; error?: string };
@@ -170,13 +171,13 @@ export function GameScreen() {
         session={session}
         onLeave={() => {
           leaving.current = true;
-          registry.remove(slug, gameId, session.matchId, true);
+          registry.remove(slug, gameId, session.matchId, true, 'leave');
           navigate(path('/'));
         }}
         onReconnect={() => {
           setResume({ status: 'loading' });
           setAttempt((n) => n + 1);
-          registry.remove(slug, gameId, session.matchId, true);
+          registry.remove(slug, gameId, session.matchId, true, 'reconnect');
         }}
       />
     );

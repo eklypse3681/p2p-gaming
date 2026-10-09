@@ -13,7 +13,7 @@ import type { BaseSession } from './SessionRegistry';
 import type { RandomnessChoice } from './entropy';
 import { buildEntropy, randomnessOptions } from './entropy';
 import type { FlowDeps, FlowOptions } from './retry';
-import { logStatusChanges } from './connLog';
+import { connLog, logStatusChanges } from './connLog';
 import { cancelled, joinWithRetry, resumeWithRetry, throwIfAborted } from './retry';
 
 /**
@@ -225,6 +225,7 @@ async function hostWithServer<S, A, C, V, Cfg>(
   let lostAddress = false;
   listener.onLost?.(() => {
     lostAddress = true;
+    connLog(`${code} session closed`, { reason: 'another device took the room code' });
     dispose();
   });
   try {

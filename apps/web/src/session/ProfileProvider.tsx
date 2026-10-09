@@ -96,10 +96,13 @@ export function ProfileProvider({
   const unlocked = !locked || secrets !== null;
 
   // Keep this player's devices in sync while the profile is open (honours the `sync` setting).
+  // Depends on whether there is a record, not on the record object: that changes on every update
+  // (even opening a page touches it), and re-attaching would restart sync each time.
+  const hasRecord = !!record;
   useEffect(() => {
-    if (!valid || !record || !unlocked) return;
+    if (!valid || !hasRecord || !unlocked) return;
     return attachSync(slug);
-  }, [slug, valid, record, unlocked]);
+  }, [slug, valid, hasRecord, unlocked]);
 
   const privateKey = secrets?.privateKey ?? null;
   const deviceKey = secrets?.deviceKey ?? null;
