@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
 
-const attach = vi.fn(() => () => {});
+const attach = vi.fn((_slug: string) => () => {});
 vi.mock('./sync/registry', () => ({ attachSync: (slug: string) => attach(slug) }));
 
 import { ProfileProvider } from './ProfileProvider';
