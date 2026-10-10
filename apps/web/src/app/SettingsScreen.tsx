@@ -28,6 +28,7 @@ import type { Look } from '../themes';
 import { GAMES, getGame } from '../games/registry';
 import { Switch } from './settingsParts';
 import { CopyConnLog } from '../hud/CopyConnLog';
+import { APP_VERSION } from './version';
 import { clearConnLog } from '../session/connLog';
 import styles from './SettingsScreen.module.css';
 
@@ -849,6 +850,9 @@ function GeneralSettings() {
           Board demo
         </a>
       </div>
+      <p className="muted small" data-testid="app-version">
+        Version <span className="mono">{APP_VERSION}</span>
+      </p>
     </>
   );
 }

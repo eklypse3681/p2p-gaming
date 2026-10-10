@@ -4,6 +4,8 @@
  * lines, and never records keys, profiles or game state: only what the network did.
  */
 
+import { APP_VERSION } from '../app/version';
+
 const KEY = 'bgf:connlog';
 const MAX_LINES = 400;
 
@@ -66,6 +68,7 @@ export function formatConnLog(): string {
   const online = typeof navigator !== 'undefined' ? navigator.onLine : 'unknown';
   const header = [
     `Among Friends connection log, copied ${new Date().toISOString()}`,
+    `version ${APP_VERSION}`,
     `page ${typeof location !== 'undefined' ? location.href : ''}`,
     `agent ${ua}`,
     `online ${String(online)} visibility ${visible}`,

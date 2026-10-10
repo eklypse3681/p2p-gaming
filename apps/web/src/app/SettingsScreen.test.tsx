@@ -143,6 +143,11 @@ describe('SettingsScreen tabs', () => {
     });
   });
 
+  it('shows which version of the app is running', () => {
+    renderSettings();
+    expect(screen.getByTestId('app-version')).toHaveTextContent(/^Version \S+$/);
+  });
+
   it('falls back to General for a game it does not know', () => {
     renderSettings('chess');
     expect(screen.getByTestId('profile-section')).toBeInTheDocument();

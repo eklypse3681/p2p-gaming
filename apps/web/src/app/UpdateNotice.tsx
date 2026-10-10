@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { connLog } from '../session/connLog';
+import { APP_VERSION } from './version';
 
 /** This page's build, or null where there is none to compare (dev server, tests). */
-const RUNNING: string | null =
-  typeof __APP_VERSION__ !== 'undefined' && import.meta.env.PROD ? __APP_VERSION__ : null;
+const RUNNING: string | null = APP_VERSION === 'dev' ? null : APP_VERSION;
 
 const CHECK_EVERY_MS = 60_000;
 

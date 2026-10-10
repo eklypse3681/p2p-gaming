@@ -7,6 +7,7 @@ import { getGame } from '../games/registry';
 import { useTheme } from './ThemeProvider';
 import { useSyncStatus } from '../session/sync/registry';
 import styles from './AppBar.module.css';
+import { APP_VERSION } from './version';
 
 /** Small dot on the player chip: green while this player's other devices are connected. */
 function SyncDot({ slug }: { slug: string }) {
@@ -257,6 +258,9 @@ export function AppBar() {
             </NavLink>
           </>
         ) : null}
+        <span className={styles.version} data-testid="menu-version">
+          Version {APP_VERSION}
+        </span>
       </div>
     </header>
   );

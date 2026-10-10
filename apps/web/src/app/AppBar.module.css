@@ -140,6 +140,10 @@
 .panelOnly {
   display: none;
 }
+/* The build, at the foot of the phone menu panel only. */
+.version {
+  display: none;
+}
 /* Icons appear only in the phone panel and the rail; the desktop bar stays text. */
 .icon {
   display: none;
@@ -241,6 +245,19 @@
   }
   .panelOnly {
     display: inline;
+  }
+  .panel .version {
+    display: block;
+    order: 3;
+    margin-top: auto;
+    padding: 8px 14px 0;
+    font-size: 0.75rem;
+    font-family: var(--ui-font-mono);
+    color: var(--ui-text-muted);
+  }
+  /* collapsed rail: no room for it */
+  :global(:root:has([data-dock])) .bar:not([data-menu-open='true']) .version {
+    display: none;
   }
 }
 
