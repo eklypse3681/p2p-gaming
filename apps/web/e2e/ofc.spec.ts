@@ -322,3 +322,45 @@ test('on a desktop the table scrolls with the wheel, so every hand at the showdo
   expect(await host.evaluate(() => window.scrollY)).toBe(0);
   await ctx.close();
 });
+
+test('a guest is told once who hosts the table, and in portrait the table never runs under the panel below', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({
+    viewport: { width: 412, height: 860 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const host = await ctx.newPage();
+  await seedProfile(host, 'alice', HOST);
+  const code = await hostTable(host, 'alice', { seats: 2, preset: 'standard-pineapple' });
+  await expect(host.getByTestId('trust-note')).toHaveCount(0);
+  const bob = await ctx.newPage();
+  await seedProfile(bob, 'bob', GUEST);
+  await bob.goto(ofcUrl('bob', `/join/${code}`));
+  await expect(bob.getByTestId('trust-note')).toContainText(`${HOST.name} is hosting this table`);
+  await bob.getByTestId('trust-note-ok').click();
+  await expect(bob.getByTestId('trust-note')).toHaveCount(0);
+  await expect(bob.getByTestId('trust-line')).toContainText(`Hosted by ${HOST.name}`);
+  await bob.reload();
+  await expect(bob.getByTestId('game-screen')).toBeVisible({ timeout: 20_000 });
+  await bob.waitForTimeout(1500);
+  await expect(bob.getByTestId('trust-note')).toHaveCount(0);
+
+  await expect(host.getByTestId('ofc-table')).toHaveAttribute('data-phase', 'setting', {
+    timeout: 15_000,
+  });
+  for (const p of [host, bob]) {
+    const area = (await p.getByTestId('table-area').boundingBox())!;
+    const mine = (await p
+      .locator('[data-testid="ofc-table"] section[data-me="true"]')
+      .boundingBox())!;
+    const rail = (await p.getByTestId('rail').boundingBox())!;
+    // My board lies inside the table area, and the panel below starts after it.
+    expect(mine.y + mine.height, 'my board inside the table area').toBeLessThanOrEqual(
+      area.y + area.height + 1,
+    );
+    expect(rail.y, 'panel starts below my board').toBeGreaterThanOrEqual(mine.y + mine.height - 1);
+  }
+  await ctx.close();
+});

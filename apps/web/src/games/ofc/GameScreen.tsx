@@ -370,6 +370,38 @@ function LiveTable({
 
   const seat = state.seat;
   const snapshot = state.snapshot;
+  const trust: TrustDescription | null = snapshot
+    ? ((snapshot.options?.trust as TrustDescription | undefined) ??
+      describeTrust(ofcDefinition, {
+        hostSeat: snapshot.hostSeat,
+        randomness: snapshot.options?.randomness as
+          { mode?: RandomnessMode; provider?: string } | undefined,
+      }))
+    : null;
+  const hostName =
+    snapshot && snapshot.hostSeat != null && snapshot.hostSeat >= 0
+      ? (snapshot.seats[snapshot.hostSeat]?.name ?? null)
+      : null;
+  // Once per table, for a player who is not the host: who hosts, and what that means, gently.
+  const { slug } = useProfile();
+  const trustKey = `bgf:trust-seen:${slug}:${session.matchId}`;
+  const [trustSeen, setTrustSeen] = useState(() => {
+    try {
+      return localStorage.getItem(trustKey) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const showTrustNote =
+    !trustSeen && trust?.level === 'host-sees-hidden' && session.role !== 'host' && !!hostName;
+  const dismissTrustNote = () => {
+    try {
+      localStorage.setItem(trustKey, '1');
+    } catch {
+      /* storage blocked: it just shows again next time */
+    }
+    setTrustSeen(true);
+  };
   const role = state.role ?? 'seat';
   const isDealer = role === 'dealer';
   const dealerInfo =
@@ -579,20 +611,18 @@ function LiveTable({
             {isDealer ? ' (you)' : dealerInfo.connected ? '' : ' · away'}
           </p>
         )}
-        {state.snapshot && (
-          <p className="small" data-testid="trust-line">
-            <TrustBadge
-              trust={
-                (state.snapshot.options?.trust as TrustDescription | undefined) ??
-                describeTrust(ofcDefinition, {
-                  hostSeat: state.snapshot.hostSeat,
-                  randomness: state.snapshot.options?.randomness as
-                    { mode?: RandomnessMode; provider?: string } | undefined,
-                })
-              }
-            />
-          </p>
-        )}
+        {trust &&
+          (trust.level === 'host-sees-hidden' && hostName ? (
+            // Said once in a dialog when sitting down; here just who hosts, without alarm.
+            <p className="small muted" data-testid="trust-line" data-level={trust.level}>
+              Hosted by <strong>{hostName}</strong>
+              {session.role === 'host' ? ' (you)' : ''}
+            </p>
+          ) : (
+            <p className="small" data-testid="trust-line" data-level={trust.level}>
+              <TrustBadge trust={trust} />
+            </p>
+          ))}
         {tableView && (
           <div className="stack-sm" data-testid="balances">
             {names.map((n, i) => (
@@ -893,6 +923,24 @@ function LiveTable({
           exportName={`ofc-${session.code}-audit`}
           onClose={() => setFairnessOpen(false)}
         />
+      )}
+      {showTrustNote && (
+        <div className={styles.trustNote} role="dialog" aria-modal="true" data-testid="trust-note">
+          <div className={`card ${styles.trustNoteCard}`}>
+            <strong>{hostName} is hosting this table</strong>
+            <p className="muted small">
+              Their device runs the table and deals the cards. Play with people you trust.
+            </p>
+            <button
+              className="btn btn-primary"
+              onClick={dismissTrustNote}
+              data-testid="trust-note-ok"
+              autoFocus
+            >
+              OK
+            </button>
+          </div>
+        </div>
       )}
       {ledgerOpen && tableView && (
         <LedgerSheet

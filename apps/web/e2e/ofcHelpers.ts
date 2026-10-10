@@ -29,6 +29,18 @@ export async function hostTable(
 export async function joinTable(page: Page, profile: string, code: string): Promise<void> {
   await page.goto(ofcUrl(profile, `/join/${code}`));
   await expect(page.getByTestId('game-screen')).toBeVisible({ timeout: 20_000 });
+  await dismissTrustNote(page);
+}
+
+/** A guest at a player-hosted table is told once who hosts it; close that note. */
+export async function dismissTrustNote(page: Page): Promise<void> {
+  const ok = page.getByTestId('trust-note-ok');
+  try {
+    await ok.waitFor({ state: 'visible', timeout: 3_000 });
+    await ok.click();
+  } catch {
+    /* not shown (the host, a dealer-hosted table, or already seen) */
+  }
 }
 
 const CAPACITY: Record<string, number> = { top: 3, middle: 5, bottom: 5 };
