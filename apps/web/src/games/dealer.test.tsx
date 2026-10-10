@@ -156,7 +156,7 @@ describe('dealer role rendering', () => {
     expect(screen.getByTestId('board')).toBeInTheDocument();
     expect(screen.getAllByTestId('dealer-badge')[0]).toHaveTextContent('Dealt by Dana (you)');
     expect(screen.getByTestId('fairness-button')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('fairness-button-bar'));
+    fireEvent.click(screen.getByTestId('fairness-button'));
     expect(screen.getByTestId('fairness-panel')).toBeInTheDocument();
   });
 });

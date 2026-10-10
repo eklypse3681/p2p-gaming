@@ -35,6 +35,7 @@ import { MatchPanel } from '../../hud/MatchPanel';
 import { Chat } from '../../hud/Chat';
 import { RoomCode } from '../../hud/RoomCode';
 import { Handoff } from '../../hud/Handoff';
+import { useTableMenu } from '../../app/TableMenu';
 import { ClubChip } from '../../clubs/ClubChip';
 import { GameOverOverlay } from '../../hud/GameOverOverlay';
 import { ConnectionBadge } from '../../hud/ConnectionBadge';
@@ -352,8 +353,6 @@ function RailContent({
             <RoomCode code={session.code} />
           </>
         )}
-        <hr className="divider" />
-        <Handoff code={session.code} />
       </div>
       <div className={`card ${styles.railCard} ${tab !== 'chat' ? styles.railHidden : ''}`}>
         <h3 style={{ marginBottom: 8 }}>Chat</h3>
@@ -397,6 +396,34 @@ function LiveGame({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [overlayDismissedFor, setOverlayDismissedFor] = useState<number | null>(null);
   const [fairnessOpen, setFairnessOpen] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  // Desktop: the side panel (match, chat) folds away; remembered per browser.
+  const [railCollapsed, setRailCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('bgf:rail-collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const collapseRail = (v: boolean) => {
+    setRailCollapsed(v);
+    try {
+      localStorage.setItem('bgf:rail-collapsed', v ? '1' : '0');
+    } catch {
+      /* not remembered */
+    }
+  };
+  // The ⋮ menu in the title bar: everything that is not playing the game.
+  useTableMenu([
+    { id: 'handoff', label: 'Move to another device', onSelect: () => setHandoffOpen(true) },
+    { id: 'fairness', label: 'Fairness', onSelect: () => setFairnessOpen(true) },
+    {
+      id: 'table',
+      label: 'Match & chat',
+      onSelect: () => (landscape ? setSheetOpen(true) : collapseRail(false)),
+    },
+    { id: 'leave', label: 'Leave (resume later)', onSelect: onLeave, quiet: true },
+  ]);
   const isDealer = (state.role ?? 'seat') === 'dealer';
 
   const seat = state.seat;
@@ -594,6 +621,7 @@ function LiveGame({
       data-layout={landscape ? 'landscape' : 'default'}
       data-rules={free ? 'free' : 'enforced'}
       data-staged={state.draft.played.length}
+      data-rail={railCollapsed ? 'collapsed' : 'open'}
     >
       {(state.status === 'disconnected' || state.status === 'rejected') && (
         <div className={styles.banner} role="alert" data-testid="disconnected-banner">
@@ -727,29 +755,6 @@ function LiveGame({
                     </button>
                   </details>
                 )}
-                <button
-                  className="btn btn-sm"
-                  onClick={() => setFairnessOpen(true)}
-                  data-testid="fairness-button-bar"
-                >
-                  Fairness
-                </button>
-                {landscape && (
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => setSheetOpen(true)}
-                    data-testid="more-button"
-                  >
-                    More
-                  </button>
-                )}
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={onLeave}
-                  data-testid="leave-button"
-                >
-                  Leave
-                </button>
                 {fullscreenButton}
               </span>
             </>
@@ -757,10 +762,8 @@ function LiveGame({
             <ActionBar
               state={state}
               client={client}
-              onLeave={onLeave}
               compact={landscape}
               dense={landscape}
-              onMore={landscape ? () => setSheetOpen(true) : undefined}
               // The result is shown over the board; the dock does not repeat it.
               showStatus={!over}
               fullscreen={fullscreen}
@@ -777,8 +780,52 @@ function LiveGame({
 
       {!landscape && (
         <aside className={styles.rail} data-testid="rail">
+          <button
+            type="button"
+            className={`btn btn-ghost btn-sm ${styles.railCollapse}`}
+            onClick={() => collapseRail(true)}
+            data-testid="rail-collapse"
+            aria-label="Hide the side panel"
+            title="Hide the side panel"
+          >
+            ⟩
+          </button>
           {rail}
         </aside>
+      )}
+      {!landscape && railCollapsed && (
+        <button
+          type="button"
+          className={styles.railExpand}
+          onClick={() => collapseRail(false)}
+          data-testid="rail-expand"
+          title="Show the side panel"
+        >
+          ⟨ Match &amp; chat
+        </button>
+      )}
+      {handoffOpen && (
+        <div
+          className={styles.modal}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Move to another device"
+          data-testid="handoff-dialog"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setHandoffOpen(false);
+          }}
+        >
+          <div className={`card ${styles.modalCard}`}>
+            <Handoff code={session.code} />
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setHandoffOpen(false)}
+              data-testid="handoff-close"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
 
       {fairnessOpen && state.snapshot && (

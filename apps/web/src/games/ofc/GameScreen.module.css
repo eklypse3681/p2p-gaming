@@ -72,6 +72,7 @@
   touch-action: manipulation;
 }
 .rail {
+  position: relative;
   grid-column: 2;
   grid-row: 1 / span 4;
   display: flex;
@@ -368,4 +369,51 @@
   display: grid;
   gap: var(--space-2);
   text-align: center;
+}
+
+/* Desktop: the side panel folds away (⟩), leaving the table the full width; a slim tab on the
+   right edge brings it back. Phones never show either: their panel sits below or in a sheet. */
+/* doubled: these sit on .btn elements, whose global display would otherwise win */
+.railCollapse.railCollapse,
+.railExpand.railExpand {
+  display: none;
+}
+@media (min-width: 981px) {
+  .railCollapse.railCollapse {
+    display: inline-flex;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 2;
+  }
+  .screen[data-rail='collapsed'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .screen[data-rail='collapsed'] .rail {
+    display: none;
+  }
+  .railExpand.railExpand {
+    display: block;
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 30;
+    writing-mode: vertical-rl;
+    padding: 12px 6px;
+    border: 1px solid var(--ui-border);
+    border-right: 0;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+    background: var(--ui-surface-raised);
+    color: var(--ui-text-muted);
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+}
+.handoffCard {
+  width: min(380px, 100%);
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
 }

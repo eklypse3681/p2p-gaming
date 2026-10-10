@@ -24,6 +24,8 @@ import { LANDSCAPE_PHONE_QUERY, useMediaQuery } from '../../session/useMediaQuer
 import { useTheme } from '../../app/ThemeProvider';
 import { RoomCode } from '../../hud/RoomCode';
 import { Handoff } from '../../hud/Handoff';
+import { useTableMenu } from '../../app/TableMenu';
+import { scoreLink } from './table/scoreLink';
 import { ClubChip } from '../../clubs/ClubChip';
 import { useToasts } from '../../hud/Toast';
 import { useKeyboardShortcuts } from '../../hud/useKeyboardShortcuts';
@@ -367,6 +369,35 @@ function LiveTable({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [fairnessOpen, setFairnessOpen] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  // Desktop: the side panel (table details, chat) folds away; remembered per browser.
+  const [railCollapsed, setRailCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('bgf:rail-collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const collapseRail = (v: boolean) => {
+    setRailCollapsed(v);
+    try {
+      localStorage.setItem('bgf:rail-collapsed', v ? '1' : '0');
+    } catch {
+      /* not remembered */
+    }
+  };
+  // The ⋮ menu in the title bar: everything that is not playing the hand.
+  useTableMenu([
+    { id: 'handoff', label: 'Move to another device', onSelect: () => setHandoffOpen(true) },
+    { id: 'ledger', label: 'Ledger', onSelect: () => setLedgerOpen(true) },
+    { id: 'fairness', label: 'Fairness', onSelect: () => setFairnessOpen(true) },
+    {
+      id: 'table',
+      label: 'Table & chat',
+      onSelect: () => (landscape ? setSheetOpen(true) : collapseRail(false)),
+    },
+    { id: 'leave', label: 'Leave (resume later)', onSelect: onLeave, quiet: true },
+  ]);
 
   const seat = state.seat;
   const snapshot = state.snapshot;
@@ -564,6 +595,7 @@ function LiveTable({
       fantasyland={tableView.fantasyland}
       inFantasyland={tableView.hand?.seats.map((s) => s.fantasyland)}
       handOver={tableView.hand?.phase === 'showdown'}
+      onScoreClick={() => setLedgerOpen(true)}
       latencyMs={session.role === 'guest' ? state.latencyMs : null}
       compact={landscape}
       dealer={dealerInfo ? { ...dealerInfo, me: isDealer } : null}
@@ -628,7 +660,12 @@ function LiveTable({
             {names.map((n, i) => (
               <div key={i} className="row" style={{ justifyContent: 'space-between' }}>
                 <span>{n}</span>
-                <span className="mono" data-testid={`balance-${i}`}>
+                <span
+                  className="mono"
+                  data-testid={`balance-${i}`}
+                  title="Open the ledger"
+                  {...scoreLink(() => setLedgerOpen(true))}
+                >
                   {config?.scoring.mode === 'buyin'
                     ? bal[i]
                     : (tableView.scores[i] ?? 0) > 0
@@ -661,8 +698,6 @@ function LiveTable({
             <RoomCode code={session.code} />
           </>
         )}
-        <hr className="divider" />
-        <Handoff code={session.code} />
       </div>
       <div className={`card ${styles.railCard} ${railTab !== 'chat' ? styles.railHidden : ''}`}>
         <h3 style={{ marginBottom: 8 }}>Chat</h3>
@@ -693,6 +728,7 @@ function LiveTable({
       data-seat={seat ?? ''}
       data-layout={landscape ? 'landscape' : 'default'}
       data-status={tableView?.status ?? ''}
+      data-rail={railCollapsed ? 'collapsed' : 'open'}
       // A table: toasts keep clear of the actions, and on a landscape phone the app bar is a rail.
       data-dock
     >
@@ -848,45 +884,58 @@ function LiveTable({
                 </span>
               </details>
             )}
-            <button
-              className="btn btn-sm"
-              onClick={() => setLedgerOpen(true)}
-              data-testid="ledger-button-bar"
-            >
-              Ledger
-            </button>
-            <button
-              className="btn btn-sm"
-              onClick={() => setFairnessOpen(true)}
-              data-testid="fairness-button-bar"
-            >
-              Fairness
-            </button>
-            {landscape && (
-              <button
-                className="btn btn-sm"
-                onClick={() => setSheetOpen(true)}
-                data-testid="more-button"
-              >
-                More
-              </button>
-            )}
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={onLeave}
-              data-testid="leave-button"
-              title="Leave (resume later)"
-            >
-              {landscape ? 'Leave' : 'Leave (resume later)'}
-            </button>
           </span>
         </div>
       </div>
 
       {!landscape && (
         <aside className={styles.rail} data-testid="rail">
+          <button
+            type="button"
+            className={`btn btn-ghost btn-sm ${styles.railCollapse}`}
+            onClick={() => collapseRail(true)}
+            data-testid="rail-collapse"
+            aria-label="Hide the side panel"
+            title="Hide the side panel"
+          >
+            ⟩
+          </button>
           {rail}
         </aside>
+      )}
+      {!landscape && railCollapsed && (
+        <button
+          type="button"
+          className={styles.railExpand}
+          onClick={() => collapseRail(false)}
+          data-testid="rail-expand"
+          title="Show the side panel"
+        >
+          ⟨ Table &amp; chat
+        </button>
+      )}
+      {handoffOpen && (
+        <div
+          className={styles.trustNote}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Move to another device"
+          data-testid="handoff-dialog"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setHandoffOpen(false);
+          }}
+        >
+          <div className={`card ${styles.handoffCard}`}>
+            <Handoff code={session.code} />
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setHandoffOpen(false)}
+              data-testid="handoff-close"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
 
       {landscape && sheetOpen && (

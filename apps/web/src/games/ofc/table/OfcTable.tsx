@@ -247,6 +247,7 @@ export function OfcTable(props: OfcTableProps) {
               </div>
               <div className={styles.mine} data-fantasyland="true">
                 <SeatPanel
+                  onScoreClick={onOpenLedger}
                   seat={me}
                   size="md"
                   result={model.result}
@@ -265,6 +266,7 @@ export function OfcTable(props: OfcTableProps) {
               <div className={styles.opponents} data-testid="opponents">
                 {opponents.map((s) => (
                   <SeatPanel
+                    onScoreClick={onOpenLedger}
                     key={s.seat}
                     seat={s}
                     size="sm"
@@ -277,6 +279,7 @@ export function OfcTable(props: OfcTableProps) {
               <div className={styles.mine}>
                 {me && (
                   <SeatPanel
+                    onScoreClick={onOpenLedger}
                     seat={me}
                     size="md"
                     result={model.result}

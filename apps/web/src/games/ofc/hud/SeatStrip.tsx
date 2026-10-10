@@ -1,4 +1,5 @@
 import type { PlayerProfile } from '@bgf/protocol';
+import { scoreLink } from '../table/scoreLink';
 import styles from './SeatStrip.module.css';
 
 export interface SeatStripProps {
@@ -19,6 +20,8 @@ export interface SeatStripProps {
   /** Seats currently in Fantasyland this hand. */
   inFantasyland?: boolean[];
   /** The hand is at its showdown: "in Fantasyland" is history, shown muted. */
+  /** Tapping a score opens the ledger. */
+  onScoreClick?: () => void;
   handOver?: boolean;
   latencyMs?: number | null;
   compact?: boolean;
@@ -101,7 +104,8 @@ export function SeatStrip(p: SeatStripProps) {
                 <span
                   className={`mono ${score > 0 ? styles.up : score < 0 ? styles.down : ''}`}
                   data-testid={`strip-score-${i}`}
-                  title="Net points"
+                  title={p.onScoreClick ? 'Net points: open the ledger' : 'Net points'}
+                  {...scoreLink(p.onScoreClick)}
                 >
                   {score > 0 ? `+${score}` : score}
                 </span>

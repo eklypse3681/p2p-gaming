@@ -352,6 +352,23 @@ export async function startGameIfNeeded(page: Page, others: Page[] = []): Promis
 
 /** The pairing link a `PairOffer` is showing (hand-off panel or Settings → Add a device). */
 export async function pairLinkOf(page: Page): Promise<string> {
+  // At a table the pairing code lives behind ⋮ > Move to another device.
+  if (
+    !(await page
+      .getByTestId('pair-link')
+      .first()
+      .isVisible()
+      .catch(() => false))
+  ) {
+    if (
+      await page
+        .getByTestId('table-menu-button')
+        .isVisible()
+        .catch(() => false)
+    ) {
+      await menuAction(page, 'handoff');
+    }
+  }
   const value = await page.getByTestId('pair-link').first().inputValue({ timeout: 20_000 });
   expect(value).toMatch(/#\/pair\/[A-Z0-9]{8}/);
   return value;
@@ -361,6 +378,9 @@ export async function pairLinkOf(page: Page): Promise<string> {
 export async function approvePairing(page: Page): Promise<void> {
   await page.getByTestId('pair-approve').first().click({ timeout: 20_000 });
   await expect(page.getByTestId('pair-done').first()).toBeVisible({ timeout: 20_000 });
+  // At a table the code was shown in the "Move to another device" dialog: close it.
+  const close = page.getByTestId('handoff-close');
+  if (await close.isVisible().catch(() => false)) await close.click();
 }
 
 /**
@@ -373,4 +393,10 @@ export async function pressAction(page: Page, testId: string): Promise<void> {
     await page.getByTestId('more-actions').click();
   }
   await button.click();
+}
+
+/** Choose an item from the ⋮ table menu in the title bar (`menu-<id>`). */
+export async function menuAction(page: Page, id: string): Promise<void> {
+  await page.getByTestId('table-menu-button').click();
+  await page.getByTestId(`menu-${id}`).click();
 }

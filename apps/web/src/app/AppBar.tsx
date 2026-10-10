@@ -8,6 +8,7 @@ import { useTheme } from './ThemeProvider';
 import { useSyncStatus } from '../session/sync/registry';
 import styles from './AppBar.module.css';
 import { APP_VERSION } from './version';
+import { TableMenuButton } from './TableMenu';
 
 /** Small dot on the player chip: green while this player's other devices are connected. */
 function SyncDot({ slug }: { slug: string }) {
@@ -147,6 +148,9 @@ export function AppBar() {
         <Logo />
         <span>Among Friends</span>
       </NavLink>
+      <span className={styles.titleVersion} data-testid="title-version" title="Version">
+        {APP_VERSION}
+      </span>
       {menuOpen && (
         <div
           className={styles.scrim}
@@ -258,10 +262,8 @@ export function AppBar() {
             </NavLink>
           </>
         ) : null}
-        <span className={styles.version} data-testid="menu-version">
-          Version {APP_VERSION}
-        </span>
       </div>
+      <TableMenuButton />
     </header>
   );
 }

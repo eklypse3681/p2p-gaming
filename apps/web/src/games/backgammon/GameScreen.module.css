@@ -84,6 +84,7 @@
   gap: var(--space-2);
 }
 .rail {
+  position: relative;
   grid-column: 2;
   grid-row: 1 / span 2;
   display: flex;
@@ -390,4 +391,62 @@
 }
 .advanced > summary::-webkit-details-marker {
   display: none;
+}
+
+/* Desktop: the side panel folds away (⟩), leaving the board the full width; a slim tab on the
+   right edge brings it back. Phones never show either. */
+/* doubled: these sit on .btn elements, whose global display would otherwise win */
+.railCollapse.railCollapse,
+.railExpand.railExpand {
+  display: none;
+}
+@media (min-width: 981px) {
+  .railCollapse.railCollapse {
+    display: inline-flex;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 2;
+  }
+  .screen[data-rail='collapsed'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .screen[data-rail='collapsed'] .rail {
+    display: none;
+  }
+  .railExpand.railExpand {
+    display: block;
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 30;
+    writing-mode: vertical-rl;
+    padding: 12px 6px;
+    border: 1px solid var(--ui-border);
+    border-right: 0;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+    background: var(--ui-surface-raised);
+    color: var(--ui-text-muted);
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+}
+/* A dialog over the table (move to another device). */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--ui-bg) 60%, transparent);
+  backdrop-filter: blur(2px);
+}
+.modalCard {
+  width: min(380px, 100%);
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
 }

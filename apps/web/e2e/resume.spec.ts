@@ -9,6 +9,7 @@ import {
   seedProfile,
   step,
   startGameIfNeeded,
+  menuAction,
 } from './helpers';
 
 test('a match survives the host leaving: the guest resumes as host and the original host rejoins', async ({
@@ -36,7 +37,7 @@ test('a match survives the host leaving: the guest resumes as host and the origi
   const statusBefore = await guest.getByTestId('status-text').textContent();
 
   // Host walks away ("Leave" keeps the match saved on both sides), then closes the tab.
-  await host.getByTestId('leave-button').click();
+  await menuAction(host, 'leave');
   await expect(host.getByTestId('home-screen')).toBeVisible();
   await expect(guest.getByTestId('connection-badge')).toHaveText(/disconnected|offline|stopped/i, {
     timeout: 15_000,

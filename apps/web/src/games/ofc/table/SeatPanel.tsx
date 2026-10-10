@@ -4,6 +4,7 @@ import { ROWS, ROW_CAPACITY, cardKey } from '@bgf/ofc-engine';
 import { Card, HiddenStack } from '../cards/Card';
 import type { RowModel, SeatModel } from './model';
 import { rowOutcome } from './model';
+import { scoreLink } from './scoreLink';
 import styles from './OfcTable.module.css';
 
 export interface SeatPanelProps {
@@ -23,17 +24,20 @@ export interface SeatPanelProps {
    */
   pressPlaced?: (card: CardT) => Record<string, unknown>;
   liftedKey?: string | null;
+  /** Tapping the score opens the ledger. */
+  onScoreClick?: () => void;
 }
 
 const HIDDEN_ROWS: Record<Row, number> = ROW_CAPACITY;
 
-function ScoreText({ seat }: { seat: SeatModel }) {
+function ScoreText({ seat, onOpen }: { seat: SeatModel; onOpen?: () => void }) {
   const value = seat.balance ?? seat.score;
   const text = seat.balance !== null ? `${value}` : value > 0 ? `+${value}` : `${value}`;
   return (
     <span
       className={styles.seatScore}
       data-testid={`score-${seat.seat}`}
+      {...scoreLink(onOpen)}
       data-positive={seat.score > 0 ? 'true' : undefined}
       data-negative={seat.score < 0 ? 'true' : undefined}
       title={
@@ -167,6 +171,7 @@ export function SeatPanel(props: SeatPanelProps) {
     fourColor = false,
     pressPlaced,
     liftedKey = null,
+    onScoreClick,
   } = props;
   const hidden = seat.hidden;
   const seatResult = result?.seats[seat.seat] ?? null;
@@ -194,7 +199,7 @@ export function SeatPanel(props: SeatPanelProps) {
           {seat.name}
           {seat.isMe && <span className={styles.hiddenNote}> (you)</span>}
         </span>
-        <ScoreText seat={seat} />
+        <ScoreText seat={seat} onOpen={onScoreClick} />
       </header>
       {/* Badges float on the seat's top-right corner: they never shift the rows, and they stay
           visible where the name line is hidden (my own board on a landscape phone). */}

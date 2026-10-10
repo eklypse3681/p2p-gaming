@@ -10,6 +10,7 @@ import {
   checkersAt,
   startGameIfNeeded,
   pressAction,
+  menuAction,
 } from './helpers';
 
 test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
@@ -90,12 +91,8 @@ test('landscape phone: board fills the screen, controls are reachable, nothing s
   await expect(checkersAt(host, 'p9')).toHaveCount(1);
   await expect(checkersAt(guest, 'p9')).toHaveCount(1);
 
-  // The rail lives in a sheet: open, read the score, close. In a narrow dock it sits behind
-  // the split button's arrow.
-  if (await host.getByTestId('more-actions').isVisible()) {
-    await host.getByTestId('more-actions').tap();
-  }
-  await host.getByTestId('more-button').tap();
+  // The rail lives in a sheet, opened from the ⋮ menu: open, read the score, close.
+  await menuAction(host, 'table');
   await expect(host.getByTestId('rail-sheet')).toBeVisible();
   await expect(host.getByTestId('score-white')).toBeVisible();
   await host.getByTestId('sheet-close').tap();

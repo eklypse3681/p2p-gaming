@@ -11,6 +11,7 @@ import {
   seedProfile,
   step,
   startGameIfNeeded,
+  menuAction,
 } from './helpers';
 
 /**
@@ -65,7 +66,7 @@ test('the host hands the game to a second device; both stay in sync and the seco
   await expect(laptop.getByTestId('status-text').first()).toHaveText(statusPhone?.trim() ?? '');
 
   // The laptop leaves: it was hosting, so the table goes down; the phone takes over as host.
-  await laptop.getByTestId('leave-button').click();
+  await menuAction(laptop, 'leave');
   await expect(laptop.getByTestId('home-screen')).toBeVisible();
   await expect(phone.getByTestId('reconnect-button')).toBeVisible({ timeout: 20_000 });
   await phone.getByTestId('reconnect-button').click();

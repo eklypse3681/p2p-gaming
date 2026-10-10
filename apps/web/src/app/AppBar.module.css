@@ -340,3 +340,76 @@
     z-index: 60;
   }
 }
+
+/* The build, small and quiet beside the title. */
+.titleVersion {
+  font-family: var(--ui-font-mono);
+  font-size: 0.68rem;
+  color: var(--ui-text-muted);
+  opacity: 0.8;
+  margin-left: -6px;
+  white-space: nowrap;
+}
+
+/* The ⋮ table menu: last in the bar (right end); in the landscape rail, right under ☰. */
+.tableMenu {
+  position: relative;
+  order: 99;
+  flex: none;
+  /* the right-hand end of the bar, also where the rest of the bar has moved into the panel */
+  margin-left: auto;
+}
+.tableMenuList {
+  position: fixed;
+  z-index: 80;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-raised);
+  box-shadow: var(--shadow-md);
+  animation: fade-up var(--dur) var(--ease);
+}
+.tableMenuItem {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.tableMenuItem:hover {
+  background: color-mix(in srgb, var(--ui-text) 8%, transparent);
+}
+.tableMenuSep {
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  margin: 4px 6px;
+}
+@media (max-height: 480px) and (orientation: landscape) {
+  :global(:root:has([data-dock])) .menuButton {
+    order: -2;
+  }
+  :global(:root:has([data-dock])) .tableMenu {
+    order: -1;
+    align-self: flex-start;
+    margin-bottom: 4px;
+  }
+  :global(:root:has([data-dock])) .tableMenuList {
+    top: 8px !important;
+    left: calc(var(--menu-rail-w, 48px) + 8px);
+    right: auto !important;
+  }
+  :global(:root:has([data-dock])) .tableMenu {
+    margin-left: 0;
+  }
+  :global(:root:has([data-dock])) .titleVersion {
+    display: none;
+  }
+}

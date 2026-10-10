@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { GUEST, HOST, THIRD, approvePairing, pairLinkOf, seedProfile } from './helpers';
+import { GUEST, HOST, THIRD, approvePairing, pairLinkOf, seedProfile, menuAction } from './helpers';
 import { hostTable, joinTable, ofcUrl, playHand } from './ofcHelpers';
 
 test.describe('Open Face Chinese Poker', () => {
@@ -61,7 +61,7 @@ test.describe('Open Face Chinese Poker', () => {
 
     // The score sheet shows one hand entry; the full ledger (amounts at half a unit per point,
     // an immediate settlement) sits under Advanced.
-    await bob.getByTestId('ledger-button').first().click();
+    await menuAction(bob, 'ledger');
     await expect(bob.getByTestId('ledger-sheet')).toBeVisible();
     await expect(bob.locator('[data-testid="ledger-entry"][data-kind="hand"]')).toHaveCount(1);
     await bob.getByTestId('ledger-advanced').click();
@@ -157,7 +157,7 @@ test.describe('Open Face Chinese Poker', () => {
 
     // The host leaves: Bob's copy is only a view, so resuming waits for the host.
     const bobUrl = bob.url();
-    await host.getByTestId('leave-button').click();
+    await menuAction(host, 'leave');
     await expect(host.getByTestId('home-screen')).toBeVisible();
     await expect(bob.getByTestId('disconnected-banner')).toBeVisible({ timeout: 20_000 });
     await bob.goto(ofcUrl('bob', '/'));
@@ -185,12 +185,12 @@ test.describe('Open Face Chinese Poker', () => {
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(844 + 1);
-    await bob.getByTestId('more-button').click();
+    await menuAction(bob, 'table');
     await expect(bob.getByTestId('rail-sheet')).toBeVisible();
     await bob.getByTestId('sheet-close').click();
     const scrollW = await host.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollW).toBeLessThanOrEqual(390 + 1);
-    await expect(host.getByTestId('leave-button')).toBeVisible();
+    await expect(host.getByTestId('table-menu-button')).toBeVisible();
   });
 });
 

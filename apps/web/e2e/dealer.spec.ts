@@ -1,6 +1,15 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { GUEST, HOST, THIRD, appUrl, completeOpening, playMove, seedProfile } from './helpers';
+import {
+  GUEST,
+  HOST,
+  THIRD,
+  appUrl,
+  completeOpening,
+  playMove,
+  seedProfile,
+  menuAction,
+} from './helpers';
 import { joinTable, ofcUrl, playHand } from './ofcHelpers';
 
 /**
@@ -92,7 +101,7 @@ test.describe('dealer-hosted tables', () => {
     await bob.getByTestId('settle-request-button').first().click();
     await expect(carol.getByTestId('settle-requests').first()).toContainText(/Bob wants/);
     await carol.getByTestId('settle-request-button').first().click();
-    await bob.getByTestId('ledger-button').first().click();
+    await menuAction(bob, 'ledger');
     await expect(bob.locator('[data-testid="ledger-entry"][data-kind="settlement"]')).toHaveCount(
       1,
       { timeout: 10_000 },

@@ -4,6 +4,7 @@ import type { SeatModel, TableModel } from './model';
 import { ROW_LABELS, pairwiseFor, seatScooped, signed } from './model';
 import { FlowControls } from './FlowControls';
 import type { FlowProps } from './FlowControls';
+import { scoreLink } from './scoreLink';
 import styles from './OfcTable.module.css';
 
 export interface ShowdownPanelProps {
@@ -48,6 +49,7 @@ function SeatBlock({
   result,
   names,
   badgesFor,
+  onOpenLedger,
 }: {
   seat: SeatModel;
   model: TableModel;
@@ -55,6 +57,7 @@ function SeatBlock({
   names: string[];
   /** Two players: one box tells both sides, so the opponent's badges go in their column head. */
   badgesFor?: (seat: number) => React.ReactNode;
+  onOpenLedger?: () => void;
 }) {
   const s = result.seats[seat.seat]!;
   const lines = pairwiseFor(result, seat.seat);
@@ -74,25 +77,19 @@ function SeatBlock({
           {seat.name}
           {seat.isMe ? ' (you)' : ''}
         </strong>
-        {seatBadges(result, seat.seat, scoop)}
-        {/* This hand's points and the running total, in the head instead of a box of their own. */}
+        {/* The running total beside the name; it opens the ledger. This hand's points are the
+            table's Total row. */}
         <span
-          className={styles.blockTotal}
-          data-testid={`hand-total-${seat.seat}`}
-          data-scoop={scoop ? 'true' : undefined}
-          data-points={s.points}
+          className={styles.runningTotal}
+          data-testid={`running-total-${seat.seat}`}
+          data-positive={(model.scores[seat.seat] ?? 0) > 0 ? 'true' : undefined}
+          data-negative={(model.scores[seat.seat] ?? 0) < 0 ? 'true' : undefined}
+          title={onOpenLedger ? 'Open the ledger' : undefined}
+          {...scoreLink(onOpenLedger)}
         >
-          <span
-            className={styles.totalPoints}
-            data-positive={s.points > 0 ? 'true' : undefined}
-            data-negative={s.points < 0 ? 'true' : undefined}
-          >
-            {signed(s.points)}
-          </span>
-          <span className={styles.hiddenNote}>
-            {model.config?.scoring.mode === 'buyin' ? 'balance' : 'running'} {runningText}
-          </span>
+          {runningText}
         </span>
+        {seatBadges(result, seat.seat, scoop)}
       </div>
       <table className={styles.pairs}>
         <thead>
@@ -127,7 +124,12 @@ function SeatBlock({
               <Cell key={l.opponent} points={l.scoop} blank />
             ))}
           </tr>
-          <tr className={styles.pairTotalRow}>
+          <tr
+            className={styles.pairTotalRow}
+            data-testid={`hand-total-${seat.seat}`}
+            data-points={s.points}
+            data-scoop={scoop ? 'true' : undefined}
+          >
             <th>Total</th>
             {lines.map((l) => (
               <Cell key={l.opponent} points={l.total} bold />
@@ -190,6 +192,7 @@ export function ShowdownPanel({
             model={model}
             result={result}
             names={names}
+            onOpenLedger={onOpenLedger}
             badgesFor={
               bySeat.length === 2 ? (other) => <> {seatBadges(result, other)}</> : undefined
             }

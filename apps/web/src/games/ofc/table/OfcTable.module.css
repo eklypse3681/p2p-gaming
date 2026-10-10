@@ -13,6 +13,8 @@
   color: var(--ui-text);
   font-family: var(--ui-font);
   touch-action: pan-y;
+  /* room above the first boards for the badges that float on their corners */
+  padding-top: 10px;
   /* Pressing a card must start a drag of that card, never a text selection across the table. */
   user-select: none;
   -webkit-user-select: none;
@@ -61,6 +63,16 @@
 }
 
 /* ------------------------------------------------------------------ header */
+/* The status is in the screen's status line and the Ledger in the ⋮ menu: the header is only
+   there to carry the Deal / Next hand button of a table dealt by hand. */
+.header:not(:has([data-testid='start-hand-button'])) {
+  display: none;
+}
+.headerMeta,
+.header .turn,
+.header [data-testid='ledger-button'] {
+  display: none;
+}
 .header {
   display: flex;
   align-items: center;
@@ -391,6 +403,16 @@
   border-color: var(--ui-accent);
   animation: pulse 0.9s var(--ease) 2;
 }
+.runningTotal {
+  font-family: var(--ui-font-mono);
+  font-weight: 700;
+}
+.runningTotal[data-positive='true'] {
+  color: var(--ui-success);
+}
+.runningTotal[data-negative='true'] {
+  color: var(--ui-danger);
+}
 .blockTotal {
   margin-left: auto;
   display: inline-flex;
@@ -528,16 +550,7 @@
     gap: var(--space-2);
     grid-template-rows: auto minmax(0, 1fr);
   }
-  /* The status and Ledger are in the screen's side column; the header stays only to carry the
-     Deal / Next hand button of a table dealt by hand. */
-  .header:not(:has([data-testid='start-hand-button'])) {
-    display: none;
-  }
-  .headerMeta,
-  .header .turn,
-  .header [data-testid='ledger-button'] {
-    display: none;
-  }
+
   .body {
     display: grid;
     grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
@@ -889,4 +902,14 @@
 }
 .countdown {
   font-family: var(--ui-font-mono);
+}
+
+/* A score that opens the ledger. */
+[data-opens-ledger='true'] {
+  cursor: pointer;
+  border-radius: 4px;
+}
+[data-opens-ledger='true']:hover {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }

@@ -172,3 +172,13 @@
     overflow: hidden;
   }
 }
+
+/* A score that opens the ledger. */
+[data-opens-ledger='true'] {
+  cursor: pointer;
+  border-radius: 4px;
+}
+[data-opens-ledger='true']:hover {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
