@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } f
 import { ThemeProvider } from './ThemeProvider';
 import { ErrorBoundary } from './ErrorBoundary';
 import { AppBar } from './AppBar';
+import { UpdateNotice } from './UpdateNotice';
 import { SessionRegistryProvider } from '../session/SessionRegistry';
 import { ProfileProvider, useProfile } from '../session/ProfileProvider';
 import { runPendingDbMigrations } from '../session/migrate';
@@ -162,6 +163,7 @@ export function App() {
           <HashRouter>
             <AppRoutes />
           </HashRouter>
+          <UpdateNotice />
         </ClubRegistryProvider>
       </SessionRegistryProvider>
     </ToastProvider>

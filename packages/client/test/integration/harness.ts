@@ -62,8 +62,24 @@ export function rawHello(transport: Transport, base: PlayerProfile): void {
 }
 
 /** Let queued microtasks / macrotasks drain so messages propagate both ways. */
+/** Every client the harness made, so `flush` can wait for their handshakes. */
+const liveClients = new Set<GameClient>();
+
 export async function flush(rounds = 6): Promise<void> {
   for (let i = 0; i < rounds; i++) await new Promise((r) => setTimeout(r, 0));
+  // A handshake signs the seat challenge with WebCrypto, which can outlast a few ticks on a busy
+  // machine: give any client still connecting a moment (bounded) to finish.
+  await settled(Array.from(liveClients), 1000);
+  for (let i = 0; i < rounds; i++) await new Promise((r) => setTimeout(r, 0));
+}
+
+/** Wait (in real time, up to `ms`) until no client is still `connecting`. */
+export async function settled(clients: (GameClient | undefined)[], ms = 3000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (clients.some((c) => c && c.getState().status === 'connecting')) {
+    if (Date.now() > deadline) return;
+    await new Promise((r) => setTimeout(r, 2));
+  }
 }
 
 export function fakeClock(start = 1_000_000) {
@@ -132,6 +148,8 @@ export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
     resumeSnapshot: opts.hostResume,
     ...clientOpts,
   });
+  liveClients.clear();
+  liveClients.add(host);
   const others: GameClient[] = [];
   const connect: Harness['connect'] = (profile, o = {}) => {
     const [serverEnd, clientEnd] = createMemoryPair('guest');
@@ -151,6 +169,7 @@ export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
       ...clientOpts,
     });
     others.push(client);
+    liveClients.add(client);
     return { client, transport: clientEnd };
   };
   let guest: GameClient;
@@ -159,6 +178,9 @@ export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
   } else {
     guest = connect(GUEST, { store: guestStore, resumeSnapshot: opts.guestResume }).client;
   }
+  // Joining includes signing the seat challenge (WebCrypto), which takes longer than a few ticks
+  // on a busy machine: wait until every client has finished connecting, one way or the other.
+  await settled([host, guest]);
   await flush();
   const h: Harness = {
     server,

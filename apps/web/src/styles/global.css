@@ -585,3 +585,25 @@ code,
 :root[data-immersive] [data-appbar] {
   display: none;
 }
+
+/* "New version · Reload" (UpdateNotice): bottom-left, out of the way of tables' controls. */
+.update-notice {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 1001;
+  appearance: none;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--ui-accent);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  animation: fade-up var(--dur) var(--ease);
+}
+.update-notice strong {
+  color: var(--ui-accent);
+}

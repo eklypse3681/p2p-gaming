@@ -18,6 +18,8 @@ export interface SeatStripProps {
   fantasyland: number[];
   /** Seats currently in Fantasyland this hand. */
   inFantasyland?: boolean[];
+  /** The hand is at its showdown: "in Fantasyland" is history, shown muted. */
+  handOver?: boolean;
   latencyMs?: number | null;
   compact?: boolean;
   /** Dealer-hosted tables: who deals, whether their device is connected, and whether that is us. */
@@ -114,8 +116,11 @@ export function SeatStrip(p: SeatStripProps) {
                   </span>
                 )}
                 {p.inFantasyland?.[i] && (
-                  <span className={styles.fl} title="In Fantasyland">
-                    Fantasyland
+                  <span
+                    className={p.handOver ? styles.flPast : styles.fl}
+                    title={p.handOver ? 'This hand was played in Fantasyland' : 'In Fantasyland'}
+                  >
+                    {p.handOver ? 'FL hand' : 'Fantasyland'}
                   </span>
                 )}
                 {active && <span className={styles.turn}>To act</span>}

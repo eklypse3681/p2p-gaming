@@ -27,17 +27,34 @@ function Cell({ points, bold, blank }: { points: number; bold?: boolean; blank?:
   );
 }
 
+/** Fouled, scoop and next hand's Fantasyland for a seat. */
+function seatBadges(result: HandResult, seat: number, scoop = seatScooped(result, seat)) {
+  const s = result.seats[seat]!;
+  return (
+    <>
+      {s.fouled && <span className={`${styles.badge} ${styles.badgeDanger}`}>fouled</span>}
+      {scoop && <span className={`${styles.badge} ${styles.badgeFl}`}>scoop</span>}
+      {s.fantasylandNext > 0 && (
+        <span className={`${styles.badge} ${styles.badgeFl}`}>FL next · {s.fantasylandNext}</span>
+      )}
+    </>
+  );
+}
+
 /** A seat's results against each other seat: one column per opponent, no words. */
 function SeatBlock({
   seat,
   model,
   result,
   names,
+  badgesFor,
 }: {
   seat: SeatModel;
   model: TableModel;
   result: HandResult;
   names: string[];
+  /** Two players: one box tells both sides, so the opponent's badges go in their column head. */
+  badgesFor?: (seat: number) => React.ReactNode;
 }) {
   const s = result.seats[seat.seat]!;
   const lines = pairwiseFor(result, seat.seat);
@@ -57,13 +74,25 @@ function SeatBlock({
           {seat.name}
           {seat.isMe ? ' (you)' : ''}
         </strong>
-        {s.fouled && <span className={`${styles.badge} ${styles.badgeDanger}`}>fouled</span>}
-        {scoop && <span className={`${styles.badge} ${styles.badgeFl}`}>scoop</span>}
-        {s.fantasylandNext > 0 && (
-          <span className={`${styles.badge} ${styles.badgeFl}`}>
-            FL next hand · {s.fantasylandNext}
+        {seatBadges(result, seat.seat, scoop)}
+        {/* This hand's points and the running total, in the head instead of a box of their own. */}
+        <span
+          className={styles.blockTotal}
+          data-testid={`hand-total-${seat.seat}`}
+          data-scoop={scoop ? 'true' : undefined}
+          data-points={s.points}
+        >
+          <span
+            className={styles.totalPoints}
+            data-positive={s.points > 0 ? 'true' : undefined}
+            data-negative={s.points < 0 ? 'true' : undefined}
+          >
+            {signed(s.points)}
           </span>
-        )}
+          <span className={styles.hiddenNote}>
+            {model.config?.scoring.mode === 'buyin' ? 'balance' : 'running'} {runningText}
+          </span>
+        </span>
       </div>
       <table className={styles.pairs}>
         <thead>
@@ -72,6 +101,7 @@ function SeatBlock({
             {lines.map((l) => (
               <th key={l.opponent} data-testid={`pair-${seat.seat}-vs-${l.opponent}`}>
                 vs {names[l.opponent] ?? `Seat ${l.opponent + 1}`}
+                {badgesFor?.(l.opponent)}
               </th>
             ))}
           </tr>
@@ -105,24 +135,6 @@ function SeatBlock({
           </tr>
         </tbody>
       </table>
-      <div
-        className={styles.total}
-        data-testid={`hand-total-${seat.seat}`}
-        data-scoop={scoop ? 'true' : undefined}
-        data-points={s.points}
-      >
-        <span className={styles.totalName}>This hand</span>
-        <span
-          className={styles.totalPoints}
-          data-positive={s.points > 0 ? 'true' : undefined}
-          data-negative={s.points < 0 ? 'true' : undefined}
-        >
-          {signed(s.points)}
-        </span>
-        <span className={styles.hiddenNote}>
-          {model.config?.scoring.mode === 'buyin' ? 'balance' : 'running'} {runningText}
-        </span>
-      </div>
     </div>
   );
 }
@@ -169,9 +181,19 @@ export function ShowdownPanel({
         </div>
       </div>
       {flow?.autopilot && <FlowControls flow={flow} over={over} />}
+      {/* Two players tell one story from two sides: one box (mine). Three get one box each. */}
       <div className={styles.seatBlocks}>
-        {ordered.map((seat) => (
-          <SeatBlock key={seat.seat} seat={seat} model={model} result={result} names={names} />
+        {(bySeat.length === 2 ? ordered.slice(0, 1) : ordered).map((seat) => (
+          <SeatBlock
+            key={seat.seat}
+            seat={seat}
+            model={model}
+            result={result}
+            names={names}
+            badgesFor={
+              bySeat.length === 2 ? (other) => <> {seatBadges(result, other)}</> : undefined
+            }
+          />
         ))}
       </div>
       <ul className={styles.summary} data-testid="hand-summary">

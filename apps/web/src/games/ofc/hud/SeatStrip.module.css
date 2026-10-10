@@ -125,6 +125,15 @@
   font-size: 0.7rem;
   font-weight: 700;
 }
+/* "FL hand" after the showdown: it was a Fantasyland hand, not news about the next one. */
+.flPast {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+  white-space: nowrap;
+}
 .turn {
   color: var(--ui-accent);
   font-weight: 700;

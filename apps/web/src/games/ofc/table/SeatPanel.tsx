@@ -199,23 +199,27 @@ export function SeatPanel(props: SeatPanelProps) {
       {/* Badges float on the seat's top-right corner: they never shift the rows, and they stay
           visible where the name line is hidden (my own board on a landscape phone). */}
       <span className={styles.seatMeta} data-testid={`seat-badges-${seat.seat}`}>
-        {/* During a hand: whether this seat plays it in Fantasyland. After the showdown, only
-            next hand's status, so a seat that did not requalify shows nothing. */}
-        {!result && seat.fantasyland && (
+        {/* During a hand: this seat is playing it in Fantasyland. After the showdown two different
+            things: a muted "FL hand" (it was one), and in the accent colour whether it goes (back)
+            in next hand. */}
+        {seat.fantasyland && (
           <span
-            className={`${styles.badge} ${styles.badgeFl}`}
+            className={`${styles.badge} ${result ? '' : styles.badgeFl}`}
             data-testid={`fantasyland-badge-${seat.seat}`}
+            title={
+              result ? 'This hand was played in Fantasyland' : 'Playing this hand in Fantasyland'
+            }
           >
-            Fantasyland
+            {result ? 'FL hand' : 'Fantasyland'}
           </span>
         )}
         {(result || !seat.fantasyland) && seat.fantasylandNext > 0 && (
           <span
             className={`${styles.badge} ${styles.badgeFl}`}
-            data-testid={`fantasyland-badge-${seat.seat}`}
+            data-testid={`fantasyland-next-${seat.seat}`}
+            title={`Fantasyland next hand, ${seat.fantasylandNext} cards`}
           >
-            {result && seat.fantasyland ? 'Stays in Fantasyland' : 'FL next hand'} ·{' '}
-            {seat.fantasylandNext}
+            {result && seat.fantasyland ? 'Requalified' : 'FL next hand'} · {seat.fantasylandNext}
           </span>
         )}
         {seat.toAct && <span className={`${styles.badge} ${styles.button}`}>to act</span>}

@@ -42,20 +42,23 @@ function seat(over: Partial<SeatModel>): SeatModel {
 // Only its presence matters to the badges: "the hand is over".
 const SHOWDOWN = { seats: [], pairs: [] } as unknown as HandResult;
 
-const badge = () => screen.queryByTestId('fantasyland-badge-1');
+const played = () => screen.queryByTestId('fantasyland-badge-1');
+const next = () => screen.queryByTestId('fantasyland-next-1');
 
-describe('SeatPanel Fantasyland badge', () => {
-  it('shows "Fantasyland" while a seat plays its hand there', () => {
+describe('SeatPanel Fantasyland badges', () => {
+  it('during a hand: "Fantasyland" for a seat playing in it', () => {
     render(<SeatPanel seat={seat({ fantasyland: true })} size="sm" result={null} />);
-    expect(badge()).toHaveTextContent('Fantasyland');
+    expect(played()).toHaveTextContent('Fantasyland');
+    expect(next()).toBeNull();
   });
 
-  it('after the showdown, a Fantasyland seat that did not requalify shows nothing', () => {
+  it('after the showdown, a Fantasyland hand that did not requalify is only marked as one', () => {
     render(<SeatPanel seat={seat({ fantasyland: true })} size="sm" result={SHOWDOWN} />);
-    expect(badge()).toBeNull();
+    expect(played()).toHaveTextContent('FL hand');
+    expect(next()).toBeNull();
   });
 
-  it('after the showdown, a Fantasyland seat that requalified stays in', () => {
+  it('after the showdown, a Fantasyland hand that requalified says so separately', () => {
     render(
       <SeatPanel
         seat={seat({ fantasyland: true, fantasylandNext: 14 })}
@@ -63,11 +66,13 @@ describe('SeatPanel Fantasyland badge', () => {
         result={SHOWDOWN}
       />,
     );
-    expect(badge()).toHaveTextContent('Stays in Fantasyland · 14');
+    expect(played()).toHaveTextContent('FL hand');
+    expect(next()).toHaveTextContent('Requalified · 14');
   });
 
   it('after the showdown, a seat that qualified gets "FL next hand"', () => {
     render(<SeatPanel seat={seat({ fantasylandNext: 14 })} size="sm" result={SHOWDOWN} />);
-    expect(badge()).toHaveTextContent('FL next hand · 14');
+    expect(played()).toBeNull();
+    expect(next()).toHaveTextContent('FL next hand · 14');
   });
 });

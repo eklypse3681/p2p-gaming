@@ -391,6 +391,15 @@
   border-color: var(--ui-accent);
   animation: pulse 0.9s var(--ease) 2;
 }
+.blockTotal {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.blockTotal[data-scoop='true'] .totalPoints {
+  animation: pulse 0.9s var(--ease) 2;
+}
 .totalName {
   font-size: 12px;
   color: var(--ui-text-muted);
@@ -517,9 +526,16 @@
     --card-w-md: 31px;
     --slot-gap: 3px;
     gap: var(--space-2);
-    grid-template-rows: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
-  .header {
+  /* The status and Ledger are in the screen's side column; the header stays only to carry the
+     Deal / Next hand button of a table dealt by hand. */
+  .header:not(:has([data-testid='start-hand-button'])) {
+    display: none;
+  }
+  .headerMeta,
+  .header .turn,
+  .header [data-testid='ledger-button'] {
     display: none;
   }
   .body {
@@ -809,10 +825,30 @@
 
 /* Source order matters: these landscape overrides follow the base rules above. */
 @media (max-height: 480px) and (orientation: landscape) {
+  /* Fantasyland on a phone held sideways: my board at its full width on the left, the 14 cards
+     wrapping beside it. The explanation, the hidden opponents and the discard hint go: the side
+     column already says what this is, and the board and cards need every pixel. */
   .flLayout {
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-    grid-template-areas: 'panel mine' 'hidden mine';
+    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-areas: 'mine panel';
     align-items: start;
+    gap: var(--space-2);
+  }
+  .flHead,
+  .hiddenSeats,
+  .discards :global(.small),
+  .discards > span:last-child {
+    display: none;
+  }
+  .flLayout .tray {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'actions'
+      'head'
+      'cards';
+  }
+  .flLayout .trayCards {
+    gap: 4px;
   }
   .seatBlocks {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

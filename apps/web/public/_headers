@@ -1,0 +1,5 @@
+# Cloudflare Pages headers.
+
+# The current version, for open pages to notice a deploy: always revalidate.
+/version.json
+  Cache-Control: no-cache
