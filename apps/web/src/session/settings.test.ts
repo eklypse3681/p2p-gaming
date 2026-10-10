@@ -34,6 +34,19 @@ describe('settings', () => {
     expect(getSettings('x').homeSidePreference).toBe('right');
   });
 
+  it('splits the old single OFC tray sort into suits on/off and a rank order', async () => {
+    const { sanitizeSettings } = await loadSettings();
+    const from = (ofcTraySort: string) => {
+      const s = sanitizeSettings({ ofcTraySort });
+      return [s.ofcTraySuits, s.ofcTrayOrder];
+    };
+    expect(from('suit')).toEqual([true, 'high']);
+    expect(from('low')).toEqual([false, 'low']);
+    expect(from('high')).toEqual([false, 'high']);
+    expect(from('dealt')).toEqual([false, 'high']);
+    expect('ofcTraySort' in sanitizeSettings({ ofcTraySort: 'suit' })).toBe(false);
+  });
+
   it('turns the old "follow the table" choice and flip switch into the default side', async () => {
     localStorage.setItem(
       'bgf:settings:x',

@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import type { Card as CardT, Row } from '@bgf/ofc-engine';
 import { cardKey } from '@bgf/ofc-engine';
 import { Card } from '../cards/Card';
-import type { PlacementDraft, SortMode } from './model';
-import { sortCards } from './model';
+import type { PlacementDraft, TraySort } from './model';
+import { DEFAULT_TRAY_SORT, sortCards } from './model';
+import { useCardPress } from './useCardPress';
 import styles from './OfcTable.module.css';
 
 export interface DragState {
@@ -25,17 +26,9 @@ export interface PendingTrayProps {
   onDragCancel: () => void;
   fourColor?: boolean;
   reducedMotion?: boolean;
-  /** Where the sort starts; the buttons still change it. */
-  initialSort?: SortMode;
+  /** Where the sort starts (the player's setting); the buttons still change it. */
+  initialSort?: TraySort;
 }
-
-const DRAG_THRESHOLD = 6;
-
-const SORTS: Array<{ mode: SortMode; id: string; label: string; title: string }> = [
-  { mode: 'low', id: 'sort-low', label: '2→A', title: 'Sort lowest to highest' },
-  { mode: 'high', id: 'sort-high', label: 'A→2', title: 'Sort highest to lowest' },
-  { mode: 'suit', id: 'sort-suit', label: '♣♦♥♠', title: 'Sort by suit' },
-];
 
 /** The local player's dealt cards, the derived discards, and the confirm/undo controls. */
 export function PendingTray(props: PendingTrayProps) {
@@ -50,48 +43,21 @@ export function PendingTray(props: PendingTrayProps) {
     onDragCancel,
     fourColor = false,
     reducedMotion = false,
-    initialSort = 'dealt',
+    initialSort = DEFAULT_TRAY_SORT,
   } = props;
-  const pressed = useRef<{ card: CardT; x: number; y: number; dragging: boolean } | null>(null);
-  const [sort, setSort] = useState<SortMode>(initialSort);
-
-  const onPointerDown = useCallback((card: CardT, e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
-    pressed.current = { card, x: e.clientX, y: e.clientY, dragging: false };
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-  }, []);
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      const p = pressed.current;
-      if (!p) return;
-      if (!p.dragging) {
-        const threshold = e.pointerType === 'touch' ? 3 : DRAG_THRESHOLD;
-        if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < threshold) return;
-        p.dragging = true;
-        onDragStart(p.card, e.clientX, e.clientY);
-      }
-      onDragMove(e.clientX, e.clientY);
+  const [sort, setSort] = useState<TraySort>(initialSort);
+  const press = useCardPress({
+    onDragStart,
+    onDragMove,
+    onDragEnd,
+    onDragCancel,
+    onTap: (card) => {
+      const same = draft.selected && cardKey(draft.selected) === cardKey(card);
+      draft.select(same ? null : card);
     },
-    [onDragStart, onDragMove],
-  );
-  const onPointerUp = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      const p = pressed.current;
-      pressed.current = null;
-      if (!p) return;
-      if (p.dragging) onDragEnd(e.clientX, e.clientY);
-      else {
-        const same = draft.selected && cardKey(draft.selected) === cardKey(p.card);
-        draft.select(same ? null : p.card);
-      }
-    },
-    [draft, onDragEnd],
-  );
-  const onPointerCancel = useCallback(() => {
-    const p = pressed.current;
-    pressed.current = null;
-    if (p?.dragging) onDragCancel();
-  }, [onDragCancel]);
+  });
+  // A placed card lifted from a row: tapping the tray takes it back.
+  const lifted = draft.selected && draft.isPlaced(draft.selected) ? draft.selected : null;
 
   const discardKeys = new Set(draft.discards.map(cardKey));
   const trayCards = useMemo(
@@ -112,7 +78,10 @@ export function PendingTray(props: PendingTrayProps) {
       className={styles.tray}
       data-testid="pending-cards"
       data-fantasyland={fantasyland ? 'true' : undefined}
-      data-sort={sort}
+      data-sort={`${sort.suits ? 'suits-' : ''}${sort.order}`}
+      data-tray
+      data-lifted={lifted ? 'true' : undefined}
+      onClick={lifted ? () => draft.unplace(lifted) : undefined}
     >
       <div className={styles.trayHead}>
         <span data-testid="tray-hint">{turnText}</span>
@@ -122,20 +91,39 @@ export function PendingTray(props: PendingTrayProps) {
           </span>
           {trayCards.length > 1 && (
             <span className={styles.sortButtons} role="group" aria-label="sort cards">
-              {SORTS.map((s) => (
-                <button
-                  key={s.mode}
-                  type="button"
-                  className={styles.sortButton}
-                  data-testid={s.id}
-                  data-active={sort === s.mode ? 'true' : 'false'}
-                  title={s.title}
-                  aria-pressed={sort === s.mode}
-                  onClick={() => setSort((cur) => (cur === s.mode ? 'dealt' : s.mode))}
-                >
-                  {s.label}
-                </button>
-              ))}
+              <button
+                type="button"
+                className={styles.sortButton}
+                data-testid="sort-suits"
+                data-active={sort.suits ? 'true' : 'false'}
+                title={sort.suits ? 'Grouped by suit: tap to sort by rank only' : 'Group by suit'}
+                aria-pressed={sort.suits}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSort((cur) => ({ ...cur, suits: !cur.suits }));
+                }}
+              >
+                ♣♦♥♠
+              </button>
+              <button
+                type="button"
+                className={styles.sortButton}
+                data-testid="sort-order"
+                data-order={sort.order}
+                data-active="true"
+                title={
+                  sort.order === 'high'
+                    ? 'Highest first: tap for lowest first'
+                    : 'Lowest first: tap for highest first'
+                }
+                aria-label={sort.order === 'high' ? 'Highest first' : 'Lowest first'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSort((cur) => ({ ...cur, order: cur.order === 'high' ? 'low' : 'high' }));
+                }}
+              >
+                {sort.order === 'high' ? 'A→2' : '2→A'}
+              </button>
             </span>
           )}
         </span>
@@ -158,10 +146,7 @@ export function PendingTray(props: PendingTrayProps) {
               transition={
                 reducedMotion ? { duration: 0 } : { delay: Math.min(i, 8) * 0.05, duration: 0.25 }
               }
-              onPointerDown={(e) => onPointerDown(card, e)}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerCancel}
+              {...press(card)}
               role="listitem"
             >
               <Card card={card} size="md" fourColor={fourColor} selected={selected} />
@@ -173,6 +158,7 @@ export function PendingTray(props: PendingTrayProps) {
       {showDiscards && (
         <div
           className={styles.discards}
+          onClick={(e) => e.stopPropagation()}
           data-testid="discard-slot"
           data-count={draft.discards.length}
         >
@@ -199,7 +185,7 @@ export function PendingTray(props: PendingTrayProps) {
           )}
         </div>
       )}
-      <div className={styles.trayActions}>
+      <div className={styles.trayActions} onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           className="btn btn-ghost btn-sm"

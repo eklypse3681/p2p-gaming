@@ -47,8 +47,10 @@ export interface Settings {
   entropyFallback: boolean;
   /** OFC: clubs green and diamonds blue, so four suits never read as two colours. */
   ofcFourColor: boolean;
-  /** OFC: how dealt cards start out in the tray; the buttons there still change it per hand. */
-  ofcTraySort: OfcTraySort;
+  /** OFC: dealt cards grouped by suit (then ranked inside each suit), or ranked only. */
+  ofcTraySuits: boolean;
+  /** OFC: rank order in the tray, highest first (A→2) or lowest first (2→A). */
+  ofcTrayOrder: OfcTrayOrder;
   /** Backgammon: how big the point numbers on the frame are. */
   pointNumberSize: PointNumberSize;
   /** Backgammon: number the points from my side always, or from whoever is on turn. */
@@ -60,8 +62,8 @@ export const POINT_NUMBER_SIZES: readonly PointNumberSize[] = ['small', 'medium'
 export type PointNumbering = 'mine' | 'mover';
 export const POINT_NUMBERINGS: readonly PointNumbering[] = ['mine', 'mover'];
 
-export type OfcTraySort = 'dealt' | 'low' | 'high' | 'suit';
-export const OFC_TRAY_SORTS: readonly OfcTraySort[] = ['dealt', 'low', 'high', 'suit'];
+export type OfcTrayOrder = 'high' | 'low';
+export const OFC_TRAY_ORDERS: readonly OfcTrayOrder[] = ['high', 'low'];
 
 export type EntropySourceId = 'crypto' | 'random.org' | 'drand';
 export const ENTROPY_SOURCES: readonly EntropySourceId[] = ['crypto', 'random.org', 'drand'];
@@ -90,7 +92,8 @@ export const DEFAULT_SETTINGS: Settings = {
   randomOrgKey: '',
   entropyFallback: false,
   ofcFourColor: false,
-  ofcTraySort: 'dealt',
+  ofcTraySuits: false,
+  ofcTrayOrder: 'high',
   pointNumberSize: 'small',
   pointNumbering: 'mine',
 };
@@ -104,6 +107,8 @@ type LegacySettings = Omit<StoredSettings, 'homeSidePreference'> & {
   /** Older builds also had 'table' (follow the host's layout) and a flip-board switch. */
   homeSidePreference?: HomeSidePreference | 'table';
   flipBoard?: boolean;
+  /** Older builds had one tray sort: as dealt, low, high or by suit. */
+  ofcTraySort?: 'dealt' | 'low' | 'high' | 'suit';
 };
 
 /**
@@ -119,9 +124,14 @@ export function migrateSettings(stored: LegacySettings | null): Partial<Settings
     updatedAt: _updatedAt,
     homeSidePreference,
     flipBoard: _flipBoard,
+    ofcTraySort,
     ...rest
   } = stored;
   const out: Partial<Settings> = { ...rest };
+  if (ofcTraySort && out.ofcTraySuits === undefined && out.ofcTrayOrder === undefined) {
+    out.ofcTraySuits = ofcTraySort === 'suit';
+    out.ofcTrayOrder = ofcTraySort === 'low' ? 'low' : 'high';
+  }
   if (homeSidePreference === 'left' || homeSidePreference === 'right') {
     out.homeSidePreference = homeSidePreference;
   } else if (homeSide === 'left' || homeSide === 'right') {
@@ -182,7 +192,7 @@ export function sanitizeSettings(value: unknown): Settings {
     out.entropySource = DEFAULT_SETTINGS.entropySource;
   if (!RANDOMNESS_MODES.includes(out.randomnessMode))
     out.randomnessMode = DEFAULT_SETTINGS.randomnessMode;
-  if (!OFC_TRAY_SORTS.includes(out.ofcTraySort)) out.ofcTraySort = DEFAULT_SETTINGS.ofcTraySort;
+  if (!OFC_TRAY_ORDERS.includes(out.ofcTrayOrder)) out.ofcTrayOrder = DEFAULT_SETTINGS.ofcTrayOrder;
   if (!POINT_NUMBER_SIZES.includes(out.pointNumberSize))
     out.pointNumberSize = DEFAULT_SETTINGS.pointNumberSize;
   if (!POINT_NUMBERINGS.includes(out.pointNumbering))

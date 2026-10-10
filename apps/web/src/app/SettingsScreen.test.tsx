@@ -134,10 +134,12 @@ describe('SettingsScreen tabs', () => {
     renderSettings('ofc');
     expect(screen.queryByTestId('board-marine')).toBeNull();
     await userEvent.click(screen.getByRole('switch', { name: 'Four-colour deck' }));
-    await userEvent.selectOptions(screen.getByTestId('ofc-tray-sort'), 'suit');
+    await userEvent.click(screen.getByRole('switch', { name: 'Group dealt cards by suit' }));
+    await userEvent.selectOptions(screen.getByTestId('ofc-tray-order'), 'low');
     expect(JSON.parse(localStorage.getItem(KEY) ?? '{}')).toMatchObject({
       ofcFourColor: true,
-      ofcTraySort: 'suit',
+      ofcTraySuits: true,
+      ofcTrayOrder: 'low',
     });
   });
 

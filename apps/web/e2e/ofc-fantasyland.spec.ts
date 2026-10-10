@@ -29,15 +29,14 @@ test('Fantasyland: sorted tray, hidden opponents, keyboard placement, then showd
         els.map((e) => e.getAttribute('data-testid')!.replace('pending-card-', '')),
       )) as string[];
   const rank = (k: string) => '23456789TJQKA'.indexOf(k[0]!);
-  await page.getByTestId('sort-low').click();
-  const low = await keys();
-  for (let i = 1; i < low.length; i++)
-    expect(rank(low[i]!)).toBeGreaterThanOrEqual(rank(low[i - 1]!));
-  await page.getByTestId('sort-high').click();
   const high = await keys();
   for (let i = 1; i < high.length; i++)
     expect(rank(high[i]!)).toBeLessThanOrEqual(rank(high[i - 1]!));
-  await page.getByTestId('sort-suit').click();
+  await page.getByTestId('sort-order').click();
+  const low = await keys();
+  for (let i = 1; i < low.length; i++)
+    expect(rank(low[i]!)).toBeGreaterThanOrEqual(rank(low[i - 1]!));
+  await page.getByTestId('sort-suits').click();
   const suits = (await keys()).map((k) => k[1]!);
   expect(suits).toEqual(suits.slice().sort());
 

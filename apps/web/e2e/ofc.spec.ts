@@ -237,3 +237,88 @@ for (const size of [
     await ctx.close();
   });
 }
+
+test('on a desktop, dragging a dealt card with the mouse moves that card and selects nothing', async ({
+  browser,
+}) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const host = await ctx.newPage();
+  await seedProfile(host, 'alice', HOST);
+  const code = await hostTable(host, 'alice', { seats: 2, preset: 'standard-pineapple' });
+  const bob = await ctx.newPage();
+  await seedProfile(bob, 'bob', GUEST);
+  await joinTable(bob, 'bob', code);
+  await expect(host.getByTestId('ofc-table')).toHaveAttribute('data-phase', 'setting', {
+    timeout: 15_000,
+  });
+  const p =
+    (await host.getByTestId('ofc-table').getAttribute('data-my-turn')) === 'true' ? host : bob;
+  const seat = await p.getByTestId('game-screen').getAttribute('data-seat');
+  const card = p.locator('[data-testid^="pending-card-"]').first();
+  await card.waitFor();
+  const key = (await card.getAttribute('data-testid'))!.replace('pending-card-', '');
+  const from = (await card.boundingBox())!;
+  const to = (await p.getByTestId(`row-${seat}-bottom`).boundingBox())!;
+  await p.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await p.mouse.down();
+  await p.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+  await p.mouse.up();
+  await expect(p.getByTestId(`row-${seat}-bottom`)).toHaveAttribute('data-count', '1');
+  await expect(p.getByTestId(`placed-card-${key}`)).toBeVisible();
+  expect(await p.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('');
+
+  // The placed card moves on again, to the top row.
+  const placed = (await p.getByTestId(`placed-card-${key}`).boundingBox())!;
+  const top = (await p.getByTestId(`row-${seat}-top`).boundingBox())!;
+  await p.mouse.move(placed.x + placed.width / 2, placed.y + placed.height / 2);
+  await p.mouse.down();
+  await p.mouse.move(top.x + top.width / 2, top.y + top.height / 2, { steps: 12 });
+  await p.mouse.up();
+  await expect(p.getByTestId(`row-${seat}-top`)).toHaveAttribute('data-count', '1');
+  await expect(p.getByTestId(`row-${seat}-bottom`)).toHaveAttribute('data-count', '0');
+  expect(await p.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('');
+  await ctx.close();
+});
+
+test('on a desktop the table scrolls with the wheel, so every hand at the showdown can be read', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const host = await ctx.newPage();
+  await seedProfile(host, 'alice', HOST);
+  const code = await hostTable(host, 'alice', { seats: 3, preset: 'standard-pineapple' });
+  const bob = await ctx.newPage();
+  await seedProfile(bob, 'bob', GUEST);
+  await joinTable(bob, 'bob', code);
+  const carol = await ctx.newPage();
+  await seedProfile(carol, 'carol', THIRD);
+  await joinTable(carol, 'carol', code);
+  await expect(host.getByTestId('ofc-table')).toHaveAttribute('data-phase', 'setting', {
+    timeout: 15_000,
+  });
+  await playHand([host, bob, carol]);
+  await expect(host.getByTestId('showdown-panel')).toBeVisible();
+
+  const area = host.getByTestId('table-area');
+  const box = (await area.boundingBox())!;
+  for (const seat of [0, 1, 2]) {
+    const bottomRow = host.getByTestId(`row-${seat}-bottom`);
+    // Scroll with the wheel until the seat's bottom row is inside the table area.
+    for (let i = 0; i < 20; i++) {
+      const r = (await bottomRow.boundingBox())!;
+      if (r.y >= box.y - 1 && r.y + r.height <= box.y + box.height + 1) break;
+      await host.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await host.mouse.wheel(0, r.y > box.y ? 200 : -200);
+      await host.waitForTimeout(50);
+    }
+    const r = (await bottomRow.boundingBox())!;
+    expect(r.y, `seat ${seat} bottom row top`).toBeGreaterThanOrEqual(box.y - 1);
+    expect(r.y + r.height, `seat ${seat} bottom row bottom`).toBeLessThanOrEqual(
+      box.y + box.height + 1,
+    );
+  }
+  // The page itself never had to scroll for it.
+  expect(await host.evaluate(() => window.scrollY)).toBe(0);
+  await ctx.close();
+});

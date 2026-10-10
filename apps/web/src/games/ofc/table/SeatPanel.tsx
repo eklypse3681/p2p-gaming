@@ -17,6 +17,12 @@ export interface SeatPanelProps {
   onRowTap?: (row: Row) => void;
   fourColor?: boolean;
   compact?: boolean;
+  /**
+   * Local player, on their turn: makes the cards placed but not yet confirmed pressable (tap to
+   * lift, drag to another row or back to the tray), with the lifted card's key.
+   */
+  pressPlaced?: (card: CardT) => Record<string, unknown>;
+  liftedKey?: string | null;
 }
 
 const HIDDEN_ROWS: Record<Row, number> = ROW_CAPACITY;
@@ -54,12 +60,16 @@ function RowSlots({
   size,
   fourColor,
   hidden,
+  pressPlaced,
+  liftedKey,
 }: {
   seat: SeatModel;
   rowModel: RowModel;
   size: 'sm' | 'md';
   fourColor: boolean;
   hidden: boolean;
+  pressPlaced?: (card: CardT) => Record<string, unknown>;
+  liftedKey?: string | null;
 }) {
   const committed = rowModel.cards;
   const provisional = rowModel.provisional;
@@ -96,9 +106,18 @@ function RowSlots({
           >
             <motion.div
               layoutId={seat.isMe ? `me-${key}` : undefined}
-              className={s.provisional ? styles.provisional : undefined}
+              className={`${s.provisional ? styles.provisional : ''} ${
+                s.provisional && pressPlaced ? styles.movable : ''
+              }`}
+              data-testid={s.provisional ? `placed-card-${key}` : undefined}
+              {...(s.provisional && pressPlaced ? pressPlaced(s.card) : {})}
             >
-              <Card card={s.card} size={size} fourColor={fourColor} />
+              <Card
+                card={s.card}
+                size={size}
+                fourColor={fourColor}
+                selected={!!s.provisional && liftedKey === key}
+              />
             </motion.div>
           </div>
         );
@@ -146,6 +165,8 @@ export function SeatPanel(props: SeatPanelProps) {
     invalid = false,
     onRowTap,
     fourColor = false,
+    pressPlaced,
+    liftedKey = null,
   } = props;
   const hidden = seat.hidden;
   const seatResult = result?.seats[seat.seat] ?? null;
@@ -174,35 +195,37 @@ export function SeatPanel(props: SeatPanelProps) {
           {seat.isMe && <span className={styles.hiddenNote}> (you)</span>}
         </span>
         <ScoreText seat={seat} />
-        <span className={styles.seatMeta}>
-          {seat.fantasyland && (
-            <span
-              className={`${styles.badge} ${styles.badgeFl}`}
-              data-testid={`fantasyland-badge-${seat.seat}`}
-            >
-              Fantasyland
-            </span>
-          )}
-          {!seat.fantasyland && seat.fantasylandNext > 0 && (
-            <span
-              className={`${styles.badge} ${styles.badgeFl}`}
-              data-testid={`fantasyland-badge-${seat.seat}`}
-            >
-              FL next hand · {seat.fantasylandNext}
-            </span>
-          )}
-          {seat.toAct && <span className={`${styles.badge} ${styles.button}`}>to act</span>}
-          {fouled && <span className={`${styles.badge} ${styles.badgeDanger}`}>fouled</span>}
-          {!seat.isMe && seat.pendingCount > 0 && !seat.faceDown && (
-            <HiddenStack
-              count={seat.pendingCount}
-              size="xs"
-              testId={`pending-hidden-${seat.seat}`}
-              label={`${seat.pendingCount} cards in hand`}
-            />
-          )}
-        </span>
       </header>
+      {/* Badges float on the seat's top-right corner: they never shift the rows, and they stay
+          visible where the name line is hidden (my own board on a landscape phone). */}
+      <span className={styles.seatMeta} data-testid={`seat-badges-${seat.seat}`}>
+        {seat.fantasyland && (
+          <span
+            className={`${styles.badge} ${styles.badgeFl}`}
+            data-testid={`fantasyland-badge-${seat.seat}`}
+          >
+            Fantasyland
+          </span>
+        )}
+        {!seat.fantasyland && seat.fantasylandNext > 0 && (
+          <span
+            className={`${styles.badge} ${styles.badgeFl}`}
+            data-testid={`fantasyland-badge-${seat.seat}`}
+          >
+            FL next hand · {seat.fantasylandNext}
+          </span>
+        )}
+        {seat.toAct && <span className={`${styles.badge} ${styles.button}`}>to act</span>}
+        {fouled && <span className={`${styles.badge} ${styles.badgeDanger}`}>fouled</span>}
+        {!seat.isMe && seat.pendingCount > 0 && !seat.faceDown && (
+          <HiddenStack
+            count={seat.pendingCount}
+            size="xs"
+            testId={`pending-hidden-${seat.seat}`}
+            label={`${seat.pendingCount} cards in hand`}
+          />
+        )}
+      </span>
       <div className={styles.rows}>
         {ROWS.map((row) => {
           const rm = seat.rows[row];
@@ -262,6 +285,8 @@ export function SeatPanel(props: SeatPanelProps) {
                 size={size}
                 fourColor={fourColor}
                 hidden={hidden}
+                pressPlaced={pressPlaced}
+                liftedKey={liftedKey}
               />
               <div className={styles.rowEnd}>
                 {royalty > 0 && (

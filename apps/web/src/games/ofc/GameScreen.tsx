@@ -709,7 +709,7 @@ function LiveTable({
             mySeat={seat}
             reducedMotion={reducedMotion}
             fourColor={settings.ofcFourColor}
-            traySort={settings.ofcTraySort}
+            traySort={{ suits: settings.ofcTraySuits, order: settings.ofcTrayOrder }}
             onOpenLedger={() => setLedgerOpen(true)}
             flow={flow}
           />

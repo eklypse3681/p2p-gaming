@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { LayoutGroup, MotionConfig } from 'motion/react';
 import type { TableClientState } from '@bgf/table';
 import type { Command, Row, TableView, Card as CardT } from '@bgf/ofc-engine';
+import { cardKey } from '@bgf/ofc-engine';
 import { Card, HiddenStack } from '../cards/Card';
-import type { SeatModel, SortMode } from './model';
-import { useOfcTableModel, usePlacementDraft } from './model';
+import type { SeatModel, TraySort } from './model';
+import { DEFAULT_TRAY_SORT, useOfcTableModel, usePlacementDraft } from './model';
+import { useCardPress } from './useCardPress';
 import { SeatPanel } from './SeatPanel';
 import { PendingTray } from './PendingTray';
 import type { DragState } from './PendingTray';
@@ -19,7 +21,7 @@ export interface OfcTableProps {
   names: string[];
   mySeat: number | null;
   reducedMotion?: boolean;
-  traySort?: SortMode;
+  traySort?: TraySort;
   /** The shell shows its ledger / settle sheet. */
   onOpenLedger?: () => void;
   fourColor?: boolean;
@@ -28,6 +30,12 @@ export interface OfcTableProps {
 }
 
 const KEY_ROWS: Record<string, Row> = { '1': 'top', '2': 'middle', '3': 'bottom' };
+
+/** Over the tray (to take a placed card back)? */
+function trayUnderPoint(x: number, y: number): boolean {
+  if (typeof document === 'undefined') return false;
+  return !!document.elementFromPoint(x, y)?.closest('[data-tray]');
+}
 
 function rowUnderPoint(x: number, y: number): Row | null {
   if (typeof document === 'undefined') return null;
@@ -47,7 +55,7 @@ export function OfcTable(props: OfcTableProps) {
     names,
     mySeat,
     reducedMotion = false,
-    traySort = 'dealt',
+    traySort = DEFAULT_TRAY_SORT,
     onOpenLedger,
     fourColor = false,
     flow,
@@ -77,6 +85,7 @@ export function OfcTable(props: OfcTableProps) {
         if (d) {
           const row = rowUnderPoint(x, y);
           if (row) draft.place(row, d.card);
+          else if (trayUnderPoint(x, y) && draft.isPlaced(d.card)) draft.unplace(d.card);
         }
         return null;
       });
@@ -84,6 +93,27 @@ export function OfcTable(props: OfcTableProps) {
     [draft],
   );
   const onDragCancel = useCallback(() => setDrag(null), []);
+  // Cards placed but not yet confirmed stay movable: tap to lift, drag to another row or the tray.
+  const pressPlaced = useCardPress({
+    onDragStart,
+    onDragMove,
+    onDragEnd,
+    onDragCancel,
+    onTap: (card) => {
+      // Holding a dealt card: a tap anywhere on a row, a placed card included, places it there.
+      const held = draft.selected;
+      if (held && !draft.isPlaced(held)) {
+        const row = draft.placed.find((p) => cardKey(p.card) === cardKey(card))?.row;
+        if (row) draft.place(row);
+        return;
+      }
+      // Otherwise the placed card lifts (or drops back if it was already lifted).
+      const same = held && cardKey(held) === cardKey(card);
+      draft.select(same ? null : card);
+    },
+  });
+  const liftedKey =
+    draft.selected && draft.isPlaced(draft.selected) ? cardKey(draft.selected) : null;
 
   // Keyboard: 1/2/3 place the selected card, Enter confirms, Backspace undoes, Escape clears.
   useEffect(() => {
@@ -225,6 +255,8 @@ export function OfcTable(props: OfcTableProps) {
                   invalid={shaking}
                   onRowTap={onRowTap}
                   fourColor={fourColor}
+                  pressPlaced={pressPlaced}
+                  liftedKey={liftedKey}
                 />
               </div>
             </div>
@@ -253,6 +285,8 @@ export function OfcTable(props: OfcTableProps) {
                     invalid={shaking}
                     onRowTap={model.myTurn ? onRowTap : undefined}
                     fourColor={fourColor}
+                    pressPlaced={model.myTurn ? pressPlaced : undefined}
+                    liftedKey={liftedKey}
                   />
                 )}
                 {model.myTurn && (

@@ -13,6 +13,51 @@
   color: var(--ui-text);
   font-family: var(--ui-font);
   touch-action: pan-y;
+  /* Pressing a card must start a drag of that card, never a text selection across the table. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.table img,
+.table svg {
+  -webkit-user-drag: none;
+}
+
+/* ---- sized by the space the table has (the screen's table area is the container) ---- */
+@container ofctable (max-height: 760px) {
+  .table {
+    --card-w-md: 54px;
+    --card-w-sm: 38px;
+  }
+}
+@container ofctable (max-height: 620px) {
+  .table {
+    --card-w-md: 48px;
+    --card-w-sm: 34px;
+    gap: var(--space-2);
+  }
+}
+/* Wide enough: the showdown sits in a column beside the boards instead of on top of them. */
+@container ofctable (min-width: 1000px) {
+  .table[data-phase='showdown'] {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 36%);
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: start;
+  }
+  .table[data-phase='showdown'] > .header {
+    grid-column: 1 / -1;
+  }
+  .table[data-phase='showdown'] > .showdown {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .table[data-phase='showdown'] > .body {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .table[data-phase='showdown'] .seatBlocks {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ------------------------------------------------------------------ header */
@@ -92,7 +137,7 @@
 }
 .seatHead {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
   min-width: 0;
@@ -116,10 +161,17 @@
   color: var(--ui-danger);
 }
 .seatMeta {
-  margin-left: auto;
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  z-index: 2;
   display: flex;
   gap: 6px;
   align-items: center;
+  pointer-events: none;
+  /* the face-down stack of an opponent's cards in hand: a small icon in the header */
+  --card-w-sm: 16px;
+  --card-w-xs: 16px;
 }
 .dot {
   width: 8px;
@@ -268,7 +320,8 @@
   min-height: calc(var(--card-w-md) * 1.4);
   align-items: flex-end;
 }
-.trayCard {
+.trayCard,
+.movable {
   touch-action: none;
   cursor: grab;
 }
@@ -375,6 +428,9 @@
   border-radius: 999px;
   border: 1px solid var(--ui-border);
   color: var(--ui-text-muted);
+  /* floats over the seat's border, so it needs its own ground */
+  background: var(--ui-surface-raised);
+  white-space: nowrap;
 }
 .badgeFl {
   border-color: var(--ui-accent);

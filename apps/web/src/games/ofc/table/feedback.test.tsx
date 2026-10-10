@@ -45,12 +45,15 @@ describe('showdown feedback: pairwise columns and royalty stamps', () => {
     expect(signed(0)).toBe('0');
   });
 
-  it('sortCards orders low, high and by suit and keeps the dealt order otherwise', () => {
-    const hand = cards('Kd 2s 9h 2c Ah');
-    expect(sortCards(hand, 'dealt').map(cardKey)).toEqual(['Kd', '2s', '9h', '2c', 'Ah']);
-    expect(sortCards(hand, 'low').map(cardKey)).toEqual(['2c', '2s', '9h', 'Kd', 'Ah']);
-    expect(sortCards(hand, 'high').map(cardKey)).toEqual(['Ah', 'Kd', '9h', '2c', '2s']);
-    expect(sortCards(hand, 'suit').map(cardKey)).toEqual(['2c', 'Kd', 'Ah', '9h', '2s']);
+  it('sortCards ranks A→2 or 2→A, grouped by suit first when suits are on', () => {
+    const hand = cards('Kd 2s 9h 2c Ah 5d');
+    const sorted = (suits: boolean, order: 'high' | 'low') =>
+      sortCards(hand, { suits, order }).map(cardKey);
+    expect(sorted(false, 'high')).toEqual(['Ah', 'Kd', '9h', '5d', '2c', '2s']);
+    expect(sorted(false, 'low')).toEqual(['2c', '2s', '5d', '9h', 'Kd', 'Ah']);
+    // Suits on: ♣ ♦ ♥ ♠, and inside each suit the chosen rank order.
+    expect(sorted(true, 'high')).toEqual(['2c', 'Kd', '5d', 'Ah', '9h', '2s']);
+    expect(sorted(true, 'low')).toEqual(['2c', '5d', 'Kd', '9h', 'Ah', '2s']);
   });
 
   it('rowRoyalty follows the table rules for complete rows only', () => {
@@ -237,18 +240,24 @@ describe('Fantasyland layout', () => {
       screen
         .getAllByTestId(/^pending-card-/)
         .map((el) => el.dataset.testid!.slice('pending-card-'.length));
-    await user.click(screen.getByTestId('sort-low'));
-    const low = keysNow();
     const rank = (k: string) => '23456789TJQKA'.indexOf(k[0]!);
-    for (let i = 1; i < low.length; i++)
-      expect(rank(low[i]!)).toBeGreaterThanOrEqual(rank(low[i - 1]!));
-    await user.click(screen.getByTestId('sort-high'));
+    // Default: ranked, highest first.
     const high = keysNow();
     for (let i = 1; i < high.length; i++)
       expect(rank(high[i]!)).toBeLessThanOrEqual(rank(high[i - 1]!));
-    await user.click(screen.getByTestId('sort-suit'));
-    const suit = keysNow().map((k) => k[1]);
-    expect(suit).toEqual(suit.slice().sort());
+    await user.click(screen.getByTestId('sort-order'));
+    const low = keysNow();
+    for (let i = 1; i < low.length; i++)
+      expect(rank(low[i]!)).toBeGreaterThanOrEqual(rank(low[i - 1]!));
+    // Suits on: grouped by suit, lowest first inside each suit.
+    await user.click(screen.getByTestId('sort-suits'));
+    const grouped = keysNow();
+    const suits = grouped.map((k) => k[1]!);
+    expect(suits).toEqual(suits.slice().sort());
+    for (let i = 1; i < grouped.length; i++) {
+      if (grouped[i]![1] === grouped[i - 1]![1])
+        expect(rank(grouped[i]!)).toBeGreaterThanOrEqual(rank(grouped[i - 1]!));
+    }
     // Place 13 by keyboard: bottom ×5, middle ×5, top ×3; the 14th becomes the discard.
     const keys = ['3', '3', '3', '3', '3', '2', '2', '2', '2', '2', '1', '1', '1'];
     for (const k of keys) {

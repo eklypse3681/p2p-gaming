@@ -1,19 +1,12 @@
 import type { CSSProperties } from 'react';
 import { parseCard } from '@bgf/ofc-engine';
-import { OFC_TRAY_SORTS, useSettings } from '../../session/settings';
-import type { OfcTraySort } from '../../session/settings';
+import { useSettings } from '../../session/settings';
+import type { OfcTrayOrder } from '../../session/settings';
 import { Switch, SettingRow } from '../../app/settingsParts';
 import { Card } from './cards/Card';
 import styles from '../../app/SettingsScreen.module.css';
 
 const PREVIEW = ['Ac', 'Kd', 'Qh', 'Js'].map(parseCard);
-
-const SORT_LABELS: Record<OfcTraySort, string> = {
-  dealt: 'As dealt',
-  low: 'Lowest first (2→A)',
-  high: 'Highest first (A→2)',
-  suit: 'By suit',
-};
 
 /** Open Face Chinese Poker's own settings: how the cards read and how a hand arrives. */
 export function OfcSettings() {
@@ -41,21 +34,25 @@ export function OfcSettings() {
         />
       </SettingRow>
       <SettingRow
-        title="Sort dealt cards"
-        hint="How new cards are laid out in your tray. The buttons there still change it."
+        title="Group dealt cards by suit"
+        hint="Suits together (♣ ♦ ♥ ♠), ranked inside each; off sorts by rank alone. The tray's buttons still change it per hand."
       >
+        <Switch
+          on={settings.ofcTraySuits}
+          onChange={(v) => update({ ofcTraySuits: v })}
+          label="Group dealt cards by suit"
+        />
+      </SettingRow>
+      <SettingRow title="Rank order" hint="Highest first or lowest first.">
         <select
           className="select"
           style={{ width: 'auto' }}
-          value={settings.ofcTraySort}
-          onChange={(e) => update({ ofcTraySort: e.target.value as OfcTraySort })}
-          data-testid="ofc-tray-sort"
+          value={settings.ofcTrayOrder}
+          onChange={(e) => update({ ofcTrayOrder: e.target.value as OfcTrayOrder })}
+          data-testid="ofc-tray-order"
         >
-          {OFC_TRAY_SORTS.map((s) => (
-            <option key={s} value={s}>
-              {SORT_LABELS[s]}
-            </option>
-          ))}
+          <option value="high">Highest first (A→2)</option>
+          <option value="low">Lowest first (2→A)</option>
         </select>
       </SettingRow>
     </section>

@@ -15,7 +15,6 @@ import type {
 import {
   ROWS,
   ROW_CAPACITY,
-  SUITS,
   bottomRoyalty,
   cardKey,
   describeHand,
@@ -360,8 +359,13 @@ export interface PlacementDraft {
   /** Rows that still have room. */
   legalRows: Row[];
   select: (card: Card | null) => void;
-  /** Place `card` (or the selected card) on `row`; returns false when illegal. */
+  /** Place `card` (or the selected card) on `row`; returns false when illegal. A card already
+   *  placed (not yet confirmed) moves to `row`. */
   place: (row: Row, card?: Card) => boolean;
+  /** Take a placed (not yet confirmed) card back into the tray. */
+  unplace: (card: Card) => void;
+  /** True when `card` is placed on a row but not yet confirmed. */
+  isPlaced: (card: Card) => boolean;
   undo: () => void;
   clear: () => void;
   confirm: () => boolean;
@@ -437,7 +441,9 @@ export function usePlacementDraft(
       const c = card ?? selected;
       if (!c || !requirement) return false;
       if (!pending.some((p) => cardKey(p) === cardKey(c))) return false;
-      if (!rowFree(baseRows, placed, row)) {
+      // Moving a placed card frees its old slot first.
+      const others = placed.filter((p) => cardKey(p.card) !== cardKey(c));
+      if (!rowFree(baseRows, others, row)) {
         setInvalidAt(Date.now());
         return false;
       }
@@ -451,6 +457,14 @@ export function usePlacementDraft(
       return true;
     },
     [selected, requirement, pending, baseRows, placed],
+  );
+  const unplace = useCallback((card: Card) => {
+    setPlaced((prev) => prev.filter((p) => cardKey(p.card) !== cardKey(card)));
+    setSelected(null);
+  }, []);
+  const isPlaced = useCallback(
+    (card: Card) => placed.some((p) => cardKey(p.card) === cardKey(card)),
+    [placed],
   );
   const undo = useCallback(() => {
     setPlaced((prev) => prev.slice(0, -1));
@@ -476,6 +490,8 @@ export function usePlacementDraft(
     legalRows,
     select,
     place,
+    unplace,
+    isPlaced,
     undo,
     clear,
     confirm,
@@ -525,21 +541,29 @@ export function pairwiseFor(result: HandResult, seat: number): PairwiseLine[] {
   return lines.sort((x, y) => x.opponent - y.opponent);
 }
 
-export type SortMode = 'dealt' | 'low' | 'high' | 'suit';
+/**
+ * How the tray orders cards: by rank, high first (A→2) or low first (2→A); with `suits` on, grouped
+ * by suit first (♣ ♦ ♥ ♠) and ranked inside each suit.
+ */
+export interface TraySort {
+  suits: boolean;
+  order: 'high' | 'low';
+}
+
+export const DEFAULT_TRAY_SORT: TraySort = { suits: false, order: 'high' };
 
 const SUIT_ORDER: Record<Card['suit'], number> = { c: 0, d: 1, h: 2, s: 3 };
 
-/** Order cards for the tray; 'dealt' keeps the server's order. */
-export function sortCards(cards: readonly Card[], mode: SortMode): Card[] {
-  const out = cards.slice();
-  if (mode === 'dealt') return out;
-  if (mode === 'low') {
-    return out.sort((a, b) => a.rank - b.rank || SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]);
-  }
-  if (mode === 'high') {
-    return out.sort((a, b) => b.rank - a.rank || SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]);
-  }
-  return out.sort((a, b) => SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit) || b.rank - a.rank);
+/** Order cards for the tray. */
+export function sortCards(cards: readonly Card[], sort: TraySort): Card[] {
+  const byRank = (a: Card, b: Card) => (sort.order === 'high' ? b.rank - a.rank : a.rank - b.rank);
+  return cards
+    .slice()
+    .sort((a, b) =>
+      sort.suits
+        ? SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit] || byRank(a, b)
+        : byRank(a, b) || SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit],
+    );
 }
 
 /** `+3`, `−1`, `0`, with a proper minus sign. */

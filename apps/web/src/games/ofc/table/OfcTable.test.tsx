@@ -26,7 +26,7 @@ function Harness({
   client: FakeOfcClient;
   send?: (c: Command) => void;
   onOpenLedger?: () => void;
-  traySort?: 'dealt' | 'low' | 'high' | 'suit';
+  traySort?: { suits: boolean; order: 'high' | 'low' };
 }) {
   return (
     <OfcTable
@@ -51,8 +51,10 @@ describe('OfcTable', () => {
   it('lays dealt cards out in the sort the player chose in settings', () => {
     const client = tableFor({ variant: 'pineapple', seats: 2 });
     act(() => dealToMe(client));
-    render(<Harness client={client} traySort="suit" />);
-    expect(screen.getByTestId('pending-cards')).toHaveAttribute('data-sort', 'suit');
+    render(<Harness client={client} traySort={{ suits: true, order: 'low' }} />);
+    expect(screen.getByTestId('pending-cards')).toHaveAttribute('data-sort', 'suits-low');
+    expect(screen.getByTestId('sort-suits')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('sort-order')).toHaveTextContent('2→A');
   });
 
   it('renders the lobby with a deal button, then three seats with me at the bottom', () => {
@@ -197,6 +199,70 @@ describe('OfcTable', () => {
     fireEvent.pointerUp(cardEl, { clientX: 40, clientY: 60, pointerId: 1 });
     expect(screen.queryByTestId('drag-ghost')).not.toBeInTheDocument();
     expect(target).toHaveAttribute('data-count', '1');
+    document.elementFromPoint = original;
+  });
+
+  it('a placed card stays movable: tap to lift, tap another row to move it, the tray to take it back', async () => {
+    const user = userEvent.setup();
+    const client = tableFor({ variant: 'pineapple', seats: 2 });
+    act(() => dealToMe(client));
+    render(<Harness client={client} />);
+    const pending = client.getState().snapshot!.state.hand!.seats[0]!.pending;
+    const key = cardKey(pending[0]!);
+    await user.click(screen.getByTestId(`pending-card-${key}`));
+    await user.click(screen.getByTestId('row-0-bottom'));
+    expect(screen.getByTestId('row-0-bottom')).toHaveAttribute('data-count', '1');
+
+    // Lift it from the row and drop it on the top row.
+    await user.click(screen.getByTestId(`placed-card-${key}`));
+    expect(screen.getByTestId('pending-cards')).toHaveAttribute('data-lifted', 'true');
+    await user.click(screen.getByTestId('row-0-top'));
+    expect(screen.getByTestId('row-0-bottom')).toHaveAttribute('data-count', '0');
+    expect(screen.getByTestId('row-0-top')).toHaveAttribute('data-count', '1');
+
+    // Lift it again and send it back to the tray.
+    await user.click(screen.getByTestId(`placed-card-${key}`));
+    await user.click(screen.getByTestId('pending-cards'));
+    expect(screen.getByTestId('row-0-top')).toHaveAttribute('data-count', '0');
+    expect(screen.getByTestId(`pending-card-${key}`)).toBeInTheDocument();
+  });
+
+  it('holding a dealt card, a tap on a placed card places the held card in that row', async () => {
+    const user = userEvent.setup();
+    const client = tableFor({ variant: 'pineapple', seats: 2 });
+    act(() => dealToMe(client));
+    render(<Harness client={client} />);
+    const pending = client.getState().snapshot!.state.hand!.seats[0]!.pending;
+    const [a, b] = [cardKey(pending[0]!), cardKey(pending[1]!)];
+    await user.click(screen.getByTestId(`pending-card-${a}`));
+    await user.click(screen.getByTestId('row-0-bottom'));
+    await user.click(screen.getByTestId(`pending-card-${b}`));
+    await user.click(screen.getByTestId(`placed-card-${a}`));
+    expect(screen.getByTestId('row-0-bottom')).toHaveAttribute('data-count', '2');
+    expect(screen.getByTestId('pending-cards')).not.toHaveAttribute('data-lifted');
+  });
+
+  it('a placed card can be dragged to another row or back onto the tray', () => {
+    const client = tableFor({ variant: 'ofc', seats: 2 });
+    act(() => dealToMe(client));
+    render(<Harness client={client} />);
+    const pending = client.getState().snapshot!.state.hand!.seats[0]!.pending;
+    const key = cardKey(pending[0]!);
+    const original = document.elementFromPoint;
+    const drag = (el: Element, target: Element) => {
+      document.elementFromPoint = vi.fn(() => target);
+      fireEvent.pointerDown(el, { clientX: 10, clientY: 10, button: 0, pointerId: 1 });
+      fireEvent.pointerMove(el, { clientX: 40, clientY: 60, pointerId: 1 });
+      fireEvent.pointerUp(el, { clientX: 40, clientY: 60, pointerId: 1 });
+    };
+    drag(screen.getByTestId(`pending-card-${key}`), screen.getByTestId('row-0-top'));
+    expect(screen.getByTestId('row-0-top')).toHaveAttribute('data-count', '1');
+    drag(screen.getByTestId(`placed-card-${key}`), screen.getByTestId('row-0-bottom'));
+    expect(screen.getByTestId('row-0-top')).toHaveAttribute('data-count', '0');
+    expect(screen.getByTestId('row-0-bottom')).toHaveAttribute('data-count', '1');
+    drag(screen.getByTestId(`placed-card-${key}`), screen.getByTestId('pending-cards'));
+    expect(screen.getByTestId('row-0-bottom')).toHaveAttribute('data-count', '0');
+    expect(screen.getByTestId(`pending-card-${key}`)).toBeInTheDocument();
     document.elementFromPoint = original;
   });
 
