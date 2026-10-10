@@ -530,7 +530,13 @@ function LiveTable({
       scores={tableView.scores}
       balances={config?.scoring.mode === 'buyin' ? bal : undefined}
       fantasyland={tableView.fantasyland}
-      inFantasyland={tableView.hand?.seats.map((s) => s.fantasyland)}
+      // "In Fantasyland" describes the hand being played; once it is over only next hand's
+      // status (the FL n badge) counts, or a seat that did not requalify would look as if it had.
+      inFantasyland={
+        tableView.hand && tableView.hand.phase !== 'showdown'
+          ? tableView.hand.seats.map((s) => s.fantasyland)
+          : undefined
+      }
       latencyMs={session.role === 'guest' ? state.latencyMs : null}
       compact={landscape}
       dealer={dealerInfo ? { ...dealerInfo, me: isDealer } : null}
