@@ -95,6 +95,8 @@ export interface MatchSnapshot {
    * Absent for matches not played by mail.
    */
   mailboxKey?: string;
+  /** Turn notifications by colour (`push` on the table): see `TableSnapshot.push`. */
+  push?: Record<Player, boolean>;
   /** Readiness for the next game by colour (table flow, not match state). */
   ready?: Record<Player, boolean>;
   /** Randomness attribution per action index; see `ActionMeta`. */

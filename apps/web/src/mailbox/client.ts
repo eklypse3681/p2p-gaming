@@ -5,6 +5,9 @@
 import { createStore, del, get, keys, set } from 'idb-keyval';
 import type { Incoming } from './service';
 
+/** Dispatched on `window` to collect mail now and keep checking quickly for a while. */
+export const CHECK_MAIL_EVENT = 'bgf:mail-check';
+
 export interface MailboxDevice {
   /** The local profile this registration belongs to. */
   slug: string;

@@ -7,7 +7,7 @@ import type { TableSession, TableSessionDeps } from '../../session/tableSession'
 import type { RandomnessChoice } from '../../session/entropy';
 import type { FlowOptions } from '../../session/retry';
 import { hostTable, joinTable, resumeTable } from '../../session/tableSession';
-import { mailboxStatus } from '../../mailbox/client';
+import { notificationsOn } from '../../mailbox/notifications';
 import { MailRelay } from '../../mailbox/offline';
 import type { OfcSnapshot } from './history';
 
@@ -20,10 +20,9 @@ export function ofcDeps(slug: string): OfcDeps {
     provider: getProvider(slug, 'ofc'),
     // Stores hold the host's full copy or a seat's view; both are `TableSnapshot`s.
     store: getSnapshotStore<OfcSnapshot>(slug, 'ofc') as unknown as OfcDeps['store'],
+    // Play by mail only where pushes wake this device; otherwise wait for the host as always.
     byMail: async (snapshot, seat) =>
-      (await mailboxStatus()).available
-        ? new MailRelay(slug, 'ofc', snapshot as never, seat)
-        : null,
+      (await notificationsOn(slug)) ? new MailRelay(slug, 'ofc', snapshot as never, seat) : null,
   };
 }
 

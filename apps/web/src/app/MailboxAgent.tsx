@@ -6,17 +6,20 @@ import { connLog } from '../session/connLog';
 import { withMailboxDevice } from '../mailbox/device';
 import { processInbox } from '../mailbox/inbox';
 import { pageInboxEnv } from '../mailbox/pageEnv';
+import { CHECK_MAIL_EVENT } from '../mailbox/client';
 
-const EVERY_MS = 30_000;
+/** Checked every 5 s for 30 s after there is reason to expect mail; never otherwise. */
+export const FAST_MS = 5_000;
+export const FAST_FOR_MS = 30_000;
 /** Posted by the service worker when a push arrived while a page was open. */
 export const MAIL_MESSAGE = 'bgf:mail';
-/** Dispatched on `window` to collect mail now. */
-export const CHECK_MAIL_EVENT = 'bgf:mail-check';
+export { CHECK_MAIL_EVENT };
 
 /**
  * Collects this player's mail while the app is open: positions from tables played by mail, and
- * moves for tables this device hosts. Checked on opening, when the page comes back into view,
- * every half minute while it is in view, and whenever a push arrives.
+ * moves for tables this device hosts. Checked when a push arrives (the service worker says so),
+ * and every 5 s for 30 s after the page opens, comes back into view, or a table goes on by mail.
+ * Never on a timer beyond that: play while apart runs on pushes.
  */
 export function MailboxAgent() {
   const { slug } = useProfile();
@@ -48,24 +51,39 @@ export function MailboxAgent() {
         running = false;
       }
     };
-    void run('opened');
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void run('timer');
-    }, EVERY_MS);
+    let fastUntil = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      if (stopped || Date.now() + FAST_MS > fastUntil) return;
+      timer = setTimeout(() => {
+        timer = null;
+        const check = document.visibilityState === 'visible' ? run('timer') : Promise.resolve();
+        void check.finally(schedule);
+      }, FAST_MS);
+    };
+    /** Check now, then every 5 s for 30 s. */
+    const burst = (why: string) => {
+      fastUntil = Date.now() + FAST_FOR_MS;
+      void run(why);
+      schedule();
+    };
+    burst('opened');
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void run('visible');
+      if (document.visibilityState === 'visible') burst('visible');
     };
     const onWorker = (e: MessageEvent) => {
       if ((e.data as { type?: string } | null)?.type === MAIL_MESSAGE) void run('push');
     };
-    // Anything in the page may ask for a check now (tests; a screen that expects mail).
-    const onAsk = () => void run('asked');
+    // Anything in the page may ask for a check now (a table that just went on by mail; tests).
+    const onAsk = () => burst('asked');
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener(CHECK_MAIL_EVENT, onAsk);
     navigator.serviceWorker?.addEventListener('message', onWorker);
     return () => {
       stopped = true;
-      clearInterval(timer);
+      if (timer !== null) clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener(CHECK_MAIL_EVENT, onAsk);
       navigator.serviceWorker?.removeEventListener('message', onWorker);

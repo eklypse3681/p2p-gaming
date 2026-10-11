@@ -187,6 +187,11 @@ export class TableClient<S = unknown, A = unknown, Cfg = unknown, V = S> {
     return this.sendRaw({ type: 'ready', ready });
   }
 
+  /** Tell the table whether this device gets turn notifications (`TableSnapshot.push`). */
+  setPush(on: boolean): boolean {
+    return this.sendRaw({ type: 'push', on });
+  }
+
   sendChat(text: string): void {
     const trimmed = text.trim();
     if (trimmed.length === 0) return;

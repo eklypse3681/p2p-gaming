@@ -1272,6 +1272,17 @@ export class TableServer<S, A, C, V = S, Cfg = unknown> {
         this.evaluateAutopilot();
         return;
       }
+      case 'push': {
+        if (seat < 0) return;
+        const push = Array.from({ length: this.seatCount }, (_, i) => this.snapshot.push?.[i] ?? false);
+        if (push[seat] === msg.on) return;
+        push[seat] = msg.on;
+        this.snapshot = { ...this.snapshot, push };
+        this.broadcastState();
+        this.changes.emit({ snapshot: this.snapshot });
+        this.evaluateAutopilot();
+        return;
+      }
       case 'bye':
         // Announce absence only if this was the player's last device (detach decides).
         this.detach(conn, true);
@@ -1784,9 +1795,14 @@ export class TableServer<S, A, C, V = S, Cfg = unknown> {
     this.changes.emit({ snapshot: this.snapshot });
   }
 
-  /** Whether the players may take turns while apart (`options.mailboxKey`; see the web app's mailbox). */
+  /**
+   * Whether the players take turns while apart: the table has a mailbox key and every seated
+   * player's device gets turn notifications (`push`). See the web app's mailbox.
+   */
   private get playedByMail(): boolean {
-    return typeof this.snapshot.options?.mailboxKey === 'string';
+    if (typeof this.snapshot.options?.mailboxKey !== 'string') return false;
+    const seated = this.snapshot.seats.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
+    return seated.length > 0 && seated.every((i) => this.snapshot.push?.[i] === true);
   }
 
   private autopilotContext(): AutopilotContext<Cfg> {

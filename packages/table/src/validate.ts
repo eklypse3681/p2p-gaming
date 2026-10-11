@@ -101,6 +101,9 @@ export function validateTableMessage(raw: unknown): TableValidation {
     case 'ready':
       if (typeof raw.ready !== 'boolean') return { ok: false, reason: 'ready must be a boolean' };
       return { ok: true, message: { type: 'ready', ready: raw.ready } };
+    case 'push':
+      if (typeof raw.on !== 'boolean') return { ok: false, reason: 'push must be a boolean' };
+      return { ok: true, message: { type: 'push', on: raw.on } };
     case 'bye':
       return { ok: true, message: { type: 'bye' } };
     default:

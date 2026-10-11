@@ -35,7 +35,7 @@ import { MatchPanel } from '../../hud/MatchPanel';
 import { Chat } from '../../hud/Chat';
 import { RoomCode } from '../../hud/RoomCode';
 import { Handoff } from '../../hud/Handoff';
-import { openNotifyDialog, useNotifications } from '../../app/Notify';
+import { openNotifyDialog, useAnnouncePush, useNotifications } from '../../app/Notify';
 import { useTableMenu } from '../../app/TableMenu';
 import { ClubChip } from '../../clubs/ClubChip';
 import { GameOverOverlay } from '../../hud/GameOverOverlay';
@@ -383,6 +383,11 @@ function LiveGame({
   // A host that lost its room code to the other device rejoins them straight away: there is
   // nothing to wait for here, and the newer copy of the match wins when we say hello.
   const rejoined = useRef<object | null>(null);
+  useAnnouncePush(
+    state.status === 'joined' && !!state.seat,
+    state.seat ? state.snapshot?.push?.[state.seat] : undefined,
+    state.seat ? (on: boolean) => client.setPush(on) : null,
+  );
   useEffect(() => {
     if (state.status !== 'disconnected' || !session.lostAddress) return;
     if (rejoined.current === session) return;

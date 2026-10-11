@@ -50,6 +50,10 @@ async function withMailbox(context: BrowserContext): Promise<void> {
 const byMail = (page: Page) =>
   page.locator('[data-testid="status-text"][data-by-mail="true"]').first();
 
+/** Treat turn notifications as on (a dev-server stand-in: headless browsers cannot subscribe). */
+const withPushes = (page: Page) =>
+  page.addInitScript(() => localStorage.setItem('bgf:e2e-push', '1'));
+
 const checkMail = (page: Page) =>
   page.evaluate(() => window.dispatchEvent(new Event('bgf:mail-check')));
 
@@ -60,8 +64,10 @@ test('OFC by mail: the guest plays while the host is away, then rejoins the live
   await withMailbox(context);
   const alice = await context.newPage();
   await seedProfile(alice, 'alice', { id: 'e2e-alice-0001', name: 'Alice' });
+  await withPushes(alice);
   const bob = await context.newPage();
   await seedProfile(bob, 'bob', { id: 'e2e-bob-0002', name: 'Bob' });
+  await withPushes(bob);
 
   const code = await hostTable(alice, 'alice', { seats: 2 });
   await joinTable(bob, 'bob', code);
@@ -92,6 +98,7 @@ test('OFC by mail: the guest plays while the host is away, then rejoins the live
   // Alice opens the app on its home screen (not the table): her device applies Bob's move.
   const alice2 = await context.newPage();
   await seedProfile(alice2, 'alice', { id: 'e2e-alice-0001', name: 'Alice' });
+  await withPushes(alice2);
   await alice2.goto(profileUrl('alice', '/'));
   await expect(alice2.getByTestId('game-screen')).toHaveCount(0);
 
@@ -123,4 +130,34 @@ test('OFC by mail: the guest plays while the host is away, then rejoins the live
   await expect(alice2.getByTestId('seat-card-1').first()).toHaveAttribute('data-online', 'true', {
     timeout: 20_000,
   });
+});
+
+test('OFC: the host reloading puts the guest back at the live table within seconds', async ({
+  context,
+}) => {
+  test.setTimeout(90_000);
+  await withMailbox(context);
+  const alice = await context.newPage();
+  await seedProfile(alice, 'alice', { id: 'e2e-alice-0001', name: 'Alice' });
+  await withPushes(alice);
+  const bob = await context.newPage();
+  await seedProfile(bob, 'bob', { id: 'e2e-bob-0002', name: 'Bob' });
+  await withPushes(bob);
+  const code = await hostTable(alice, 'alice', { seats: 2 });
+  await joinTable(bob, 'bob', code);
+  await expect(alice.getByTestId('ofc-table')).toHaveAttribute('data-phase', 'setting', {
+    timeout: 15_000,
+  });
+
+  await alice.reload();
+  await expect(alice.getByTestId('game-screen')).toHaveAttribute('data-role', 'host', {
+    timeout: 20_000,
+  });
+  // Bob may go on by mail for a moment; he is back at the live table soon after.
+  const started = Date.now();
+  await expect(alice.getByTestId('seat-card-1').first()).toHaveAttribute('data-online', 'true', {
+    timeout: 20_000,
+  });
+  await expect(byMail(bob)).toHaveCount(0);
+  console.log(`guest back live ${Math.round((Date.now() - started) / 1000)} s after the host was`);
 });

@@ -36,6 +36,8 @@ export function notifySupport(): NotifySupport {
 
 /** Whether this device will be woken for `slug`. */
 export async function notificationsOn(slug: string): Promise<boolean> {
+  // Browser tests run on the dev server, where a real push subscription cannot be made.
+  if (import.meta.env.DEV && localStorage.getItem('bgf:e2e-push') === '1') return true;
   if (notifySupport() !== 'ok' || Notification.permission !== 'granted') return false;
   return !!(await getMailboxDevice(slug))?.endpoint;
 }

@@ -194,6 +194,13 @@ export interface TableSnapshot<State = unknown, Action = unknown, Config = unkno
    * the game says a new round began. Absent means nobody is ready.
    */
   ready?: boolean[];
+  /**
+   * Turn notifications by seat: whether each player's device is woken by a push when it is their
+   * turn. Only when every seated player has them is the table played while apart (a mailbox key
+   * alone is not enough): positions and moves go by mail and nobody waits for anyone to be
+   * connected. Absent means nobody has them.
+   */
+  push?: boolean[];
 }
 
 /** A pending autopilot decision (e.g. "next hand" countdown) that clients may display. */
@@ -221,6 +228,8 @@ export type TableClientMessage =
   | { type: 'command'; command: unknown }
   /** Table flow: this seat is (not) ready for the next hand / game. */
   | { type: 'ready'; ready: boolean }
+  /** Whether this seat's device is woken by turn notifications (see `TableSnapshot.push`). */
+  | { type: 'push'; on: boolean }
   /** Non-authoritative payload forwarded to every other seat (e.g. a move being arranged). */
   | { type: 'preview'; payload: unknown }
   | { type: 'chat'; text: string }

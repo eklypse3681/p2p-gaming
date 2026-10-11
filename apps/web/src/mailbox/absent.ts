@@ -19,6 +19,8 @@ export interface HostedTable {
   connected(): number[];
   /** The position as `seat` may see it. */
   viewFor(seat: number): Extract<Envelope, { t: 'view' }>['snapshot'];
+  /** Whether the game is played while apart (everyone has turn notifications). */
+  playedByMail(): boolean;
   /** Whether `seat` has something to do (worth a notification). */
   yourTurn(seat: number): boolean;
   onChange(listener: () => void): () => void;
@@ -58,7 +60,7 @@ export function mailAbsentSeats(
     timer = null;
     if ((stopped && !final) || running) return;
     const key = table.key();
-    if (!key) return;
+    if (!key || !table.playedByMail()) return;
     running = true;
     try {
       const now = Date.now();

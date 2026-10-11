@@ -24,10 +24,11 @@ import { LANDSCAPE_PHONE_QUERY, useMediaQuery } from '../../session/useMediaQuer
 import { useTheme } from '../../app/ThemeProvider';
 import { RoomCode } from '../../hud/RoomCode';
 import { Handoff } from '../../hud/Handoff';
-import { openNotifyDialog, useNotifications } from '../../app/Notify';
+import { openNotifyDialog, useAnnouncePush, useNotifications } from '../../app/Notify';
+import { playedByMail } from '../../mailbox/mutual';
+import type { TableSnapshot } from '@bgf/protocol';
 import { useTableMenu } from '../../app/TableMenu';
 import { ByMailNotify, byMailStatus, useMailPending } from './byMail';
-import { useMailboxAvailable } from '../../app/Notify';
 import { scoreLink } from './table/scoreLink';
 import { ClubChip } from '../../clubs/ClubChip';
 import { useToasts } from '../../hud/Toast';
@@ -359,12 +360,17 @@ function LiveTable({
   // nothing to wait for here, and the newer copy of the match wins when we say hello.
   const rejoined = useRef<object | null>(null);
   // A guest at a table played by mail whose host just left goes straight on by mail.
-  const mailbox = useMailboxAvailable();
+  // A game everyone gets turn notifications for is played while apart: a guest whose host drops
+  // goes on by mail. Otherwise a dropped host means Reconnect, as always.
   const byMailNext =
-    mailbox &&
     session.role === 'guest' &&
-    typeof state.snapshot?.options?.mailboxKey === 'string' &&
+    playedByMail(state.snapshot as TableSnapshot | null) &&
     state.snapshot?.view === true;
+  useAnnouncePush(
+    state.status === 'joined' && state.seat !== null,
+    state.seat !== null ? state.snapshot?.push?.[state.seat] : undefined,
+    state.seat !== null ? (on: boolean) => client.setPush(on) : null,
+  );
   useEffect(() => {
     if (state.status !== 'disconnected' || !(session.lostAddress || byMailNext)) return;
     if (rejoined.current === session) return;

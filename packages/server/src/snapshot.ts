@@ -60,6 +60,7 @@ export function toTableSnapshot(m: MatchSnapshot): BackgammonTableSnapshot {
       ...(m.mailboxKey ? { mailboxKey: m.mailboxKey } : {}),
     },
     ...(m.ready ? { ready: [m.ready.white, m.ready.black] } : {}),
+    ...(m.push ? { push: [m.push.white, m.push.black] } : {}),
     initialState: m.initialMatch ?? newMatch(m.config),
     actions: m.actions,
     state: m.match,
@@ -101,5 +102,6 @@ export function toMatchSnapshot(t: BackgammonTableSnapshot): MatchSnapshot {
   if (typeof t.options?.runtime === 'string') out.runtime = t.options.runtime;
   if (typeof t.options?.mailboxKey === 'string') out.mailboxKey = t.options.mailboxKey;
   if (t.ready) out.ready = { white: t.ready[0] ?? false, black: t.ready[1] ?? false };
+  if (t.push) out.push = { white: t.push[0] ?? false, black: t.push[1] ?? false };
   return out;
 }

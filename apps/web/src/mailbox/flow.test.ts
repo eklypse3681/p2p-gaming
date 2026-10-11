@@ -136,6 +136,10 @@ describe('OFC by mail', () => {
       bobDeps,
     );
     await flush();
+    // Both devices get turn notifications: the game is played while apart.
+    host.client.setPush(true);
+    guest.client.setPush(true);
+    await flush();
     for (let i = 0; i < 6 && !place(guest.client, 1); i++) {
       place(host.client, 0);
       await flush();
@@ -214,6 +218,9 @@ describe('backgammon by mail', () => {
       { provider, store: getMatchStore(bob.slug, 'backgammon') },
     );
     await flush();
+    host.client.setPush(true);
+    guest.client.setPush(true);
+    await flush();
     guest.dispose();
     await flush();
     const before = (await getMatchStore(bob.slug, 'backgammon').get(host.matchId))!.seq;
@@ -236,6 +243,40 @@ describe('backgammon by mail', () => {
     expect(bobCopy.chat.at(-1)?.text).toBe('back tomorrow');
     // The full match, not a view: Bob's device can host it from here.
     expect(bobCopy.mailboxKey).toBeTruthy();
+    host.dispose();
+  });
+});
+
+describe('only when everyone has turn notifications', () => {
+  it('a game where one player has none is played together: nothing is mailed', async () => {
+    const { hostNewMatch, joinMatch } = await import('../session/session');
+    const { startHostMail } = await import('./hosting');
+    const { getMatchStore } = await import('../session/matchStore');
+    const alice = await player('Alice');
+    const bob = await player('Bob');
+    const provider = memoryProvider();
+    const host = await hostNewMatch(
+      { profile: alice.profile, signer: alice.signer, config: { length: 3 } },
+      { provider, store: getMatchStore(alice.slug, 'backgammon') },
+    );
+    const guest = await joinMatch(
+      { code: host.code, profile: bob.profile, signer: bob.signer },
+      { provider, store: getMatchStore(bob.slug, 'backgammon') },
+    );
+    await flush();
+    host.client.setPush(true); // only Alice
+    await flush();
+    guest.dispose();
+    await flush();
+    const stop = startHostMail(alice.slug, 'backgammon', host);
+    host.client.sendChat('anyone there?');
+    await new Promise((r) => setTimeout(r, 2000));
+    stop();
+    await flush(20);
+    const events = await withMailboxDevice(bob.slug, (d) =>
+      processInbox(pageInboxEnv(bob.slug, d, () => undefined)),
+    );
+    expect(events).toEqual([]);
     host.dispose();
   });
 });

@@ -18,19 +18,6 @@ export function openNotifyDialog(): void {
   window.dispatchEvent(new Event(OPEN_EVENT));
 }
 
-/** Whether this site has a mailbox (false until known). */
-export function useMailboxAvailable(): boolean {
-  const [available, setAvailable] = useState(false);
-  useEffect(() => {
-    let live = true;
-    void mailboxStatus().then((s) => live && setAvailable(s.available));
-    return () => {
-      live = false;
-    };
-  }, []);
-  return available;
-}
-
 /**
  * Whether turn notifications are on for this player here, and whether they could be (the site
  * has a mailbox with push). `null` while checking.
@@ -187,4 +174,20 @@ export function NotifySetting() {
       </div>
     </section>
   );
+}
+
+/**
+ * Keep the table told whether this device gets turn notifications: a game is played while apart
+ * only when every player's device does (`playedByMail`).
+ */
+export function useAnnouncePush(
+  joined: boolean,
+  announced: boolean | undefined,
+  send: ((on: boolean) => void) | null,
+): void {
+  const { on } = useNotifications();
+  useEffect(() => {
+    if (!joined || !send || on === null || on === (announced ?? false)) return;
+    send(on);
+  }, [joined, announced, send, on]);
 }

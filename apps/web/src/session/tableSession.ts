@@ -11,6 +11,8 @@ import { CURRENT_RUNTIME, runtimeFor, watchPin } from './runtimes';
 import { newMailboxKey } from '../mailbox/crypto';
 import type { MailRelay } from '../mailbox/offline';
 import { relays } from '../mailbox/offline';
+import { playedByMail } from '../mailbox/mutual';
+import { CHECK_MAIL_EVENT } from '../mailbox/client';
 import type {
   Listener,
   PlayerProfile,
@@ -438,6 +440,46 @@ export interface ResumeTableOptions<S, A, Cfg> {
   randomness?: RandomnessChoice;
 }
 
+const QUICK_JOIN_MS = 4_000;
+const QUICK_JOIN_TRIES = 3;
+const QUICK_JOIN_GAP_MS = 1_000;
+
+/**
+ * Right after a table goes on by mail, look for its host every 5 s for 30 s (it may only have
+ * been reloading): reaching the host's room code means it is hosting live again, and the relay
+ * steps aside so the screen rejoins. After that, a host coming back reaches us by push. This only
+ * touches the peer-to-peer signalling, not the mailbox. Returns the stop function.
+ */
+function probeHost(provider: TransportProvider, code: string, relay: MailRelay): () => void {
+  const started = Date.now();
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const next = () => {
+    if (stopped || relay.steppedAside) return;
+    if (Date.now() - started + 5_000 > 30_000) return;
+    timer = setTimeout(() => void probe(), 5_000);
+  };
+  const probe = async () => {
+    if (stopped || relay.steppedAside) return;
+    if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+      try {
+        const t = await provider.join(code, { timeoutMs: 5_000 });
+        t.close();
+        if (!stopped) relay.stepAside();
+        return;
+      } catch {
+        /* still away */
+      }
+    }
+    next();
+  };
+  next();
+  return () => {
+    stopped = true;
+    if (timer !== null) clearTimeout(timer);
+  };
+}
+
 /** Name of the seat that hosted a snapshot, for messages. */
 export function hostNameOf(snapshot: TableSnapshot): string {
   if (snapshot.hostSeat === null) return snapshot.dealer?.name ?? 'the dealer';
@@ -513,12 +555,29 @@ export async function resumeTable<S, A, C, V, Cfg>(
     deps.byMail &&
     seat >= 0 &&
     snapshot.hostSeat !== null &&
-    typeof snapshot.options?.mailboxKey === 'string'
+    playedByMail(snapshot as TableSnapshot)
   ) {
-    try {
-      return await joinOnceStep();
-    } catch (e) {
-      if (e instanceof SessionError && (e.code === 'cancelled' || e.code === 'rejected')) throw e;
+    // A host that is only reloading is back in a moment: a few short tries before going by mail.
+    const quick = {
+      ...deps,
+      joinTimeoutMs: Math.min(deps.joinTimeoutMs ?? QUICK_JOIN_MS, QUICK_JOIN_MS),
+    };
+    for (let attempt = 0; attempt < QUICK_JOIN_TRIES; attempt++) {
+      try {
+        const live = deps.existingSession?.(snapshot.code);
+        if (live) return live;
+        return await joinOnce(
+          def,
+          { code: snapshot.code, profile, signer: rawOpts.signer, resumeSnapshot: snapshot },
+          quick,
+          flow.signal,
+        );
+      } catch (e) {
+        if (e instanceof SessionError && (e.code === 'cancelled' || e.code === 'rejected')) throw e;
+      }
+      await (deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms))))(
+        QUICK_JOIN_GAP_MS,
+      );
     }
     const relay = await deps.byMail(snapshot, seat);
     if (relay) {
@@ -529,8 +588,11 @@ export async function resumeTable<S, A, C, V, Cfg>(
         flow.signal,
       );
       relays.set(session.matchId, relay);
+      const stopProbe = probeHost(deps.provider, snapshot.code, relay);
       const dispose = session.dispose;
       connLog(`${snapshot.code} playing by mail`, { host: hostNameOf(snapshot) });
+      // The host may only be reloading: look for their "back live" mail quickly for a while.
+      globalThis.dispatchEvent?.(new Event(CHECK_MAIL_EVENT));
       return {
         ...session,
         byMail: relay,
@@ -539,6 +601,7 @@ export async function resumeTable<S, A, C, V, Cfg>(
         },
         dispose: () => {
           if (relays.get(session.matchId) === relay) relays.delete(session.matchId);
+          stopProbe();
           relay.close();
           dispose();
         },

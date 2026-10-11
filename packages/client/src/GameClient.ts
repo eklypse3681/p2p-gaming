@@ -227,6 +227,11 @@ export class GameClient implements GameClientApi {
   startGame(): void {
     this.send({ type: 'start-game' });
   }
+  /** Tell the table whether this device gets turn notifications. */
+  setPush(on: boolean): void {
+    this.table.setPush(on);
+  }
+
   ready(ready?: boolean): void {
     const mine = this.state.seat ? (this.state.ready?.[this.state.seat] ?? false) : false;
     this.table.setReady(ready ?? !mine);

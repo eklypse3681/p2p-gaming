@@ -195,6 +195,10 @@ export class FakeClient implements GameClientApi {
     return this.dice.rollDie();
   }
 
+  setPush(): void {
+    /* the fake table has no mailbox */
+  }
+
   ready(): void {
     /* the fake table never runs unattended */
   }

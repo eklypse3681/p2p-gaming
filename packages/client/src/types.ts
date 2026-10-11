@@ -77,6 +77,8 @@ export interface ClientState {
 }
 
 export interface GameClientApi {
+  /** Tell the table whether this device gets turn notifications. */
+  setPush(on: boolean): void;
   readonly profile: PlayerProfile;
   getState(): ClientState;
   /** `useSyncExternalStore`-compatible subscription; fires after every state change. */

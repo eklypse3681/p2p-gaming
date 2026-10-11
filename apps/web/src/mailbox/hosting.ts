@@ -4,6 +4,7 @@ import { definitions, viewSnapshot } from '../runtime';
 import type { HostedTable } from './absent';
 import { mailAbsentSeats } from './absent';
 import { backgammonTurn, ofcTurn } from './turns';
+import { playedByMail } from './mutual';
 
 const COLORS: Player[] = ['white', 'black'];
 
@@ -29,6 +30,7 @@ function backgammonTable(server: BackgammonServer): HostedTable {
     seats: () => COLORS.map((c) => snap().players[c] ?? null),
     connected: () => server.connectedSeats().map((c) => COLORS.indexOf(c)),
     viewFor: () => snap() as unknown as ReturnType<HostedTable['viewFor']>,
+    playedByMail: () => playedByMail(snap()),
     yourTurn: (seat) => backgammonTurn(snap().match as MatchState, seat),
     onChange: (l) => server.onChange(l),
   };
@@ -51,6 +53,7 @@ function genericTable(game: string, server: AnyTableServer): HostedTable | null 
     connected: () => server.connectedSeats(),
     viewFor: (seat) =>
       viewSnapshot(def, snap(), seat) as unknown as ReturnType<HostedTable['viewFor']>,
+    playedByMail: () => playedByMail(snap()),
     yourTurn: (seat) => (game === 'ofc' ? ofcTurn(snap().state, seat) : false),
     onChange: (l) => server.onChange(l),
   };

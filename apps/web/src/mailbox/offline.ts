@@ -154,11 +154,17 @@ export class MailRelay {
       this.pendingMoves = 0;
     }
     this.changed();
-    if (e.live) {
-      connLog('mailbox: the host is back; rejoining the live table', { match: incoming.id });
-      this.steppedAside = true;
-      this.close();
-    }
+    if (e.live) this.stepAside();
+  }
+
+  /** The host is reachable again: step aside so the screen rejoins the live table. */
+  stepAside(): void {
+    if (this.steppedAside) return;
+    connLog('mailbox: the host is reachable again; rejoining the live table', {
+      match: this.snapshot.id,
+    });
+    this.steppedAside = true;
+    this.close();
   }
 
   close(): void {
