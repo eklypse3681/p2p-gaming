@@ -624,6 +624,77 @@ export class TableServer<S, A, C, V = S, Cfg = unknown> {
     return clientEnd;
   }
 
+  /**
+   * A message from a seated player that arrived without a connection (through the mailbox, while
+   * they were away): handled exactly as if that seat had sent it live. Only what a seat may send
+   * on its own behalf is taken: a command, readiness, or chat. Resolves once the table is idle
+   * again, with any errors the table would have sent back to that seat.
+   */
+  async deliver(
+    seat: number,
+    msg: TableClientMessage,
+  ): Promise<{ errors: { code: string; message: string }[] }> {
+    const errors: { code: string; message: string }[] = [];
+    if (this.closed) return { errors: [{ code: 'closed', message: 'the table is closed' }] };
+    if (
+      !Number.isInteger(seat) ||
+      seat < 0 ||
+      seat >= this.seatCount ||
+      !this.snapshot.seats[seat]
+    ) {
+      return { errors: [{ code: 'not-seated', message: 'nobody sits in that seat' }] };
+    }
+    if (msg.type !== 'command' && msg.type !== 'ready' && msg.type !== 'chat') {
+      return { errors: [{ code: 'bad-message', message: `${msg.type} cannot be mailed` }] };
+    }
+    const conn: Connection = {
+      transport: {
+        id: `mailbox:${seat}`,
+        status: 'open',
+        send(message: unknown) {
+          const m = message as { type?: string; code?: string; message?: string };
+          if (m.type === 'error') errors.push({ code: m.code ?? '', message: m.message ?? '' });
+        },
+        onMessage: () => () => {},
+        onStatus: () => () => {},
+        close() {
+          /* nothing to close */
+        },
+      },
+      seat,
+      role: 'seat',
+      closed: false,
+      unsubscribe: [],
+    };
+    this.handleSeated(conn, seat, msg);
+    await this.idle();
+    return { errors };
+  }
+
+  /**
+   * Nobody is watching (the table was woken by a mailed move): apply what the autopilot has
+   * scheduled now instead of after its delay, until it has nothing more to do.
+   */
+  async settle(): Promise<void> {
+    for (let guard = 0; guard < 16 && !this.closed; guard++) {
+      await this.idle();
+      if (!this.autopilotPending) return;
+      if (this.autopilotTimer !== null) {
+        clearTimeout(this.autopilotTimer);
+        this.autopilotTimer = null;
+      }
+      this.firePendingAutopilot();
+    }
+    await this.idle();
+  }
+
+  /** Resolves once no draw is in flight and nothing is queued. */
+  private async idle(): Promise<void> {
+    for (let waited = 0; (this.busy || this.queue.length > 0) && waited < 60_000; waited += 5) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  }
+
   close(): void {
     if (this.closed) return;
     this.cancelAutopilot(false);
@@ -1709,13 +1780,20 @@ export class TableServer<S, A, C, V = S, Cfg = unknown> {
     this.changes.emit({ snapshot: this.snapshot });
   }
 
+  /** Whether the players may take turns while apart (`options.mailboxKey`; see the web app's mailbox). */
+  private get playedByMail(): boolean {
+    return typeof this.snapshot.options?.mailboxKey === 'string';
+  }
+
   private autopilotContext(): AutopilotContext<Cfg> {
     const n = this.seatCount;
     const seatsFilled: boolean[] = [];
     const present: boolean[] = [];
     for (let i = 0; i < n; i++) {
       seatsFilled.push(this.snapshot.seats[i] !== null && this.snapshot.seats[i] !== undefined);
-      present.push(this.seats.has(i));
+      // A table played by mail (it has a mailbox key) never waits for a player to be connected:
+      // whoever is away gets the table by mail.
+      present.push(this.seats.has(i) || (this.playedByMail && seatsFilled[i]!));
     }
     return {
       seatsFilled,
@@ -1766,32 +1844,35 @@ export class TableServer<S, A, C, V = S, Cfg = unknown> {
     this.cancelAutopilot(false);
     const at = this.now() + afterMs;
     this.autopilotPending = { reason, at };
-    this.autopilotTimer = setTimeout(() => {
-      this.autopilotTimer = null;
-      const pending = this.autopilotPending;
-      this.autopilotPending = null;
-      if (this.closed || !pending) return;
-      this.broadcast({ type: 'autopilot', pending: null });
-      // The game is asked again: the room may have changed while the clock ran.
-      const decision = this.def.autopilot?.(this.snapshot.state, this.autopilotContext());
-      if (!decision || decision.reason !== pending.reason) {
-        this.autopilotEvents.emit({ kind: 'cancelled', reason: pending.reason });
-        this.evaluateAutopilot();
-        return;
-      }
-      if (this.busy) return; // re-evaluated (and re-scheduled) after the draw in flight
-      this.evaluating = true;
-      try {
-        this.applyingReason = decision.reason;
-        this.apply(this.systemConn, DEALER_SEAT, decision.command);
-        this.applyingReason = null;
-      } finally {
-        this.evaluating = false;
-      }
-      if (!this.busy) this.evaluateAutopilot();
-    }, afterMs);
+    this.autopilotTimer = setTimeout(() => this.firePendingAutopilot(), afterMs);
     this.broadcast({ type: 'autopilot', pending: this.autopilotPending });
     this.autopilotEvents.emit({ kind: 'scheduled', reason, at });
+  }
+
+  /** Apply the scheduled autopilot decision now (its timer fired, or `settle` asked). */
+  private firePendingAutopilot(): void {
+    this.autopilotTimer = null;
+    const pending = this.autopilotPending;
+    this.autopilotPending = null;
+    if (this.closed || !pending) return;
+    this.broadcast({ type: 'autopilot', pending: null });
+    // The game is asked again: the room may have changed while the clock ran.
+    const decision = this.def.autopilot?.(this.snapshot.state, this.autopilotContext());
+    if (!decision || decision.reason !== pending.reason) {
+      this.autopilotEvents.emit({ kind: 'cancelled', reason: pending.reason });
+      this.evaluateAutopilot();
+      return;
+    }
+    if (this.busy) return; // re-evaluated (and re-scheduled) after the draw in flight
+    this.evaluating = true;
+    try {
+      this.applyingReason = decision.reason;
+      this.apply(this.systemConn, DEALER_SEAT, decision.command);
+      this.applyingReason = null;
+    } finally {
+      this.evaluating = false;
+    }
+    if (!this.busy) this.evaluateAutopilot();
   }
 
   private cancelAutopilot(announce = true): void {

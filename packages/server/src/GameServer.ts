@@ -45,6 +45,8 @@ export interface GameServerOptions {
    */
   autopilot?: boolean;
   /** The rules' id to record on a new match (`MatchSnapshot.runtime`). */
+  /** A new match's mailbox key (`MatchSnapshot.mailboxKey`). */
+  mailboxKey?: string;
   runtime?: string;
   /** Dice source; default cryptographically random. Ignored when `rng` is given. */
   dice?: DiceSource;
@@ -127,6 +129,7 @@ function tableOptionsFor(
       ...(opts.randomness?.mode ? { randomness: { mode: opts.randomness.mode } } : {}),
       ...(opts.autopilot !== undefined ? { autopilot: opts.autopilot } : {}),
       ...(opts.runtime ? { runtime: opts.runtime } : {}),
+      ...(opts.mailboxKey ? { mailboxKey: opts.mailboxKey } : {}),
     },
     initialState: opts.initialMatch,
     rng,
@@ -191,6 +194,16 @@ export class GameServer {
   /** Create an in-memory connection for the host's own client and return the client's end. */
   connectLocal(): Transport {
     return this.table.connectLocal();
+  }
+
+  /** A move mailed by a player who is away (see `TableServer.deliver`). */
+  deliver(seat: Player, msg: Parameters<BackgammonTable['deliver']>[1]) {
+    return this.table.deliver(seatIndex(seat), msg);
+  }
+
+  /** Apply what the autopilot has scheduled now (see `TableServer.settle`). */
+  settle(): Promise<void> {
+    return this.table.settle();
   }
 
   close(): void {

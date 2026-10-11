@@ -4,6 +4,7 @@ import type { GameClientApi, MatchStore } from '@bgf/client';
 import { GameClient } from '@bgf/client';
 import type { GameServer } from '../runtime';
 import { CURRENT_RUNTIME, runtimeFor, watchPin } from './runtimes';
+import { newMailboxKey } from '../mailbox/crypto';
 import type { GameServerOptions } from '@bgf/server';
 import type {
   Listener,
@@ -300,6 +301,7 @@ export async function hostNewMatch(rawOpts: HostOptions, deps: SessionDeps): Pro
     homeSide: opts.homeSide ?? 'left',
     autopilot: opts.autopilot ?? true,
     ...(CURRENT_RUNTIME !== 'dev' ? { runtime: CURRENT_RUNTIME } : {}),
+    mailboxKey: newMailboxKey(),
     ...(randomness
       ? {
           randomness: { mode: randomnessOptions(randomness).mode },

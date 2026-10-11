@@ -89,6 +89,12 @@ export interface MatchSnapshot {
    * id, fixed when the match is created. Absent for matches from before matches were pinned.
    */
   runtime?: string;
+  /**
+   * The match's own secret (`options.mailboxKey` on the table): base64url AES-256 key known only
+   * to its players, which encrypts what they send each other through the mailbox while apart.
+   * Absent for matches not played by mail.
+   */
+  mailboxKey?: string;
   /** Readiness for the next game by colour (table flow, not match state). */
   ready?: Record<Player, boolean>;
   /** Randomness attribution per action index; see `ActionMeta`. */

@@ -8,6 +8,7 @@ import type {
 import { TableClient } from '@bgf/table';
 import type { TableServer } from '../runtime';
 import { CURRENT_RUNTIME, runtimeFor, watchPin } from './runtimes';
+import { newMailboxKey } from '../mailbox/crypto';
 import type {
   Listener,
   PlayerProfile,
@@ -328,6 +329,7 @@ export async function hostTable<S, A, C, V, Cfg>(
       ...(randomness ? { randomness: randomnessOptions(randomness) } : {}),
       autopilot: rawOpts.autopilot ?? true,
       ...(CURRENT_RUNTIME !== 'dev' ? { runtime: CURRENT_RUNTIME } : {}),
+      mailboxKey: newMailboxKey(),
     },
     ...(randomness ? { entropy: entropyFor(randomness) } : {}),
   });
