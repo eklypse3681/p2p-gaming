@@ -26,7 +26,7 @@ import { RoomCode } from '../../hud/RoomCode';
 import { Handoff } from '../../hud/Handoff';
 import { openNotifyDialog, useNotifications } from '../../app/Notify';
 import { useTableMenu } from '../../app/TableMenu';
-import { ByMailBanner } from './ByMailBanner';
+import { ByMailNotify, byMailStatus, useMailPending } from './byMail';
 import { useMailboxAvailable } from '../../app/Notify';
 import { scoreLink } from './table/scoreLink';
 import { ClubChip } from '../../clubs/ClubChip';
@@ -571,7 +571,8 @@ function LiveTable({
         requestReset: (v) => send({ type: 'settle-request', requested: v }),
       }
     : undefined;
-  const status = isDealer
+  const mailPending = useMailPending(session.byMail);
+  const baseStatus = isDealer
     ? dealerStatusText(tableView, names, seatsFilled, {
         on: auto,
         ready: state.ready,
@@ -579,6 +580,10 @@ function LiveTable({
         pending: state.autopilot,
       })
     : statusText(tableView, seat, names, seatsFilled);
+  const status =
+    session.byMail && state.status === 'joined'
+      ? byMailStatus(session.byMail, mailPending, baseStatus)
+      : baseStatus;
   const over = tableView?.status === 'over';
   const dealerCanDeal =
     isDealer &&
@@ -747,7 +752,6 @@ function LiveTable({
       // A table: toasts keep clear of the actions, and on a landscape phone the app bar is a rail.
       data-dock
     >
-      {session.byMail && state.status === 'joined' && <ByMailBanner relay={session.byMail} />}
       {(state.status === 'disconnected' || state.status === 'rejected') &&
         !session.lostAddress &&
         !(byMailNext && state.status === 'disconnected') && (
@@ -779,9 +783,14 @@ function LiveTable({
 
       {landscape && (
         <div className={styles.sideStatus}>
-          <span className={styles.sideStatusLine} data-testid="status-text">
+          <span
+            className={styles.sideStatusLine}
+            data-testid="status-text"
+            data-by-mail={session.byMail ? 'true' : undefined}
+          >
             {status}
           </span>
+          {session.byMail && <ByMailNotify />}
         </div>
       )}
 
@@ -797,6 +806,7 @@ function LiveTable({
             traySort={{ suits: settings.ofcTraySuits, order: settings.ofcTrayOrder }}
             onOpenLedger={() => setLedgerOpen(true)}
             flow={flow}
+            waiting={mailPending > 0}
           />
         )}
         {!seatsFilled && state.status === 'joined' && (
@@ -841,8 +851,15 @@ function LiveTable({
       <div className={styles.actions} data-testid={isDealer ? 'dealer-bar' : undefined}>
         <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
           {!landscape && (
-            <span className="muted small" data-testid="status-text">
-              {status}
+            <span className="row">
+              <span
+                className="muted small"
+                data-testid="status-text"
+                data-by-mail={session.byMail ? 'true' : undefined}
+              >
+                {status}
+              </span>
+              {session.byMail && <ByMailNotify />}
             </span>
           )}
           <span className="row">

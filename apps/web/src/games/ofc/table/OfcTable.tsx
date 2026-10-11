@@ -27,6 +27,8 @@ export interface OfcTableProps {
   fourColor?: boolean;
   /** Unattended table: readiness, countdown and reset requests (hides the deal buttons). */
   flow?: FlowProps;
+  /** A move is on its way to an absent host: nothing more to place until it is answered. */
+  waiting?: boolean;
 }
 
 const KEY_ROWS: Record<string, Row> = { '1': 'top', '2': 'middle', '3': 'bottom' };
@@ -59,9 +61,11 @@ export function OfcTable(props: OfcTableProps) {
     onOpenLedger,
     fourColor = false,
     flow,
+    waiting = false,
   } = props;
   const draft = usePlacementDraft(state, mySeat, send);
-  const model = useOfcTableModel(state, mySeat, names, draft.placed);
+  const built = useOfcTableModel(state, mySeat, names, draft.placed);
+  const model = waiting && built.myTurn ? { ...built, myTurn: false } : built;
   const [drag, setDrag] = useState<DragState | null>(null);
   // Flash the rows briefly after an illegal drop: shown until a timer marks that drop as seen.
   const [seenInvalidAt, setSeenInvalidAt] = useState(0);

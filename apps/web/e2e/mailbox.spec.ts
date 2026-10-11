@@ -46,6 +46,10 @@ async function withMailbox(context: BrowserContext): Promise<void> {
   });
 }
 
+/** The status line while playing by mail. */
+const byMail = (page: Page) =>
+  page.locator('[data-testid="status-text"][data-by-mail="true"]').first();
+
 const checkMail = (page: Page) =>
   page.evaluate(() => window.dispatchEvent(new Event('bgf:mail-check')));
 
@@ -77,10 +81,12 @@ test('OFC by mail: the guest plays while the host is away, then rejoins the live
   await alice.close();
   await bob.goto(profileUrl('bob', '/'));
   await bob.goto(matchUrl);
-  await expect(bob.getByTestId('by-mail-banner')).toBeVisible({ timeout: 40_000 });
-  await expect(bob.getByTestId('by-mail-banner')).toContainText('Alice is away');
+  await expect(byMail(bob)).toBeVisible({ timeout: 40_000 });
+  await expect(byMail(bob)).toContainText('Alice is away');
   expect(await placeIfMyTurn(bob)).toBe(true);
-  await expect(bob.getByTestId('by-mail-banner')).toContainText('Sent to Alice');
+  await expect(byMail(bob)).toContainText('Sent to Alice');
+  // Nothing more to place until Alice's device answers.
+  await expect(bob.getByTestId('ofc-table')).toHaveAttribute('data-my-turn', 'false');
   const seqBefore = await bob.getByTestId('game-screen').getAttribute('data-seq');
 
   // Alice opens the app on its home screen (not the table): her device applies Bob's move.
@@ -99,7 +105,7 @@ test('OFC by mail: the guest plays while the host is away, then rejoins the live
       { timeout: 30_000, intervals: [1000] },
     )
     .not.toBe(seqBefore);
-  await expect(bob.getByTestId('by-mail-banner')).toContainText('Alice is away');
+  await expect(byMail(bob)).toContainText('Alice is away');
 
   // Alice opens the table: she hosts it live; Bob is switched back to the live table.
   await alice2.goto(ofcUrl('alice', matchUrl.split('/ofc/')[1]!));
@@ -108,7 +114,7 @@ test('OFC by mail: the guest plays while the host is away, then rejoins the live
     .poll(
       async () => {
         await checkMail(bob);
-        return bob.getByTestId('by-mail-banner').count();
+        return byMail(bob).count();
       },
       { timeout: 45_000, intervals: [1500] },
     )
