@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } f
 import { ThemeProvider } from './ThemeProvider';
 import { ErrorBoundary } from './ErrorBoundary';
 import { SavePlayerPrompt } from './SavePlayerPrompt';
+import { MailboxAgent } from './MailboxAgent';
 import { AppBar } from './AppBar';
 import { UpdateNotice } from './UpdateNotice';
 import { TableMenuProvider } from './TableMenu';
@@ -49,6 +50,7 @@ function ProfileShell() {
           <Outlet />
         </ErrorBoundary>
         <SavePlayerPrompt />
+        <MailboxAgent />
       </ThemeProvider>
     </ProfileProvider>
   );

@@ -695,11 +695,15 @@ export class TableServer<S, A, C, V = S, Cfg = unknown> {
     }
   }
 
-  close(): void {
+  /**
+   * Close the table. A seeded segment still open is revealed so the last hand stays verifiable,
+   * unless `suspend`: the table is only put away to be restored from its snapshot later (a host
+   * device woken by a mailed move), and revealing would show the rest of the deck.
+   */
+  close(opts: { suspend?: boolean } = {}): void {
     if (this.closed) return;
     this.cancelAutopilot(false);
-    // A seeded segment still open is revealed so the last hand stays verifiable.
-    if (this.mode === 'seeded' && this.revealActive()) {
+    if (!opts.suspend && this.mode === 'seeded' && this.revealActive()) {
       this.snapshot = this.withAudit(this.snapshot);
       this.broadcastState();
       this.changes.emit({ snapshot: this.snapshot });

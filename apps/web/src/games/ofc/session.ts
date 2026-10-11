@@ -7,6 +7,8 @@ import type { TableSession, TableSessionDeps } from '../../session/tableSession'
 import type { RandomnessChoice } from '../../session/entropy';
 import type { FlowOptions } from '../../session/retry';
 import { hostTable, joinTable, resumeTable } from '../../session/tableSession';
+import { mailboxStatus } from '../../mailbox/client';
+import { MailRelay } from '../../mailbox/offline';
 import type { OfcSnapshot } from './history';
 
 export type OfcSession = TableSession<TableState, Action, Command, TableView, TableConfig>;
@@ -18,6 +20,10 @@ export function ofcDeps(slug: string): OfcDeps {
     provider: getProvider(slug, 'ofc'),
     // Stores hold the host's full copy or a seat's view; both are `TableSnapshot`s.
     store: getSnapshotStore<OfcSnapshot>(slug, 'ofc') as unknown as OfcDeps['store'],
+    byMail: async (snapshot, seat) =>
+      (await mailboxStatus()).available
+        ? new MailRelay(slug, 'ofc', snapshot as never, seat)
+        : null,
   };
 }
 

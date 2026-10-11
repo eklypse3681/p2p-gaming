@@ -9,6 +9,8 @@ import { TableClient } from '@bgf/table';
 import type { TableServer } from '../runtime';
 import { CURRENT_RUNTIME, runtimeFor, watchPin } from './runtimes';
 import { newMailboxKey } from '../mailbox/crypto';
+import type { MailRelay } from '../mailbox/offline';
+import { relays } from '../mailbox/offline';
 import type {
   Listener,
   PlayerProfile,
@@ -45,6 +47,8 @@ export interface TableSession<
   server?: TableServer<S, A, C, V, Cfg>;
   provider: TransportProvider;
   gameId: string;
+  /** Set while the host is away and this seat plays by mail (see `mailbox/offline.ts`). */
+  byMail?: MailRelay;
 }
 
 /** Persistence the session layer needs: put every snapshot, and look copies up for resume/join. */
@@ -79,6 +83,11 @@ export interface TableSessionDeps<
   createClient?: (
     opts: ConstructorParameters<typeof TableClient<S, A, Cfg, V>>[0],
   ) => TableClient<S, A, Cfg, V>;
+  /**
+   * Play a saved seat's view by mail while its host is away: the relay to use, or null when this
+   * table or device cannot (no mailbox). Without it, an absent host means `host-offline`.
+   */
+  byMail?: (snapshot: TableSnapshot<S, A, Cfg>, seat: number) => Promise<MailRelay | null>;
 }
 
 const DEFAULT_JOIN_TIMEOUT = 20_000;
@@ -497,6 +506,42 @@ export async function resumeTable<S, A, C, V, Cfg>(
       flow.signal,
     );
   };
+  // A seat's view of a table played by mail: try the host once, and play by mail if it is away.
+  const seat = snapshot.seats.findIndex((p) => p?.id === profile.id);
+  if (
+    viewOnly &&
+    deps.byMail &&
+    seat >= 0 &&
+    snapshot.hostSeat !== null &&
+    typeof snapshot.options?.mailboxKey === 'string'
+  ) {
+    try {
+      return await joinOnceStep();
+    } catch (e) {
+      if (e instanceof SessionError && (e.code === 'cancelled' || e.code === 'rejected')) throw e;
+    }
+    const relay = await deps.byMail(snapshot, seat);
+    if (relay) {
+      const session = await joinOnce(
+        def,
+        { code: snapshot.code, profile, signer: rawOpts.signer },
+        { ...deps, provider: relay.provider() },
+        flow.signal,
+      );
+      relays.set(session.matchId, relay);
+      const dispose = session.dispose;
+      connLog(`${snapshot.code} playing by mail`, { host: hostNameOf(snapshot) });
+      return {
+        ...session,
+        byMail: relay,
+        dispose: () => {
+          if (relays.get(session.matchId) === relay) relays.delete(session.matchId);
+          relay.close();
+          dispose();
+        },
+      };
+    }
+  }
   return resumeWithRetry(
     { hostOnce, joinOnce: joinOnceStep, hostName: hostNameOf(snapshot) },
     flow,

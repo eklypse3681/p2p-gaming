@@ -20,6 +20,9 @@
  */
 import { base64UrlToBytes, bytesToBase64Url, utf8Bytes } from '@bgf/protocol';
 import { verifyDelegated } from '@bgf/wallet';
+import { registrationBytes } from './bytes';
+
+export { registrationBytes };
 
 /** The slice of D1's API used here. */
 export interface Db {
@@ -117,16 +120,6 @@ export class MailboxError extends Error {
 const KEY = /^[A-Za-z0-9_-]{40,120}$/;
 const TOKEN = /^[A-Za-z0-9_-]{32,128}$/;
 const MATCH = /^[\w-]{1,80}$/;
-
-/** What a device signs to register: binds the token to the player and device, with the time. */
-export function registrationBytes(r: {
-  player: string;
-  device: string;
-  at: number;
-  token: string;
-}): Uint8Array {
-  return utf8Bytes(`amongfriends mailbox\n${r.player}\n${r.device}\n${r.at}\n${r.token}`);
-}
 
 async function sha256(text: string): Promise<string> {
   const d = await crypto.subtle.digest('SHA-256', utf8Bytes(text) as Uint8Array<ArrayBuffer>);
@@ -260,6 +253,8 @@ export interface Outgoing {
   /** `view`: the table's latest position (replaces an uncollected older one); `cmd`: a move. */
   kind: 'cmd' | 'view';
   body: string;
+  /** Wake the recipient's devices (default true). Off for news that can wait to be collected. */
+  notify?: boolean;
 }
 
 export async function send(
@@ -316,7 +311,7 @@ export async function send(
     .prepare('DELETE FROM mailbox_quota WHERE day < ?')
     .bind(day - 1)
     .run();
-  const woke = await wake(deps, m.to);
+  const woke = m.notify === false ? 0 : await wake(deps, m.to);
   return { id: row!.id, woke };
 }
 

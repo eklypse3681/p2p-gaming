@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 import type { Session } from './session';
 import type { GameId } from '../games/ids';
 import { connLog } from './connLog';
+import { startHostMail } from '../mailbox/hosting';
 
 /**
  * What every live session looks like to the registry, whatever game runs on it: a backgammon
@@ -76,6 +77,12 @@ export function SessionRegistryProvider({
     ),
   );
   const [version, bump] = useState(0);
+  /** Hosted sessions mail their position to absent players (see `mailbox/hosting.ts`). */
+  const mailers = useRef(new Map<string, () => void>());
+  const stopMail = (k: string) => {
+    mailers.current.get(k)?.();
+    mailers.current.delete(k);
+  };
 
   const get = useCallback(
     (slug: string, game: GameId, id: string) => map.current.get(keyOf(slug, game, id)),
@@ -95,9 +102,11 @@ export function SessionRegistryProvider({
     }
     if (prev) {
       connLog(`${prev.code} session closed`, { reason: 'replaced by a new session' });
+      stopMail(k);
       prev.dispose();
     }
     map.current.set(k, s);
+    mailers.current.set(k, startHostMail(slug, game, s as BaseSession & { server?: unknown }));
     bump((n) => n + 1);
     return 'added';
   }, []);
@@ -109,6 +118,7 @@ export function SessionRegistryProvider({
     (slug: string, game: GameId, id: string, dispose = true, reason = 'removed') => {
       const k = keyOf(slug, game, id);
       const s = map.current.get(k);
+      stopMail(k);
       if (s && dispose) {
         connLog(`${s.code} session closed`, { reason });
         s.dispose();
@@ -123,6 +133,7 @@ export function SessionRegistryProvider({
   // Closing the tab: say goodbye so the peer learns immediately instead of via a timeout.
   useEffect(() => {
     const onHide = (e: PageTransitionEvent) => {
+      for (const k of [...mailers.current.keys()]) stopMail(k);
       for (const s of map.current.values()) {
         connLog(`${s.code} session closed`, { reason: 'page hidden', persisted: e.persisted });
         try {
