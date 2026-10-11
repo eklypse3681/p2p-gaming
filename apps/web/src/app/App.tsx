@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { HashRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router';
 import { ThemeProvider } from './ThemeProvider';
 import { ErrorBoundary } from './ErrorBoundary';
+import { SavePlayerPrompt } from './SavePlayerPrompt';
 import { AppBar } from './AppBar';
 import { UpdateNotice } from './UpdateNotice';
 import { TableMenuProvider } from './TableMenu';
@@ -47,6 +48,7 @@ function ProfileShell() {
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
+        <SavePlayerPrompt />
       </ThemeProvider>
     </ProfileProvider>
   );
