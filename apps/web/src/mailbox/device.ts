@@ -2,7 +2,14 @@ import { bytesToBase64Url, sign } from '@bgf/protocol';
 import { decodeGrant } from '@bgf/wallet';
 import { getProfile, getSecrets } from '../session/profiles';
 import type { MailboxDevice } from './client';
-import { getMailboxDevice, mailboxStatus, putMailboxDevice, registerDevice } from './client';
+import {
+  MailboxAuthError,
+  forgetMailboxDevice,
+  getMailboxDevice,
+  mailboxStatus,
+  putMailboxDevice,
+  registerDevice,
+} from './client';
 import { registrationBytes } from './bytes';
 
 /** Re-register (refreshing the mailbox's "last seen") at most this often. */
@@ -69,4 +76,24 @@ export async function ensureMailboxDevice(
   };
   await putMailboxDevice(saved);
   return saved;
+}
+
+/**
+ * Run `fn` with this device's registration; if the mailbox no longer knows it (its records were
+ * reset), register afresh and try once more. Null when the device cannot use the mailbox.
+ */
+export async function withMailboxDevice<T>(
+  slug: string,
+  fn: (device: MailboxDevice) => Promise<T>,
+): Promise<T | null> {
+  const device = await ensureMailboxDevice(slug);
+  if (!device) return null;
+  try {
+    return await fn(device);
+  } catch (e) {
+    if (!(e instanceof MailboxAuthError)) throw e;
+    await forgetMailboxDevice(slug);
+    const again = await ensureMailboxDevice(slug);
+    return again ? fn(again) : null;
+  }
 }

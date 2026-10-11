@@ -51,6 +51,8 @@ export function setMailboxFetchForTests(f: typeof fetch | null): void {
 }
 
 export class MailboxUnavailable extends Error {}
+/** The mailbox does not know this device's token (it was reset, or the device signed out). */
+export class MailboxAuthError extends Error {}
 
 async function call<T>(path: string, init: RequestInit, token?: string): Promise<T> {
   const res = await fetcher(`${base()}${path}`, {
@@ -65,6 +67,7 @@ async function call<T>(path: string, init: RequestInit, token?: string): Promise
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) {
     if (res.status === 503) throw new MailboxUnavailable('the mailbox is not set up here');
+    if (res.status === 401) throw new MailboxAuthError(`mailbox ${path}: ${body.error ?? 401}`);
     throw new Error(`mailbox ${path}: ${body.error ?? res.status}`);
   }
   return body;

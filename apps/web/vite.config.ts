@@ -94,12 +94,17 @@ export default defineConfig({
     target: 'es2022',
     manifest: true,
     rollupOptions: {
-      input: { main: 'index.html', runtime: 'src/runtime.ts' },
+      // The service worker sits at the root (`/sw.js`) so its scope is the whole app.
+      input: { main: 'index.html', runtime: 'src/runtime.ts', sw: 'src/sw.ts' },
       // App builds normally drop an entry's exports; the runtime's exports are its whole point.
       preserveEntrySignatures: 'exports-only',
       output: {
         entryFileNames: (chunk) =>
-          chunk.name === 'runtime' ? 'runtime/runtime-[hash].js' : 'assets/[name]-[hash].js',
+          chunk.name === 'runtime'
+            ? 'runtime/runtime-[hash].js'
+            : chunk.name === 'sw'
+              ? 'sw.js'
+              : 'assets/[name]-[hash].js',
       },
     },
   },

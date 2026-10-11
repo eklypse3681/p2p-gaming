@@ -48,15 +48,12 @@ function isSnapshot(v: unknown): v is StoredSnapshot {
   );
 }
 
-/** IndexedDB database name for one player's saved matches of one game. */
-export function matchDbName(slug: string, game: GameId): string {
-  return `p2p-${slug}-${game}`;
-}
+export { matchDbName, MATCH_STORE_NAME } from './matchDb';
+import { MATCH_STORE_NAME, matchDbName } from './matchDb';
 /** Database name used before games became a route segment (backgammon only). */
 export function legacyMatchDbName(slug: string): string {
   return `bgf-matches-${slug}`;
 }
-export const MATCH_STORE_NAME = 'matches';
 
 /**
  * One player's saved snapshots of one game in IndexedDB. Game-agnostic: backgammon stores

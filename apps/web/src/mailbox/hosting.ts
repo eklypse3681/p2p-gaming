@@ -25,7 +25,7 @@ function backgammonTable(server: BackgammonServer): HostedTable {
     game: 'backgammon',
     matchId: () => snap().id,
     key: () => snap().mailboxKey,
-    seq: () => snap().seq,
+    version: () => `${snap().seq}:${snap().chat?.length ?? 0}`,
     seats: () => COLORS.map((c) => snap().players[c] ?? null),
     connected: () => server.connectedSeats().map((c) => COLORS.indexOf(c)),
     viewFor: () => snap() as unknown as ReturnType<HostedTable['viewFor']>,
@@ -46,7 +46,7 @@ function genericTable(game: string, server: AnyTableServer): HostedTable | null 
       const k = snap().options?.mailboxKey;
       return typeof k === 'string' ? k : undefined;
     },
-    seq: () => snap().seq,
+    version: () => `${snap().seq}:${snap().chat?.length ?? 0}`,
     seats: () => snap().seats as (PlayerProfile | null)[],
     connected: () => server.connectedSeats(),
     viewFor: (seat) =>

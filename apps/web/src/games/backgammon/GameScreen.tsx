@@ -35,6 +35,7 @@ import { MatchPanel } from '../../hud/MatchPanel';
 import { Chat } from '../../hud/Chat';
 import { RoomCode } from '../../hud/RoomCode';
 import { Handoff } from '../../hud/Handoff';
+import { openNotifyDialog, useNotifications } from '../../app/Notify';
 import { useTableMenu } from '../../app/TableMenu';
 import { ClubChip } from '../../clubs/ClubChip';
 import { GameOverOverlay } from '../../hud/GameOverOverlay';
@@ -414,6 +415,7 @@ function LiveGame({
     }
   };
   // The ⋮ menu in the title bar: everything that is not playing the game.
+  const notify = useNotifications();
   useTableMenu([
     { id: 'handoff', label: 'Move to another device', onSelect: () => setHandoffOpen(true) },
     { id: 'fairness', label: 'Fairness', onSelect: () => setFairnessOpen(true) },
@@ -422,6 +424,9 @@ function LiveGame({
       label: 'Match & chat',
       onSelect: () => (landscape ? setSheetOpen(true) : collapseRail(false)),
     },
+    ...(notify.possible && notify.on === false
+      ? [{ id: 'notify', label: 'Notify me when it’s my turn', onSelect: openNotifyDialog }]
+      : []),
     { id: 'leave', label: 'Leave (resume later)', onSelect: onLeave, quiet: true },
   ]);
   const isDealer = (state.role ?? 'seat') === 'dealer';

@@ -73,6 +73,12 @@ const pinOf = (s: AnySnapshot): string | undefined => {
   return typeof p === 'string' ? p : undefined;
 };
 
+/** Chat does not advance `seq`, so a copy with the same position but more chat is newer too. */
+export function isNewer(incoming: AnySnapshot, current: AnySnapshot): boolean {
+  if (incoming.seq !== current.seq) return incoming.seq > current.seq;
+  return (incoming.chat?.length ?? 0) > (current.chat?.length ?? 0);
+}
+
 /** The seats of either snapshot shape, by index. */
 function seatsOf(game: string, s: AnySnapshot): (PlayerProfile | null)[] {
   if (game === 'backgammon') {
@@ -133,7 +139,7 @@ export async function processInbox(env: InboxEnv): Promise<InboxEvent[]> {
     const current = (await env.findMatch(m.match))?.snapshot ?? known.snapshot;
     // Only the device's own player's matches, and never someone else's match under this id.
     if (incoming.id !== current.id) continue;
-    const newer = incoming.seq > current.seq;
+    const newer = isNewer(incoming, current);
     // A device hosting the match keeps its own copy: it is the table.
     const hosting = env.liveHost?.(known.game, m.match);
     let stored = false;

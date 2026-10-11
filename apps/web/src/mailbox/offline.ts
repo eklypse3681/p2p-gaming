@@ -9,8 +9,9 @@ import { TransportError, createMemoryPair } from '@bgf/protocol';
 import { connLog } from '../session/connLog';
 import { sendMail } from './client';
 import { seal } from './crypto';
-import { ensureMailboxDevice } from './device';
+import { withMailboxDevice } from './device';
 import type { Envelope } from './envelope';
+import { isNewer } from './inbox';
 
 type View = Extract<Envelope, { t: 'view' }>;
 
@@ -27,6 +28,8 @@ export class MailRelay {
   private transport: Transport | null = null;
   private snapshot: TableSnapshot;
   private pendingMoves = 0;
+  /** The host came back live and this stand-in stepped aside: rejoin the real table. */
+  steppedAside = false;
   private listeners = new Set<() => void>();
 
   constructor(
@@ -99,6 +102,12 @@ export class MailRelay {
     }
   }
 
+  /** The host's name, for "Alice is away". */
+  get hostName(): string {
+    const h = this.snapshot.hostSeat;
+    return (h === null ? null : this.snapshot.seats[h]?.name) ?? 'The host';
+  }
+
   private hostKey(): string | undefined {
     const h = this.snapshot.hostSeat;
     return h === null ? undefined : (this.snapshot.seats[h] as PlayerProfile | null)?.publicKey;
@@ -108,17 +117,13 @@ export class MailRelay {
     const key = this.snapshot.options?.mailboxKey;
     const to = this.hostKey();
     try {
-      const device = await ensureMailboxDevice(this.slug);
-      if (typeof key !== 'string' || !to || !device)
-        throw new Error('this table cannot be played by mail');
+      if (typeof key !== 'string' || !to) throw new Error('this table cannot be played by mail');
       const envelope: Envelope = { v: 1, t: 'cmd', game: this.game, seat: this.seat, msg };
-      await sendMail(device.token, {
-        to,
-        match: this.snapshot.id,
-        kind: 'cmd',
-        body: await seal(key, this.snapshot.id, envelope),
-        notify: true,
-      });
+      const body = await seal(key, this.snapshot.id, envelope);
+      const sent = await withMailboxDevice(this.slug, (device) =>
+        sendMail(device.token, { to, match: this.snapshot.id, kind: 'cmd', body, notify: true }),
+      );
+      if (!sent) throw new Error('the mailbox is not available');
       if (msg.type === 'command') this.pendingMoves++;
       connLog('mailbox: move mailed to the host', { match: this.snapshot.id, type: msg.type });
       this.changed();
@@ -141,7 +146,7 @@ export class MailRelay {
     if (incoming.id !== this.snapshot.id) return;
     for (const err of e.errors ?? [])
       this.send({ type: 'error', code: err.code, message: err.message });
-    if (incoming.seq > this.snapshot.seq) {
+    if (isNewer(incoming as never, this.snapshot as never)) {
       this.snapshot = incoming;
       this.pendingMoves = 0;
       this.send({ type: 'state', snapshot: incoming });
@@ -151,6 +156,7 @@ export class MailRelay {
     this.changed();
     if (e.live) {
       connLog('mailbox: the host is back; rejoining the live table', { match: incoming.id });
+      this.steppedAside = true;
       this.close();
     }
   }

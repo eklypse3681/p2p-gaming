@@ -24,7 +24,9 @@ import { LANDSCAPE_PHONE_QUERY, useMediaQuery } from '../../session/useMediaQuer
 import { useTheme } from '../../app/ThemeProvider';
 import { RoomCode } from '../../hud/RoomCode';
 import { Handoff } from '../../hud/Handoff';
+import { openNotifyDialog, useNotifications } from '../../app/Notify';
 import { useTableMenu } from '../../app/TableMenu';
+import { ByMailBanner } from './ByMailBanner';
 import { scoreLink } from './table/scoreLink';
 import { ClubChip } from '../../clubs/ClubChip';
 import { useToasts } from '../../hud/Toast';
@@ -387,6 +389,7 @@ function LiveTable({
     }
   };
   // The ⋮ menu in the title bar: everything that is not playing the hand.
+  const notify = useNotifications();
   useTableMenu([
     { id: 'handoff', label: 'Move to another device', onSelect: () => setHandoffOpen(true) },
     { id: 'ledger', label: 'Ledger', onSelect: () => setLedgerOpen(true) },
@@ -396,6 +399,9 @@ function LiveTable({
       label: 'Table & chat',
       onSelect: () => (landscape ? setSheetOpen(true) : collapseRail(false)),
     },
+    ...(notify.possible && notify.on === false
+      ? [{ id: 'notify', label: 'Notify me when it’s my turn', onSelect: openNotifyDialog }]
+      : []),
     { id: 'leave', label: 'Leave (resume later)', onSelect: onLeave, quiet: true },
   ]);
 
@@ -728,11 +734,13 @@ function LiveTable({
       data-seat={seat ?? ''}
       data-layout={landscape ? 'landscape' : 'default'}
       data-status={tableView?.status ?? ''}
+      data-seq={state.snapshot?.seq ?? ''}
       data-rail={railCollapsed ? 'collapsed' : 'open'}
       // A table: toasts keep clear of the actions, and on a landscape phone the app bar is a rail.
       data-dock
     >
-      {(state.status === 'disconnected' || state.status === 'rejected') && (
+      {session.byMail && state.status === 'joined' && <ByMailBanner relay={session.byMail} />}
+      {(state.status === 'disconnected' || state.status === 'rejected') && !session.lostAddress && (
         <div className={styles.banner} role="alert" data-testid="disconnected-banner">
           <span>
             {state.status === 'rejected'

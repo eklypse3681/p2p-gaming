@@ -2,7 +2,7 @@ import type { PlayerProfile } from '@bgf/protocol';
 import { connLog } from '../session/connLog';
 import { sendMail } from './client';
 import { seal } from './crypto';
-import { ensureMailboxDevice } from './device';
+import { withMailboxDevice } from './device';
 import type { Envelope } from './envelope';
 
 /** What the host's mailer needs to know about the table it hosts. */
@@ -11,7 +11,8 @@ export interface HostedTable {
   matchId(): string;
   /** The match's mailbox key; nothing is mailed without one. */
   key(): string | undefined;
-  seq(): number;
+  /** Changes whenever there is something new to mail: the position, or chat. */
+  version(): string;
   /** Seated players by seat index. */
   seats(): (PlayerProfile | null)[];
   /** Seats with a device connected right now. */
@@ -48,7 +49,7 @@ export function mailAbsentSeats(
   const absentSince = new Map<number, number>();
   /** Seats seen connected while hosting: only they get the grace period (they may be back). */
   const seen = new Set<number>();
-  const sentSeq = new Map<number, number>();
+  const sentVersion = new Map<number, string>();
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
   let running = false;
@@ -62,14 +63,14 @@ export function mailAbsentSeats(
     try {
       const now = Date.now();
       const connected = new Set(table.connected());
-      const seq = table.seq();
+      const version = table.version();
       let wait = Infinity;
       for (const [seat, p] of table.seats().entries()) {
         if (seat === me || !p?.publicKey) continue;
         if (connected.has(seat)) {
           seen.add(seat);
           absentSince.delete(seat);
-          sentSeq.delete(seat);
+          sentVersion.delete(seat);
           continue;
         }
         const since = absentSince.get(seat) ?? now;
@@ -78,9 +79,7 @@ export function mailAbsentSeats(
           wait = Math.min(wait, grace - (now - since));
           continue;
         }
-        if (sentSeq.get(seat) === seq) continue;
-        const device = await ensureMailboxDevice(slug);
-        if (!device || (stopped && !final)) return;
+        if (sentVersion.get(seat) === version) continue;
         const envelope: Envelope = {
           v: 1,
           t: 'view',
@@ -89,15 +88,19 @@ export function mailAbsentSeats(
           live: true,
         };
         const notify = table.yourTurn(seat);
-        await sendMail(device.token, {
-          to: p.publicKey,
-          match: table.matchId(),
-          kind: 'view',
-          body: await seal(key, table.matchId(), envelope),
-          notify,
-        });
-        sentSeq.set(seat, seq);
-        connLog('mailbox: position mailed', { seat, seq, notify });
+        const body = await seal(key, table.matchId(), envelope);
+        const sent = await withMailboxDevice(slug, (device) =>
+          sendMail(device.token, {
+            to: p.publicKey!,
+            match: table.matchId(),
+            kind: 'view',
+            body,
+            notify,
+          }),
+        );
+        if (!sent || (stopped && !final)) return;
+        sentVersion.set(seat, version);
+        connLog('mailbox: position mailed', { seat, version, notify });
       }
       if (wait !== Infinity) schedule(wait + 50);
     } catch (e) {

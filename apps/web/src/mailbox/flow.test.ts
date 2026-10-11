@@ -12,7 +12,7 @@ import { getSnapshotStore, setMatchStoreForTests } from '../session/matchStore';
 import type { TableSessionDeps } from '../session/tableSession';
 import { hostTable, joinTable, resumeTable } from '../session/tableSession';
 import { setMailboxFetchForTests } from './client';
-import { ensureMailboxDevice } from './device';
+import { ensureMailboxDevice, withMailboxDevice } from './device';
 import type { Db } from './service';
 import { handleMailbox } from './http';
 import type { MailboxAction } from './http';
@@ -194,5 +194,48 @@ describe('OFC by mail', () => {
       'deck' in ((byMail.client.getState().snapshot!.state as { hand?: object }).hand ?? {}),
     ).toBe(false);
     byMail.dispose();
+  });
+});
+
+describe('backgammon by mail', () => {
+  it('the host mails the whole match to an absent player, who can then host it', async () => {
+    const { hostNewMatch, joinMatch } = await import('../session/session');
+    const { startHostMail } = await import('./hosting');
+    const { getMatchStore } = await import('../session/matchStore');
+    const alice = await player('Alice');
+    const bob = await player('Bob');
+    const provider = memoryProvider();
+    const host = await hostNewMatch(
+      { profile: alice.profile, signer: alice.signer, config: { length: 3 } },
+      { provider, store: getMatchStore(alice.slug, 'backgammon') },
+    );
+    const guest = await joinMatch(
+      { code: host.code, profile: bob.profile, signer: bob.signer },
+      { provider, store: getMatchStore(bob.slug, 'backgammon') },
+    );
+    await flush();
+    guest.dispose();
+    await flush();
+    const before = (await getMatchStore(bob.slug, 'backgammon').get(host.matchId))!.seq;
+
+    // Alice's device hosts; Bob is away. A change happens (here: chat), and it is mailed.
+    const stop = startHostMail(alice.slug, 'backgammon', host);
+    host.client.sendChat('back tomorrow');
+    await new Promise((r) => setTimeout(r, 2000));
+    stop();
+    await flush(20);
+
+    // Bob's device still holds a token from an earlier mailbox (as after a reset): it registers
+    // again and collects.
+    const events = await withMailboxDevice(bob.slug, (d) =>
+      processInbox(pageInboxEnv(bob.slug, d, () => undefined)),
+    );
+    expect(events).toEqual([expect.objectContaining({ kind: 'view', stored: true })]);
+    const bobCopy = (await getMatchStore(bob.slug, 'backgammon').get(host.matchId))!;
+    expect(bobCopy.seq).toBe(before); // chat does not move the position on
+    expect(bobCopy.chat.at(-1)?.text).toBe('back tomorrow');
+    // The full match, not a view: Bob's device can host it from here.
+    expect(bobCopy.mailboxKey).toBeTruthy();
+    host.dispose();
   });
 });

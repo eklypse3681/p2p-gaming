@@ -3,13 +3,15 @@ import { useProfile } from '../session/ProfileProvider';
 import { useSessionRegistry } from '../session/SessionRegistry';
 import { isGameId } from '../games/ids';
 import { connLog } from '../session/connLog';
-import { ensureMailboxDevice } from '../mailbox/device';
+import { withMailboxDevice } from '../mailbox/device';
 import { processInbox } from '../mailbox/inbox';
 import { pageInboxEnv } from '../mailbox/pageEnv';
 
 const EVERY_MS = 30_000;
 /** Posted by the service worker when a push arrived while a page was open. */
 export const MAIL_MESSAGE = 'bgf:mail';
+/** Dispatched on `window` to collect mail now. */
+export const CHECK_MAIL_EVENT = 'bgf:mail-check';
 
 /**
  * Collects this player's mail while the app is open: positions from tables played by mail, and
@@ -27,13 +29,14 @@ export function MailboxAgent() {
       if (stopped || running) return;
       running = true;
       try {
-        const device = await ensureMailboxDevice(slug);
-        if (!device || stopped) return;
-        const events = await processInbox(
-          pageInboxEnv(slug, device, (game, id) =>
-            isGameId(game) ? registry.get(slug, game, id) : undefined,
-          ),
-        );
+        const events =
+          (await withMailboxDevice(slug, (device) =>
+            processInbox(
+              pageInboxEnv(slug, device, (game, id) =>
+                isGameId(game) ? registry.get(slug, game, id) : undefined,
+              ),
+            ),
+          )) ?? [];
         if (events.length)
           connLog('mailbox: collected', { why, events: events.map((e) => e.kind) });
       } catch (e) {
@@ -55,12 +58,16 @@ export function MailboxAgent() {
     const onWorker = (e: MessageEvent) => {
       if ((e.data as { type?: string } | null)?.type === MAIL_MESSAGE) void run('push');
     };
+    // Anything in the page may ask for a check now (tests; a screen that expects mail).
+    const onAsk = () => void run('asked');
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener(CHECK_MAIL_EVENT, onAsk);
     navigator.serviceWorker?.addEventListener('message', onWorker);
     return () => {
       stopped = true;
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener(CHECK_MAIL_EVENT, onAsk);
       navigator.serviceWorker?.removeEventListener('message', onWorker);
     };
     // The registry object changes on every session change; reading it through the closure is fine.

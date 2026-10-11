@@ -534,6 +534,9 @@ export async function resumeTable<S, A, C, V, Cfg>(
       return {
         ...session,
         byMail: relay,
+        get lostAddress() {
+          return relay.steppedAside;
+        },
         dispose: () => {
           if (relays.get(session.matchId) === relay) relays.delete(session.matchId);
           relay.close();

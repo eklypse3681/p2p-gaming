@@ -19,6 +19,7 @@ import { canPairDevices } from '../session/pairing';
 import { decodeGrant } from '@bgf/wallet';
 import { PairOffer } from '../hud/PairOffer';
 import { SafetySection } from './SafetySection';
+import { NotifySetting } from './Notify';
 import { downloadJson, exportFileName, exportProfile } from '../session/transfer';
 import { restartSync, syncSupported, useSyncStatus } from '../session/sync/registry';
 import type { SyncStatus } from '../session/sync/SyncManager';
@@ -706,6 +707,7 @@ function GeneralSettings() {
       </section>
 
       <SafetySection />
+      <NotifySetting />
 
       <DevicesSection slug={slug} />
 

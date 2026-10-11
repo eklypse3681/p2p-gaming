@@ -204,11 +204,12 @@ export async function register(deps: MailboxDeps, r: Registration): Promise<void
     }
     return;
   }
-  // One push subscription wakes one device: a re-registration with it replaces the old row.
+  // The same player re-registering this device under a new token (its storage was cleared)
+  // replaces the old row. Other players on the same browser share the subscription and keep theirs.
   if (r.push) {
     await deps.db
-      .prepare('DELETE FROM mailbox_devices WHERE endpoint = ?')
-      .bind(r.push.endpoint)
+      .prepare('DELETE FROM mailbox_devices WHERE endpoint = ? AND player = ?')
+      .bind(r.push.endpoint, r.player)
       .run();
   }
   await deps.db

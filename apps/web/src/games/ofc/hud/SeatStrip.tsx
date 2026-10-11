@@ -74,6 +74,7 @@ export function SeatStrip(p: SeatStripProps) {
             data-testid={`seat-card-${i}`}
             data-to-act={active ? 'true' : 'false'}
             data-present={present ? 'true' : 'false'}
+            data-online={online ? 'true' : 'false'}
           >
             <div className={styles.avatar} aria-hidden="true">
               {present ? (profile.avatar ?? profile.name.slice(0, 1).toUpperCase()) : '…'}
