@@ -221,13 +221,11 @@ async function main() {
   const meta = await conn.runAndReadAll(
     `SELECT path_in_schema AS col, sum(total_compressed_size) AS compressed, sum(total_uncompressed_size) AS raw FROM parquet_metadata('${join(root, 'hands-full-rg10000.parquet')}') GROUP BY 1 ORDER BY 2 DESC`,
   );
-  const cols = meta
-    .getRows()
-    .map((r) => ({
-      col: String(r[0]),
-      compressedPerRow: Math.round(Number(r[1]) / hands.length),
-      rawPerRow: Math.round(Number(r[2]) / hands.length),
-    }));
+  const cols = meta.getRows().map((r) => ({
+    col: String(r[0]),
+    compressedPerRow: Math.round(Number(r[1]) / hands.length),
+    rawPerRow: Math.round(Number(r[2]) / hands.length),
+  }));
   results['handsColumns'] = cols;
   console.table(cols);
 

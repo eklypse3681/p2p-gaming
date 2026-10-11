@@ -17,6 +17,7 @@ import type {
 import {
   DEALER_SEAT,
   Emitter,
+  MIN_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   challengeBytes,
   createMemoryPair,
@@ -797,11 +798,11 @@ export class TableServer<S, A, C, V = S, Cfg = unknown> {
   }
 
   private handleHello(conn: Connection, msg: Extract<TableClientMessage, { type: 'hello' }>): void {
-    if (msg.protocol !== PROTOCOL_VERSION) {
+    if (typeof msg.protocol !== 'number' || msg.protocol < MIN_PROTOCOL_VERSION) {
       this.reject(
         conn,
         'protocol',
-        `protocol ${msg.protocol} not supported (server is ${PROTOCOL_VERSION})`,
+        `protocol ${msg.protocol} is too old (this table speaks ${PROTOCOL_VERSION})`,
       );
       return;
     }

@@ -44,6 +44,8 @@ export interface GameServerOptions {
    * or ready (next game). Default: on for dealer-hosted matches, off otherwise.
    */
   autopilot?: boolean;
+  /** The rules' id to record on a new match (`MatchSnapshot.runtime`). */
+  runtime?: string;
   /** Dice source; default cryptographically random. Ignored when `rng` is given. */
   dice?: DiceSource;
   /**
@@ -124,6 +126,7 @@ function tableOptionsFor(
       ...(opts.initialMatch ? { customStart: true } : {}),
       ...(opts.randomness?.mode ? { randomness: { mode: opts.randomness.mode } } : {}),
       ...(opts.autopilot !== undefined ? { autopilot: opts.autopilot } : {}),
+      ...(opts.runtime ? { runtime: opts.runtime } : {}),
     },
     initialState: opts.initialMatch,
     rng,

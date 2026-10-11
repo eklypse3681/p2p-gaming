@@ -68,7 +68,7 @@ describe('coordinates', () => {
 });
 
 describe('boardFrom / counts', () => {
-  it('places checkers in each player\'s numbering', () => {
+  it("places checkers in each player's numbering", () => {
     const b = boardFrom({ 6: 5, 13: 3, [BAR]: 2, [OFF]: 5 }, { 6: 4, 24: 2, [BAR]: 1, [OFF]: 8 });
     expect(b.points[5]).toBe(5); // white 6
     expect(b.points[12]).toBe(3); // white 13

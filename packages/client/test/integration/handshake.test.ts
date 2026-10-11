@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createMemoryPair, PROTOCOL_VERSION } from '@bgf/protocol';
+import { createMemoryPair, MIN_PROTOCOL_VERSION, PROTOCOL_VERSION } from '@bgf/protocol';
 import { GameClient } from '../../src/index.js';
 import { GUEST, HOST, STRANGER, flush, keyedProfile, makeHarness, signerOf } from './harness.js';
 
@@ -74,16 +74,24 @@ describe('handshake', () => {
     h.close();
   });
 
-  it('rejects a protocol mismatch', async () => {
+  it('rejects a client older than the table accepts, and lets a newer one in', async () => {
     const h = await makeHarness({ withGuest: false });
     const [serverEnd, raw] = createMemoryPair();
     h.server.accept(serverEnd);
     const got: unknown[] = [];
     raw.onMessage((m) => got.push(m));
-    raw.send({ type: 'hello', protocol: PROTOCOL_VERSION + 1, profile: GUEST });
+    raw.send({ type: 'hello', protocol: MIN_PROTOCOL_VERSION - 1, profile: GUEST });
     await flush();
     expect(got).toEqual([expect.objectContaining({ type: 'rejected', reason: 'protocol' })]);
     expect(raw.status).toBe('closed');
+    // A newer client meets a table pinned to older rules: it is welcome.
+    const [serverEnd2, raw2] = createMemoryPair();
+    h.server.accept(serverEnd2);
+    const got2: { type?: string }[] = [];
+    raw2.onMessage((m) => got2.push(m as { type?: string }));
+    raw2.send({ type: 'hello', protocol: PROTOCOL_VERSION + 1, profile: GUEST });
+    await flush();
+    expect(got2.some((m) => m.type === 'rejected')).toBe(false);
     h.close();
   });
 

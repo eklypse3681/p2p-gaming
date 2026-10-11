@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { connLog } from '../session/connLog';
+import { CHECK_VERSION_EVENT } from '../session/runtimes';
 import { APP_VERSION } from './version';
 
 /** This page's build, or null where there is none to compare (dev server, tests). */
@@ -43,10 +44,14 @@ export function UpdateNotice() {
       if (document.visibilityState === 'visible') void check();
     };
     document.addEventListener('visibilitychange', onVisible);
+    // A table running rules this app does not have: there may be a newer app.
+    const onAsk = () => void check();
+    window.addEventListener(CHECK_VERSION_EVENT, onAsk);
     return () => {
       stopped = true;
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener(CHECK_VERSION_EVENT, onAsk);
     };
   }, []);
   if (!newer) return null;

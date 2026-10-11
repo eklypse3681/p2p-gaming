@@ -1,6 +1,13 @@
-import type { EntropySource, GameDefinition, SnapshotStore, TableClientState } from '@bgf/table';
+import type {
+  EntropySource,
+  GameDefinition,
+  SnapshotStore,
+  TableClientState,
+  TableServerOptions,
+} from '@bgf/table';
 import { TableClient } from '@bgf/table';
-import { TableServer } from '../runtime';
+import type { TableServer } from '../runtime';
+import { CURRENT_RUNTIME, runtimeFor, watchPin } from './runtimes';
 import type {
   Listener,
   PlayerProfile,
@@ -285,6 +292,19 @@ export function entropyFor(
   return { source: built.source, fallback: built.fallback };
 }
 
+/**
+ * Host with the rules the table is pinned to (`options.runtime`; this app's own for a new table):
+ * that runtime's table server and its copy of the game's definition.
+ */
+async function pinnedTableServer<S, A, C, V, Cfg>(
+  o: TableServerOptions<S, A, C, V, Cfg>,
+): Promise<TableServer<S, A, C, V, Cfg>> {
+  const pin = o.snapshot?.options?.runtime;
+  const rt = await runtimeFor(typeof pin === 'string' ? pin : undefined);
+  const def = (rt.definitions as Record<string, unknown>)[o.def.id] as typeof o.def | undefined;
+  return rt.TableServer.create<S, A, C, V, Cfg>({ ...o, def: def ?? o.def });
+}
+
 /** Create a brand-new table: run the server here and connect our own client to it. */
 export async function hostTable<S, A, C, V, Cfg>(
   def: GameDefinition<S, A, C, V, Cfg>,
@@ -293,7 +313,7 @@ export async function hostTable<S, A, C, V, Cfg>(
 ): Promise<TableSession<S, A, C, V, Cfg>> {
   const profile = publicProfile(rawOpts.profile);
   requireName(profile);
-  const createServer = deps.createServer ?? ((o) => TableServer.create<S, A, C, V, Cfg>(o));
+  const createServer = deps.createServer ?? pinnedTableServer<S, A, C, V, Cfg>;
   const code = generateRoomCode();
   const randomness = rawOpts.randomness;
   const server = await createServer({
@@ -307,6 +327,7 @@ export async function hostTable<S, A, C, V, Cfg>(
       ...(rawOpts.options ?? {}),
       ...(randomness ? { randomness: randomnessOptions(randomness) } : {}),
       autopilot: rawOpts.autopilot ?? true,
+      ...(CURRENT_RUNTIME !== 'dev' ? { runtime: CURRENT_RUNTIME } : {}),
     },
     ...(randomness ? { entropy: entropyFor(randomness) } : {}),
   });
@@ -361,6 +382,7 @@ async function joinOnce<S, A, C, V, Cfg>(
     resumeSnapshot,
   });
   logStatusChanges(client, `${rawOpts.code} guest`);
+  watchPin(client, (s) => s.snapshot?.options?.runtime);
   const dispose = makeDisposer({ client });
   try {
     await awaitTableJoined(client, timeoutMs, signal);
@@ -436,7 +458,7 @@ export async function resumeTable<S, A, C, V, Cfg>(
     : async () => {
         const live = deps.existingSession?.(snapshot.code);
         if (live) return live;
-        const createServer = deps.createServer ?? ((o) => TableServer.create<S, A, C, V, Cfg>(o));
+        const createServer = deps.createServer ?? pinnedTableServer<S, A, C, V, Cfg>;
         let server: TableServer<S, A, C, V, Cfg>;
         try {
           server = await createServer({

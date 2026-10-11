@@ -85,10 +85,7 @@ export function cloneBoard(board: Board): Board {
  * Build a board from a compact description. Useful for tests.
  * Each entry maps a player-relative point (1..24, 25 = bar, 0 = off) to a checker count.
  */
-export function boardFrom(
-  white: Record<number, number>,
-  black: Record<number, number>,
-): Board {
+export function boardFrom(white: Record<number, number>, black: Record<number, number>): Board {
   const b = emptyBoard();
   const put = (player: Player, spec: Record<number, number>) => {
     for (const [k, n] of Object.entries(spec)) {

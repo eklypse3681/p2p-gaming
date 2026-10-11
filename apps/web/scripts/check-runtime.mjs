@@ -47,10 +47,26 @@ if (!/^(import\{[^}]*\}from"[^"]+";)+export\{[^}]*\};?$/.test(entry.replace(/\s+
 
 // 3. Under Node: import it and host a table.
 const rt = await import(pathToFileURL(join(dist, runtime.entry)).href);
-for (const name of ['RUNTIME_API_VERSION', 'TableServer', 'GameServer', 'backgammonDefinition', 'ofcDefinition', 'peerJsProvider', 'memoryProvider']) {
+for (const name of [
+  'RUNTIME_API_VERSION',
+  'TableServer',
+  'GameServer',
+  'backgammonDefinition',
+  'ofcDefinition',
+  'peerJsProvider',
+  'memoryProvider',
+]) {
   if (rt[name] === undefined) fail(`the runtime does not export ${name}`);
 }
 if (typeof rt.RUNTIME_API_VERSION !== 'number') fail('RUNTIME_API_VERSION is not a number');
+// Matches are pinned to RUNTIME_ID and the archive finds a copy by the manifest's id: they must agree.
+if (rt.RUNTIME_ID !== runtime.id)
+  fail(`RUNTIME_ID ${rt.RUNTIME_ID} does not match the manifest's id ${runtime.id}`);
+if (
+  rt.definitions?.backgammon !== rt.backgammonDefinition ||
+  rt.definitions?.ofc !== rt.ofcDefinition
+)
+  fail('definitions does not name the game definitions');
 const server = await rt.GameServer.create({
   code: 'CHECK1',
   host: { id: 'dealer', name: 'Dealer' },
@@ -60,5 +76,5 @@ if (server.getSnapshot().code !== 'CHECK1') fail('a table hosted by the runtime 
 server.close();
 
 console.log(
-  `check-runtime: ok — runtime ${runtime.version} (API ${rt.RUNTIME_API_VERSION}), ${runtime.files.length} files, all loaded by the app too`,
+  `check-runtime: ok — runtime ${runtime.id} (${runtime.version}) (API ${rt.RUNTIME_API_VERSION}), ${runtime.files.length} files, all loaded by the app too`,
 );

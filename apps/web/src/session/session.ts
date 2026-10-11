@@ -2,7 +2,8 @@ import type { Signer } from '@bgf/protocol';
 import type { MatchConfig, Player } from '@bgf/engine';
 import type { GameClientApi, MatchStore } from '@bgf/client';
 import { GameClient } from '@bgf/client';
-import { GameServer } from '../runtime';
+import type { GameServer } from '../runtime';
+import { CURRENT_RUNTIME, runtimeFor, watchPin } from './runtimes';
 import type { GameServerOptions } from '@bgf/server';
 import type {
   Listener,
@@ -280,11 +281,15 @@ export function matchEntropyFor(
   return { source: built.source, fallback: built.fallback };
 }
 
+/** Host with the rules the match is pinned to (this app's own for a new match). */
+const defaultCreateServer = async (o: GameServerOptions): Promise<GameServer> =>
+  (await runtimeFor(o.snapshot?.runtime)).GameServer.create(o);
+
 /** Create a brand-new match: run the server here and connect our own client to it. */
 export async function hostNewMatch(rawOpts: HostOptions, deps: SessionDeps): Promise<Session> {
   const opts = { ...rawOpts, profile: publicProfile(rawOpts.profile) };
   requireName(opts.profile);
-  const createServer = deps.createServer ?? ((o) => GameServer.create(o));
+  const createServer = deps.createServer ?? defaultCreateServer;
   const code = generateRoomCode();
   const randomness = opts.randomness;
   const server = await createServer({
@@ -294,6 +299,7 @@ export async function hostNewMatch(rawOpts: HostOptions, deps: SessionDeps): Pro
     hostSeat: opts.dealer ? null : (opts.hostSeat ?? 'white'),
     homeSide: opts.homeSide ?? 'left',
     autopilot: opts.autopilot ?? true,
+    ...(CURRENT_RUNTIME !== 'dev' ? { runtime: CURRENT_RUNTIME } : {}),
     ...(randomness
       ? {
           randomness: { mode: randomnessOptions(randomness).mode },
@@ -349,6 +355,7 @@ async function joinOnce(
     resumeSnapshot,
   });
   logStatusChanges(client, `${opts.code} guest`);
+  watchPin(client, (s) => s.snapshot?.runtime);
   const dispose = makeDisposer({ client });
   try {
     await awaitJoined(client, timeoutMs, signal);
@@ -410,7 +417,7 @@ export async function resumeMatch(
   const hostOnce = async () => {
     const live = deps.existingSession?.(snapshot.code);
     if (live) return live;
-    const createServer = deps.createServer ?? ((o) => GameServer.create(o));
+    const createServer = deps.createServer ?? defaultCreateServer;
     const server = await createServer({
       snapshot,
       code: snapshot.code,

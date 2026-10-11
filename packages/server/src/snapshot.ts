@@ -56,6 +56,7 @@ export function toTableSnapshot(m: MatchSnapshot): BackgammonTableSnapshot {
       ...(custom ? { customStart: true } : {}),
       ...(m.randomness ? { randomness: m.randomness } : {}),
       ...(m.autopilot !== undefined ? { autopilot: m.autopilot } : {}),
+      ...(m.runtime ? { runtime: m.runtime } : {}),
     },
     ...(m.ready ? { ready: [m.ready.white, m.ready.black] } : {}),
     initialState: m.initialMatch ?? newMatch(m.config),
@@ -96,6 +97,7 @@ export function toMatchSnapshot(t: BackgammonTableSnapshot): MatchSnapshot {
   if (t.actionMeta) out.actionMeta = t.actionMeta;
   if (t.entropyAudit) out.entropyAudit = t.entropyAudit;
   if (typeof t.options?.autopilot === 'boolean') out.autopilot = t.options.autopilot;
+  if (typeof t.options?.runtime === 'string') out.runtime = t.options.runtime;
   if (t.ready) out.ready = { white: t.ready[0] ?? false, black: t.ready[1] ?? false };
   return out;
 }

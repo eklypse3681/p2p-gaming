@@ -3,6 +3,12 @@ import type { ActionMeta, EntropyAudit, RandomnessMode } from './table.js';
 
 /** Wire protocol version: 2 = generic table protocol (see table.ts). */
 export const PROTOCOL_VERSION = 2;
+/**
+ * The oldest client a table accepts. A table keeps the rules (and so the code) a match was
+ * created with, so it can be older than the players' apps: newer clients are always let in and
+ * must keep understanding older tables. Raise this only to shut out clients that are too old.
+ */
+export const MIN_PROTOCOL_VERSION = 2;
 
 /**
  * Which side of the table the home boards are on, as seen from a given seat. A match has one
@@ -78,6 +84,11 @@ export interface MatchSnapshot {
   randomness?: { provider: string; mode?: RandomnessMode };
   /** Unattended play (`options.autopilot` on the table): games start when both are ready. */
   autopilot?: boolean;
+  /**
+   * The rules this match is played with (`options.runtime` on the table): the published runtime's
+   * id, fixed when the match is created. Absent for matches from before matches were pinned.
+   */
+  runtime?: string;
   /** Readiness for the next game by colour (table flow, not match state). */
   ready?: Record<Player, boolean>;
   /** Randomness attribution per action index; see `ActionMeta`. */

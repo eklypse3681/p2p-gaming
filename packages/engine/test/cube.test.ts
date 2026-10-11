@@ -51,11 +51,13 @@ describe('canDouble', () => {
 
   it('is capped at MAX_CUBE', () => {
     const base = toRollGame(startingBoard(), 'white');
-    expect(canDouble({ ...base, cube: { value: MAX_CUBE / 2, owner: 'white' } }, 'white')).toBe(true);
-    expect(canDouble({ ...base, cube: { value: MAX_CUBE, owner: 'white' } }, 'white')).toBe(false);
-    expect(code(() => game.double({ ...base, cube: { value: MAX_CUBE, owner: 'center' } }, 'white'))).toBe(
-      'cannot-double',
+    expect(canDouble({ ...base, cube: { value: MAX_CUBE / 2, owner: 'white' } }, 'white')).toBe(
+      true,
     );
+    expect(canDouble({ ...base, cube: { value: MAX_CUBE, owner: 'white' } }, 'white')).toBe(false);
+    expect(
+      code(() => game.double({ ...base, cube: { value: MAX_CUBE, owner: 'center' } }, 'white')),
+    ).toBe('cannot-double');
   });
 });
 
@@ -93,7 +95,10 @@ describe('double / take / drop', () => {
   });
 
   it('double → drop ends the game for the doubler at the pre-double value', () => {
-    const s0: GameState = { ...toRollGame(startingBoard(), 'black'), cube: { value: 2, owner: 'black' } };
+    const s0: GameState = {
+      ...toRollGame(startingBoard(), 'black'),
+      cube: { value: 2, owner: 'black' },
+    };
     const s1 = game.drop(game.double(s0, 'black'), 'white');
     expect(s1.phase).toEqual({
       kind: 'over',

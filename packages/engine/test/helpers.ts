@@ -44,7 +44,11 @@ export function movingGame(
 }
 
 /** Get a state where `player` is `to-roll` on `board` (opponent won the opening and moved). */
-export function toRollGame(board: Board, player: Player, opts: { crawford?: boolean } = {}): GameState {
+export function toRollGame(
+  board: Board,
+  player: Player,
+  opts: { crawford?: boolean } = {},
+): GameState {
   // Cheat: construct the state directly; the engine treats phase as plain data.
   const s = newGame({ board, crawford: opts.crawford });
   return { ...s, phase: { kind: 'to-roll', player } };

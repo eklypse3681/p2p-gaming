@@ -35,6 +35,14 @@ function runtimeManifest(): Plugin {
         for (const dep of [...out.imports, ...out.dynamicImports]) await visit(dep);
       };
       await visit(entry.fileName);
+      // The rules' identity (`RUNTIME_ID` in src/runtime.ts): the file holding that module's code.
+      const home = Object.values(bundle).find(
+        (f) =>
+          f.type === 'chunk' &&
+          f.moduleIds.some((m) => m.replaceAll('\\', '/').endsWith('/src/runtime.ts')) &&
+          f.fileName !== entry.fileName,
+      );
+      const id = (home ?? entry).fileName.split('/').pop()!;
       const version = createHash('sha256')
         .update(files.map((f) => `${f.path}:${f.sha256}`).join('\n'))
         .digest('hex')
@@ -42,7 +50,7 @@ function runtimeManifest(): Plugin {
       await mkdir(join(outDir, 'runtime'), { recursive: true });
       await writeFile(
         join(outDir, 'runtime/manifest.json'),
-        JSON.stringify({ format: 1, version, entry: entry.fileName, files }, null, 2),
+        JSON.stringify({ format: 1, version, id, entry: entry.fileName, files }, null, 2),
       );
     },
   };

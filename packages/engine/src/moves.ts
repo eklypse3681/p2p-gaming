@@ -38,7 +38,8 @@ export function singleDieMoves(board: Board, player: Player, die: Die): SubMove[
     if (highest === 0) highest = rel;
     const to = rel - die;
     if (to >= 1) {
-      if (canLand(board, player, to)) out.push({ from: rel, to, die, hit: isHit(board, player, to) });
+      if (canLand(board, player, to))
+        out.push({ from: rel, to, die, hit: isHit(board, player, to) });
     } else if (home) {
       // Exact bear-off, or a larger die from the highest occupied point.
       if (to === 0 || rel === highest) out.push({ from: rel, to: OFF, die, hit: false });
@@ -88,7 +89,13 @@ export function playKey(play: readonly SubMove[]): string {
  */
 export function legalPlays(board: Board, player: Player, dice: DiceRoll): Play[] {
   const [a, b] = dice;
-  const orders: Die[][] = a === b ? [[a, a, a, a]] : [[a, b], [b, a]];
+  const orders: Die[][] =
+    a === b
+      ? [[a, a, a, a]]
+      : [
+          [a, b],
+          [b, a],
+        ];
   const raw: Play[] = [];
   for (const order of orders) enumerate(board, player, order, [], raw);
   let max = 0;

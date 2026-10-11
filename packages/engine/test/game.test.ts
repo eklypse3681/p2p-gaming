@@ -115,8 +115,7 @@ describe('roll', () => {
 });
 
 describe('play', () => {
-  const moving = (): GameState =>
-    game.roll(toRollGame(startingBoard(), 'white'), 'white', [3, 1]);
+  const moving = (): GameState => game.roll(toRollGame(startingBoard(), 'white'), 'white', [3, 1]);
 
   it('applies a legal play, records it and passes the turn', () => {
     const s = game.play(moving(), 'white', [sm(8, 5, 3), sm(6, 5, 1)]);
@@ -185,7 +184,7 @@ describe('game over classification', () => {
     expect(s.phase).toMatchObject({ kind: 'over', result: { kind: 'backgammon' } });
   });
 
-  it('backgammon when the loser still has a checker in the winner\'s home board', () => {
+  it("backgammon when the loser still has a checker in the winner's home board", () => {
     // black's 20-point is inside white's home board (white's 5-point)
     const s = finish({}, { 20: 1, 13: 14 });
     expect(s.phase).toMatchObject({ kind: 'over', result: { kind: 'backgammon' } });
@@ -228,7 +227,10 @@ describe('resignation', () => {
   });
 
   it('accept ends the game at the offered stakes times the cube', () => {
-    const s0: GameState = { ...toRollGame(startingBoard(), 'white'), cube: { value: 4, owner: 'black' } };
+    const s0: GameState = {
+      ...toRollGame(startingBoard(), 'white'),
+      cube: { value: 4, owner: 'black' },
+    };
     const s1 = game.acceptResign(game.offerResign(s0, 'white', 'gammon'), 'black');
     expect(s1.phase).toMatchObject({
       kind: 'over',
@@ -244,7 +246,11 @@ describe('resignation', () => {
 
     const pending = game.double(toRollGame(startingBoard(), 'white'), 'white');
     const r2 = game.offerResign(pending, 'black', 'single');
-    expect(r2.phase).toMatchObject({ kind: 'resign-offered', by: 'black', prior: { kind: 'double-offered' } });
+    expect(r2.phase).toMatchObject({
+      kind: 'resign-offered',
+      by: 'black',
+      prior: { kind: 'double-offered' },
+    });
 
     expect(code(() => game.offerResign(newGame(), 'white', 'single'))).toBe('wrong-phase');
     expect(code(() => game.offerResign(r, 'black', 'single'))).toBe('wrong-phase');
