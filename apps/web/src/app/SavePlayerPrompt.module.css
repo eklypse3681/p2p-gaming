@@ -1,0 +1,32 @@
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--ui-bg) 60%, transparent);
+  backdrop-filter: blur(2px);
+}
+.card {
+  width: min(360px, 100%);
+  display: grid;
+  gap: var(--space-3);
+  text-align: center;
+}
+.card h2,
+.card p {
+  margin: 0;
+}
+.quiet {
+  justify-self: center;
+  background: none;
+  border: 0;
+  padding: 2px;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--ui-muted, inherit);
+  opacity: 0.75;
+  cursor: pointer;
+  text-decoration: underline;
+}

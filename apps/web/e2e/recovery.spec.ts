@@ -60,9 +60,10 @@ test('a player saved with a passkey comes back after the browser forgets them', 
   await withBackupEndpoint(context);
   await withPasskeys(page);
   const slug = await newPlayer(page, 'Steve');
-  await page.goto(`/?transport=broadcast#/${slug}/settings`);
-  await page.getByTestId('save-passkey').click();
-  await expect(page.getByTestId('passkey-note')).toContainText('is saved', { timeout: 20_000 });
+  // A player with no passkey is asked to save one, and one tap does it.
+  await page.goto(`/?transport=broadcast#/${slug}/`);
+  await page.getByTestId('save-player-now').click();
+  await expect(page.getByTestId('save-player-prompt')).toBeHidden({ timeout: 20_000 });
   const before = (await playerIndex(page))[slug];
   expect(backups.size).toBe(1);
   // What reached the server is ciphertext: not the key, not the seed.
