@@ -18,7 +18,8 @@ import { GAME_IDS } from './games/ids';
 import type { MailboxDevice } from './mailbox/client';
 import { allMailboxDevices } from './mailbox/client';
 import type { InboxEnv, InboxEvent, KnownMatch } from './mailbox/inbox';
-import { processInbox } from './mailbox/inbox';
+import { processInbox, processPushed } from './mailbox/inbox';
+import type { PushData } from './mailbox/service';
 import { MATCH_STORE_NAME, matchDbName } from './session/matchDb';
 
 declare const self: ServiceWorkerGlobalScope;
@@ -80,36 +81,71 @@ async function nameOf(device: MailboxDevice, e: InboxEvent): Promise<string> {
 
 const GAME_NAMES: Record<string, string> = { backgammon: 'Backgammon', ofc: 'Open Face Chinese' };
 
-async function onPush(): Promise<void> {
-  const pages = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-  const stored: { slug: string; game: string; id: string }[] = [];
+/** Hand a push to an open page and wait briefly for it to say it took it. */
+async function handToPage(page: Client, data: PushData | null): Promise<InboxEvent[] | null> {
+  const channel = new MessageChannel();
+  const answered = new Promise<InboxEvent[] | null>((resolve) => {
+    const timer = setTimeout(() => resolve(null), 3000);
+    channel.port1.onmessage = (m) => {
+      clearTimeout(timer);
+      resolve(((m.data as { events?: InboxEvent[] } | null)?.events ?? []) as InboxEvent[]);
+    };
+  });
+  page.postMessage({ type: MAIL_MESSAGE, data }, [channel.port2]);
+  return answered;
+}
+
+async function notificationsFor(device: MailboxDevice, events: InboxEvent[]) {
   const shown: { title: string; body: string; url: string; tag: string }[] = [];
-  for (const device of await allMailboxDevices()) {
-    let events: InboxEvent[] = [];
-    try {
-      events = await processInbox(swEnv(device, stored));
-    } catch {
-      continue; // offline or the mailbox is down: the mail waits, the page will collect it
-    }
-    for (const e of events) {
-      const who = await nameOf(device, e);
-      const url = `${self.registration.scope}#/${device.slug}/${e.game}/game/${e.matchId}`;
-      const game = GAME_NAMES[e.game] ?? 'Among Friends';
-      if (e.kind === 'view' && e.yourTurn) {
-        shown.push({ title: `Your turn · ${game}`, body: `${who} played.`, url, tag: e.matchId });
-      } else if (e.kind === 'deferred') {
-        shown.push({
-          title: `${who} played · ${game}`,
-          body: 'Open the table to deal them their next cards.',
-          url,
-          tag: e.matchId,
-        });
-      }
+  for (const e of events) {
+    const who = await nameOf(device, e);
+    const url = `${self.registration.scope}#/${device.slug}/${e.game}/game/${e.matchId}`;
+    const game = GAME_NAMES[e.game] ?? 'Among Friends';
+    if (e.kind === 'view' && e.yourTurn) {
+      shown.push({ title: `Your turn · ${game}`, body: `${who} played.`, url, tag: e.matchId });
+    } else if (e.kind === 'deferred') {
+      shown.push({
+        title: `${who} played · ${game}`,
+        body: 'Open the table to deal them their next cards.',
+        url,
+        tag: e.matchId,
+      });
     }
   }
-  for (const p of pages) p.postMessage({ type: MAIL_MESSAGE, stored });
-  const visible = pages.some((p) => p.visibilityState === 'visible');
-  if (visible) return; // the open page shows it
+  return shown;
+}
+
+/**
+ * A push carries the message itself (see `processPushed`): it is acted on as it is, without
+ * reading the mailbox, unless it did not fit or this device missed an earlier one. An open page
+ * gets it first (it may be hosting that very table live); this worker acts only when no page
+ * answers.
+ */
+async function onPush(data: PushData | null): Promise<void> {
+  const pages = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const devices = (await allMailboxDevices()).filter((d) => !data || d.player === data.to);
+  let events: { device: MailboxDevice; events: InboxEvent[] }[] = [];
+  const page = pages.find((p) => p.visibilityState === 'visible') ?? pages[0];
+  const fromPage = page ? await handToPage(page, data) : null;
+  if (fromPage && devices[0]) {
+    events = [{ device: devices[0], events: fromPage }];
+  } else {
+    const stored: { slug: string; game: string; id: string }[] = [];
+    for (const device of devices) {
+      try {
+        const env = swEnv(device, stored);
+        events.push({
+          device,
+          events: data ? await processPushed(env, data) : await processInbox(env),
+        });
+      } catch {
+        /* offline or the mailbox is down: the mail waits, the page will collect it */
+      }
+    }
+    for (const p of pages) p.postMessage({ type: MAIL_MESSAGE, stored });
+  }
+  if (pages.some((p) => p.visibilityState === 'visible')) return; // the open page shows it
+  const shown = (await Promise.all(events.map((e) => notificationsFor(e.device, e.events)))).flat();
   for (const n of shown) {
     await self.registration.showNotification(n.title, {
       body: n.body,
@@ -129,8 +165,17 @@ async function onPush(): Promise<void> {
   }
 }
 
+function pushData(e: PushEvent): PushData | null {
+  try {
+    const d = e.data?.json() as PushData | undefined;
+    return d && typeof d.id === 'number' && typeof d.to === 'string' ? d : null;
+  } catch {
+    return null; // an empty push (older senders, or keys that could not be used): read the mailbox
+  }
+}
+
 self.addEventListener('push', (e) => {
-  e.waitUntil(onPush());
+  e.waitUntil(onPush(pushData(e)));
 });
 
 self.addEventListener('notificationclick', (e) => {

@@ -2,6 +2,7 @@ import type { PlayerProfile } from '@bgf/protocol';
 import { connLog } from '../session/connLog';
 import { sendMail } from './client';
 import { seal } from './crypto';
+import { pushPayload } from './delta';
 import { withMailboxDevice } from './device';
 import type { Envelope } from './envelope';
 
@@ -52,6 +53,8 @@ export function mailAbsentSeats(
   /** Seats seen connected while hosting: only they get the grace period (they may be back). */
   const seen = new Set<number>();
   const sentVersion = new Map<number, string>();
+  /** The position last mailed to each seat: what the next push's change is from. */
+  const lastSent = new Map<number, ReturnType<HostedTable['viewFor']>>();
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
   let running = false;
@@ -73,6 +76,7 @@ export function mailAbsentSeats(
           seen.add(seat);
           absentSince.delete(seat);
           sentVersion.delete(seat);
+          lastSent.delete(seat);
           continue;
         }
         const since = absentSince.get(seat) ?? now;
@@ -91,6 +95,7 @@ export function mailAbsentSeats(
         };
         const notify = table.yourTurn(seat);
         const body = await seal(key, table.matchId(), envelope);
+        const push = await pushPayload(key, table.matchId(), envelope, lastSent.get(seat));
         const sent = await withMailboxDevice(slug, (device) =>
           sendMail(device.token, {
             to: p.publicKey!,
@@ -98,10 +103,12 @@ export function mailAbsentSeats(
             kind: 'view',
             body,
             notify,
+            ...(push ? { push } : {}),
           }),
         );
         if (!sent || (stopped && !final)) return;
         sentVersion.set(seat, version);
+        lastSent.set(seat, envelope.snapshot);
         connLog('mailbox: position mailed', { seat, version, notify });
       }
       if (wait !== Infinity) schedule(wait + 50);

@@ -211,3 +211,105 @@ describe('the mailbox', () => {
     );
   });
 });
+
+describe('pushes that carry the message', () => {
+  it('encrypts the message for the subscription (RFC 8291) so the device can read it as is', async () => {
+    const { pushKeys } = await import('./webpush');
+    // The browser's side of a subscription.
+    const ua = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
+      'deriveBits',
+    ])) as CryptoKeyPair;
+    const uaPublic = new Uint8Array(await crypto.subtle.exportKey('raw', ua.publicKey));
+    const auth = crypto.getRandomValues(new Uint8Array(16));
+    const vapidPair = (await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      true,
+      ['sign', 'verify'],
+    )) as CryptoKeyPair;
+    deps.vapid = {
+      publicKey: bytesToBase64Url(
+        new Uint8Array(await crypto.subtle.exportKey('raw', vapidPair.publicKey)),
+      ),
+      privateKey: (await crypto.subtle.exportKey('jwk', vapidPair.privateKey)).d!,
+      subject: 'https://amongfriends.gg',
+    };
+    const bodies: { headers: Record<string, string>; body: Uint8Array }[] = [];
+    deps.push = async (_endpoint, init) => {
+      bodies.push({
+        headers: init.headers as Record<string, string>,
+        body: init.body as Uint8Array,
+      });
+      return new Response(null, { status: 201 });
+    };
+    await register(deps, {
+      ...(await signed(bob, bob.publicKey, token(), t)),
+      push: {
+        endpoint: 'https://push.example/abc',
+        p256dh: bytesToBase64Url(uaPublic),
+        auth: bytesToBase64Url(auth),
+      },
+    });
+
+    const decrypt = async (body: Uint8Array) => {
+      const salt = body.slice(0, 16);
+      const idlen = body[20]!;
+      const asPublic = body.slice(21, 21 + idlen);
+      const as = await crypto.subtle.importKey(
+        'raw',
+        asPublic,
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false,
+        [],
+      );
+      const ecdh = new Uint8Array(
+        await crypto.subtle.deriveBits({ name: 'ECDH', public: as }, ua.privateKey, 256),
+      );
+      const { cek, nonce } = await pushKeys(ecdh, auth, uaPublic, asPublic, salt);
+      const key = await crypto.subtle.importKey(
+        'raw',
+        cek as Uint8Array<ArrayBuffer>,
+        'AES-GCM',
+        false,
+        ['decrypt'],
+      );
+      const plain = new Uint8Array(
+        await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv: nonce as Uint8Array<ArrayBuffer> },
+          key,
+          body.slice(21 + idlen) as Uint8Array<ArrayBuffer>,
+        ),
+      );
+      expect(plain.at(-1)).toBe(2); // last-record delimiter
+      return JSON.parse(new TextDecoder().decode(plain.slice(0, -1)));
+    };
+
+    const out = await send(deps, alice.publicKey, {
+      to: bob.publicKey,
+      match: 'm1',
+      kind: 'cmd',
+      body: 'the whole move',
+      push: 'the move, for the push',
+    });
+    expect(bodies[0]!.headers['Content-Encoding']).toBe('aes128gcm');
+    expect(await decrypt(bodies[0]!.body)).toEqual({
+      to: bob.publicKey,
+      id: out.id,
+      from: alice.publicKey,
+      match: 'm1',
+      kind: 'cmd',
+      push: 'the move, for the push',
+    });
+
+    // Too big to ride along: the push says which message, and the device collects it.
+    await send(deps, alice.publicKey, {
+      to: bob.publicKey,
+      match: 'm1',
+      kind: 'view',
+      body: 'x',
+      push: 'y'.repeat(3950),
+    });
+    const second = await decrypt(bodies[1]!.body);
+    expect(second.push).toBeUndefined();
+    expect(second.kind).toBe('view');
+  });
+});

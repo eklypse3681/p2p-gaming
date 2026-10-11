@@ -22,6 +22,22 @@ export interface MailboxDevice {
 
 let store: ReturnType<typeof createStore> | null = null;
 const devices = () => (store ??= createStore('bgf-mailbox', 'devices'));
+let handledStore: ReturnType<typeof createStore> | null = null;
+const handled = () => (handledStore ??= createStore('bgf-mailbox-handled', 'handled'));
+
+/**
+ * Moves already applied from a push, by `<slug>:<id>`: their copy still waits in the mailbox (for
+ * devices that missed the push) and must not be applied twice when it is collected.
+ */
+export function markHandled(slug: string, id: number): Promise<void> {
+  return set(`${slug}:${id}`, Date.now(), handled());
+}
+export async function wasHandled(slug: string, id: number): Promise<boolean> {
+  return (await get(`${slug}:${id}`, handled())) !== undefined;
+}
+export function forgetHandled(slug: string, id: number): Promise<void> {
+  return del(`${slug}:${id}`, handled());
+}
 
 export function getMailboxDevice(slug: string): Promise<MailboxDevice | undefined> {
   return get<MailboxDevice>(slug, devices());
@@ -92,7 +108,14 @@ export function registerDevice(body: unknown): Promise<{ ok: true }> {
 
 export function sendMail(
   token: string,
-  m: { to: string; match: string; kind: 'cmd' | 'view'; body: string; notify?: boolean },
+  m: {
+    to: string;
+    match: string;
+    kind: 'cmd' | 'view';
+    body: string;
+    notify?: boolean;
+    push?: string;
+  },
 ): Promise<{ id: number; woke: number }> {
   return call('send', { method: 'POST', body: JSON.stringify(m) }, token);
 }

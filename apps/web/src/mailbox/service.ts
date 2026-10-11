@@ -21,6 +21,7 @@
 import { base64UrlToBytes, bytesToBase64Url, utf8Bytes } from '@bgf/protocol';
 import { verifyDelegated } from '@bgf/wallet';
 import { registrationBytes } from './bytes';
+import { MAX_PUSH_PLAINTEXT, encryptPush } from './webpush';
 
 export { registrationBytes };
 
@@ -256,6 +257,12 @@ export interface Outgoing {
   body: string;
   /** Wake the recipient's devices (default true). Off for news that can wait to be collected. */
   notify?: boolean;
+  /**
+   * What the push itself carries, so the woken device need not read the mailbox: the move, or the
+   * change since the last position (sealed with the match key like `body`). The mailbox keeps
+   * `body`, the whole message, for a device that missed the push.
+   */
+  push?: string;
 }
 
 export async function send(
@@ -312,7 +319,20 @@ export async function send(
     .prepare('DELETE FROM mailbox_quota WHERE day < ?')
     .bind(day - 1)
     .run();
-  const woke = m.notify === false ? 0 : await wake(deps, m.to);
+  if (m.push !== undefined && (typeof m.push !== 'string' || m.push.length > MAX_PUSH_PLAINTEXT)) {
+    throw new MailboxError(400, 'bad-push-payload');
+  }
+  const woke =
+    m.notify === false
+      ? 0
+      : await wake(deps, m.to, {
+          to: m.to,
+          id: row!.id,
+          from: sender,
+          match: m.match,
+          kind: m.kind,
+          ...(m.push ? { push: m.push } : {}),
+        });
   return { id: row!.id, woke };
 }
 
@@ -369,26 +389,50 @@ export async function ack(deps: MailboxDeps, player: string, ids: unknown): Prom
 // ---- web push --------------------------------------------------------------------------------
 
 /** Wake every device of `player` that asked for pushes. Returns how many push services took it. */
-async function wake(deps: MailboxDeps, player: string): Promise<number> {
+/** What a push carries (encrypted for the device): the message's id and, when it fits, itself. */
+export interface PushData {
+  /** The recipient: one browser may hold several players. */
+  to: string;
+  id: number;
+  from: string;
+  match: string;
+  kind: 'cmd' | 'view';
+  push?: string;
+}
+
+async function wake(deps: MailboxDeps, player: string, data: PushData): Promise<number> {
   if (!deps.vapid || !deps.push) return 0;
   const { results } = await deps.db
     .prepare(
-      'SELECT token, endpoint FROM mailbox_devices WHERE player = ? AND endpoint IS NOT NULL',
+      'SELECT token, endpoint, p256dh, auth FROM mailbox_devices WHERE player = ? AND endpoint IS NOT NULL',
     )
     .bind(player)
-    .all<{ token: string; endpoint: string }>();
+    .all<{ token: string; endpoint: string; p256dh: string | null; auth: string | null }>();
+  const full = new TextEncoder().encode(JSON.stringify(data));
+  // Too big with the payload: the push says only which message, and the device collects it.
+  const plaintext =
+    full.length <= MAX_PUSH_PLAINTEXT
+      ? full
+      : new TextEncoder().encode(JSON.stringify({ ...data, push: undefined }));
   let woke = 0;
   for (const d of results) {
     try {
+      // A subscription whose keys cannot be used still gets an empty push: "collect your mail".
+      const body =
+        d.p256dh && d.auth
+          ? await encryptPush(plaintext, { p256dh: d.p256dh, auth: d.auth }).catch(() => null)
+          : null;
       const res = await deps.push(d.endpoint, {
         method: 'POST',
         headers: {
           Authorization: await vapidAuthorization(deps.vapid, d.endpoint, deps.now()),
           TTL: String(7 * 24 * 3600),
           Urgency: 'high',
+          ...(body
+            ? { 'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream' }
+            : {}),
         },
-        // No payload: the worker collects the mail itself.
-        body: '',
+        body: body ? (body as Uint8Array<ArrayBuffer>) : '',
       });
       if (res.ok) woke++;
       else if (res.status === 404 || res.status === 410) {

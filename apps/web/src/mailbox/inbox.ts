@@ -3,7 +3,7 @@ import type { EntropySource } from '@bgf/table';
 import type { MatchState } from '@bgf/engine';
 import type { Runtime } from '../session/runtimes';
 import type { MailboxDevice } from './client';
-import { ackMail, fetchInbox, sendMail } from './client';
+import { ackMail, fetchInbox, forgetHandled, markHandled, sendMail, wasHandled } from './client';
 import { open, seal } from './crypto';
 import type { Envelope } from './envelope';
 import { isEnvelope } from './envelope';
@@ -11,6 +11,8 @@ import type { MailedCommand } from './apply';
 import { applyMailed } from './apply';
 import type { Incoming } from './service';
 import { backgammonTurn, ofcTurn } from './turns';
+import { FROM_PUSH, applyDelta, pushPayload } from './delta';
+import type { PushData } from './service';
 
 type AnySnapshot = (MatchSnapshot | TableSnapshot) & { id: string; seq: number };
 
@@ -111,8 +113,41 @@ function turnOf(game: string, s: AnySnapshot, player: string): boolean {
  */
 export async function processInbox(env: InboxEnv): Promise<InboxEvent[]> {
   const mail = await fetchInbox(env.device.token);
+  const { events, done } = await processMessages(env, mail, 'mailbox');
+  await ackMail(env.device.token, done);
+  return events;
+}
+
+/**
+ * Act on one message that arrived in a push, without reading the mailbox: a move as it is, a
+ * position rebuilt from the change it carries. When it cannot be done from the push alone (the
+ * message did not fit, or this device missed an earlier push and its copy is not the change's
+ * base), the mailbox is read instead. The mailbox's own copy of a message handled here is
+ * removed the next time it is read.
+ */
+export async function processPushed(env: InboxEnv, data: PushData): Promise<InboxEvent[]> {
+  if (!data.push) return processInbox(env);
+  const m: Incoming = {
+    id: data.id,
+    from: data.from,
+    match: data.match,
+    kind: data.kind,
+    body: data.push,
+    at: Date.now(),
+  };
+  const { events, needsMailbox } = await processMessages(env, [m], 'push');
+  if (needsMailbox) return [...events, ...(await processInbox(env))];
+  return events;
+}
+
+async function processMessages(
+  env: InboxEnv,
+  mail: Incoming[],
+  via: 'mailbox' | 'push',
+): Promise<{ events: InboxEvent[]; done: number[]; needsMailbox: boolean }> {
   const events: InboxEvent[] = [];
   const done: number[] = [];
+  let needsMailbox = false;
   const opened: { m: Incoming; e: Envelope; known: KnownMatch }[] = [];
   for (const m of mail) {
     const known = await env.findMatch(m.match);
@@ -123,9 +158,32 @@ export async function processInbox(env: InboxEnv): Promise<InboxEvent[]> {
       continue;
     }
     const key = keyOf(known.snapshot);
-    const e = key ? await open(key, m.match, m.body) : null;
-    if (!isEnvelope(e) || e.game !== known.game) {
+    const raw = key ? await open(key, m.match, m.body) : null;
+    if (!isEnvelope(raw) || raw.game !== known.game) {
       done.push(m.id); // not sealed with this match's key: nothing we can or should read
+      continue;
+    }
+    let e: Envelope = raw;
+    if (e.t === 'delta') {
+      // A position as a change from the copy we should have: rebuild it, or read the mailbox.
+      const whole = applyDelta(known.snapshot as never, e);
+      if (!whole) {
+        needsMailbox = true;
+        continue;
+      }
+      e = {
+        v: 1,
+        t: 'view',
+        game: e.game,
+        snapshot: whole,
+        ...(e.live ? { live: true } : {}),
+        ...(e.errors ? { errors: e.errors } : {}),
+      };
+    }
+    if (e.t === 'cmd' && via === 'mailbox' && (await wasHandled(env.device.slug, m.id))) {
+      // Applied already, from its push.
+      done.push(m.id);
+      await forgetHandled(env.device.slug, m.id);
       continue;
     }
     opened.push({ m, e, known });
@@ -139,7 +197,12 @@ export async function processInbox(env: InboxEnv): Promise<InboxEvent[]> {
     const current = (await env.findMatch(m.match))?.snapshot ?? known.snapshot;
     // Only the device's own player's matches, and never someone else's match under this id.
     if (incoming.id !== current.id) continue;
-    const newer = isNewer(incoming, current);
+    const newer =
+      isNewer(incoming, current) ||
+      // A copy rebuilt from a push is replaced by the whole one (with its audit trail).
+      (incoming.seq === current.seq &&
+        (current as unknown as Record<string, unknown>)[FROM_PUSH] === true &&
+        (incoming as unknown as Record<string, unknown>)[FROM_PUSH] !== true);
     // A device hosting the match keeps its own copy: it is the table.
     const hosting = env.liveHost?.(known.game, m.match);
     let stored = false;
@@ -153,7 +216,7 @@ export async function processInbox(env: InboxEnv): Promise<InboxEvent[]> {
       game: known.game,
       matchId: m.match,
       from: m.from,
-      yourTurn: newer && turnOf(known.game, incoming, env.device.player),
+      yourTurn: incoming.seq > current.seq && turnOf(known.game, incoming, env.device.player),
       stored,
     });
   }
@@ -180,6 +243,7 @@ export async function processInbox(env: InboxEnv): Promise<InboxEvent[]> {
         if (out.errors.length) await mailErrors(env, known, c.seat, out.errors);
       }
       done.push(...cmds.map((c) => c.id));
+      if (via === 'push') for (const c of cmds) await markHandled(env.device.slug, c.id);
       events.push({ kind: 'applied', game: known.game, matchId, from, moves: cmds.length });
       continue;
     }
@@ -198,20 +262,21 @@ export async function processInbox(env: InboxEnv): Promise<InboxEvent[]> {
     const applied = await applyMailed(rt, table, cmds, {
       entropy: env.entropyFor?.(provider),
     });
+    if (via === 'push') for (const c of cmds) await markHandled(env.device.slug, c.id);
     await known.put(applied.snapshot as AnySnapshot);
-    await mailViews(env, known.game, applied.snapshot, applied.errors, rt);
+    await mailViews(env, known.game, table, applied.snapshot, applied.errors, rt);
     done.push(...cmds.map((c) => c.id));
     events.push({ kind: 'applied', game: known.game, matchId, from, moves: cmds.length });
   }
 
-  await ackMail(env.device.token, done);
-  return events;
+  return { events, done, needsMailbox };
 }
 
 /** After applying mailed moves: every other player gets their view (and their errors). */
 async function mailViews(
   env: InboxEnv,
   game: string,
+  before: TableSnapshot,
   snapshot: TableSnapshot,
   errors: Map<number, { code: string; message: string }[]>,
   rt: Runtime,
@@ -232,12 +297,19 @@ async function mailViews(
       >['snapshot'],
       ...(errors.get(seat) ? { errors: errors.get(seat) } : {}),
     };
+    // The push carries the change from the view this player had before these moves.
+    const prev = rt.viewSnapshot(def, before, seat) as unknown as Extract<
+      Envelope,
+      { t: 'view' }
+    >['snapshot'];
+    const push = await pushPayload(key, snapshot.id, envelope, prev);
     await sendMail(env.device.token, {
       to: p.publicKey,
       match: snapshot.id,
       kind: 'view',
       body: await seal(key, snapshot.id, envelope),
       notify: ofcTurn(snapshot.state, seat) || !!errors.get(seat),
+      ...(push ? { push } : {}),
     });
   }
 }
@@ -260,11 +332,13 @@ async function mailErrors(
     live: true,
     errors,
   };
+  const push = await pushPayload(key, known.snapshot.id, envelope);
   await sendMail(env.device.token, {
     to,
     match: known.snapshot.id,
     kind: 'view',
     body: await seal(key, known.snapshot.id, envelope),
     notify: true,
+    ...(push ? { push } : {}),
   });
 }

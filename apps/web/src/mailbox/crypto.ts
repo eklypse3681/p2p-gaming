@@ -34,9 +34,34 @@ export async function seal(key: string, matchId: string, value: unknown): Promis
   return `${bytesToBase64Url(iv)}.${bytesToBase64Url(new Uint8Array(sealed))}`;
 }
 
-/** Open what `seal` made; null when it was not sealed with this key for this match. */
+async function gzip(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = new Response(buf(bytes)).body!.pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = new Response(buf(bytes)).body!.pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/** Like `seal`, compressed first (`z.<iv>.<ciphertext>`): what a push carries, where space is short. */
+export async function sealCompact(key: string, matchId: string, value: unknown): Promise<string> {
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const data = await gzip(new TextEncoder().encode(JSON.stringify(value)));
+  const sealed = await globalThis.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: buf(iv), additionalData: buf(new TextEncoder().encode(matchId)) },
+    await importKey(key),
+    buf(data),
+  );
+  return `z.${bytesToBase64Url(iv)}.${bytesToBase64Url(new Uint8Array(sealed))}`;
+}
+
+/**
+ * Open what `seal` or `sealCompact` made; null when it was not sealed with this key for this
+ * match.
+ */
 export async function open(key: string, matchId: string, sealed: string): Promise<unknown> {
-  const [iv, body] = sealed.split('.');
+  const compact = sealed.startsWith('z.');
+  const [iv, body] = (compact ? sealed.slice(2) : sealed).split('.');
   if (!iv || !body) return null;
   try {
     const plain = await globalThis.crypto.subtle.decrypt(
@@ -48,7 +73,8 @@ export async function open(key: string, matchId: string, sealed: string): Promis
       await importKey(key),
       buf(base64UrlToBytes(body)),
     );
-    return JSON.parse(new TextDecoder().decode(plain)) as unknown;
+    const bytes = compact ? await gunzip(new Uint8Array(plain)) : new Uint8Array(plain);
+    return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
   } catch {
     return null;
   }

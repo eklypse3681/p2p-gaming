@@ -4,7 +4,9 @@ import { useSessionRegistry } from '../session/SessionRegistry';
 import { isGameId } from '../games/ids';
 import { connLog } from '../session/connLog';
 import { withMailboxDevice } from '../mailbox/device';
-import { processInbox } from '../mailbox/inbox';
+import type { InboxEvent } from '../mailbox/inbox';
+import { processInbox, processPushed } from '../mailbox/inbox';
+import type { PushData } from '../mailbox/service';
 import { pageInboxEnv } from '../mailbox/pageEnv';
 import { CHECK_MAIL_EVENT } from '../mailbox/client';
 
@@ -74,7 +76,34 @@ export function MailboxAgent() {
       if (document.visibilityState === 'visible') burst('visible');
     };
     const onWorker = (e: MessageEvent) => {
-      if ((e.data as { type?: string } | null)?.type === MAIL_MESSAGE) void run('push');
+      const msg = e.data as { type?: string; data?: PushData | null } | null;
+      if (msg?.type !== MAIL_MESSAGE) return;
+      const port = e.ports[0];
+      if (!port) {
+        // The worker already acted on it: refresh what is shown.
+        void run('push');
+        return;
+      }
+      // A push for this page to act on (it may host that table live): say when it is done.
+      void (async () => {
+        let events: InboxEvent[] = [];
+        try {
+          events =
+            (await withMailboxDevice(slug, (device) => {
+              const env = pageInboxEnv(slug, device, (game, id) =>
+                isGameId(game) ? registry.get(slug, game, id) : undefined,
+              );
+              return msg.data && msg.data.to === device.player
+                ? processPushed(env, msg.data)
+                : processInbox(env);
+            })) ?? [];
+        } catch (err) {
+          connLog('mailbox: could not act on a push', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        port.postMessage({ events });
+      })();
     };
     // Anything in the page may ask for a check now (a table that just went on by mail; tests).
     const onAsk = () => burst('asked');

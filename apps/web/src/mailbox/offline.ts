@@ -9,6 +9,7 @@ import { TransportError, createMemoryPair } from '@bgf/protocol';
 import { connLog } from '../session/connLog';
 import { sendMail } from './client';
 import { seal } from './crypto';
+import { pushPayload } from './delta';
 import { withMailboxDevice } from './device';
 import type { Envelope } from './envelope';
 import { isNewer } from './inbox';
@@ -120,8 +121,16 @@ export class MailRelay {
       if (typeof key !== 'string' || !to) throw new Error('this table cannot be played by mail');
       const envelope: Envelope = { v: 1, t: 'cmd', game: this.game, seat: this.seat, msg };
       const body = await seal(key, this.snapshot.id, envelope);
+      const push = await pushPayload(key, this.snapshot.id, envelope);
       const sent = await withMailboxDevice(this.slug, (device) =>
-        sendMail(device.token, { to, match: this.snapshot.id, kind: 'cmd', body, notify: true }),
+        sendMail(device.token, {
+          to,
+          match: this.snapshot.id,
+          kind: 'cmd',
+          body,
+          notify: true,
+          ...(push ? { push } : {}),
+        }),
       );
       if (!sent) throw new Error('the mailbox is not available');
       if (msg.type === 'command') this.pendingMoves++;
