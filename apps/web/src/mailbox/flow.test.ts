@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import type * as Sqlite from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Action, Command, Row, TableConfig, TableState, TableView } from '@bgf/ofc-engine';
 import { defaultConfig } from '@bgf/ofc-engine';
@@ -22,9 +23,7 @@ import { MailRelay } from './offline';
 import { pageInboxEnv } from './pageEnv';
 
 // Loaded at run time: this suite runs in jsdom, where Vite would otherwise try to bundle it.
-const { DatabaseSync } = createRequire(import.meta.url)(
-  'node:sqlite',
-) as typeof import('node:sqlite');
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof Sqlite;
 
 vi.mock('idb-keyval', () => createIdbKeyvalMock());
 
