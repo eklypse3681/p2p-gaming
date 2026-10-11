@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-runtime.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",

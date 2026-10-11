@@ -3,3 +3,13 @@
 # The current version, for open pages to notice a deploy: always revalidate.
 /version.json
   Cache-Control: no-cache
+
+# The runtime manifest says which version of the table runtime is current: always revalidate.
+/runtime/manifest.json
+  Cache-Control: no-cache
+
+# Everything it names is content-hashed and never changes.
+/runtime/*.js
+  Cache-Control: public, max-age=31536000, immutable
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

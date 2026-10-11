@@ -1,5 +1,6 @@
 import type { EntropySource, GameDefinition, SnapshotStore, TableClientState } from '@bgf/table';
-import { TableClient, TableServer } from '@bgf/table';
+import { TableClient } from '@bgf/table';
+import { TableServer } from '../runtime';
 import type {
   Listener,
   PlayerProfile,
