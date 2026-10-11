@@ -27,6 +27,7 @@ import { Handoff } from '../../hud/Handoff';
 import { openNotifyDialog, useNotifications } from '../../app/Notify';
 import { useTableMenu } from '../../app/TableMenu';
 import { ByMailBanner } from './ByMailBanner';
+import { useMailboxAvailable } from '../../app/Notify';
 import { scoreLink } from './table/scoreLink';
 import { ClubChip } from '../../clubs/ClubChip';
 import { useToasts } from '../../hud/Toast';
@@ -357,12 +358,19 @@ function LiveTable({
   // A host that lost its room code to the other device rejoins them straight away: there is
   // nothing to wait for here, and the newer copy of the match wins when we say hello.
   const rejoined = useRef<object | null>(null);
+  // A guest at a table played by mail whose host just left goes straight on by mail.
+  const mailbox = useMailboxAvailable();
+  const byMailNext =
+    mailbox &&
+    session.role === 'guest' &&
+    typeof state.snapshot?.options?.mailboxKey === 'string' &&
+    state.snapshot?.view === true;
   useEffect(() => {
-    if (state.status !== 'disconnected' || !session.lostAddress) return;
+    if (state.status !== 'disconnected' || !(session.lostAddress || byMailNext)) return;
     if (rejoined.current === session) return;
     rejoined.current = session;
     onReconnect();
-  }, [state.status, session, onReconnect]);
+  }, [state.status, session, onReconnect, byMailNext]);
   const { reducedMotion } = useTheme();
   const [settings] = useSettings();
   const toasts = useToasts();
@@ -740,30 +748,32 @@ function LiveTable({
       data-dock
     >
       {session.byMail && state.status === 'joined' && <ByMailBanner relay={session.byMail} />}
-      {(state.status === 'disconnected' || state.status === 'rejected') && !session.lostAddress && (
-        <div className={styles.banner} role="alert" data-testid="disconnected-banner">
-          <span>
-            {state.status === 'rejected'
-              ? 'The host turned this connection away.'
-              : session.role === 'host'
-                ? 'The table stopped. Your copy is saved.'
-                : 'Connection to the host lost. The table is saved on their side.'}
-          </span>
-          <span className="row">
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={onReconnect}
-              data-testid="reconnect-button"
-            >
-              Reconnect
-            </button>
-            <CopyConnLog label="Copy log" />
-            <button className="btn btn-ghost btn-sm" onClick={onLeave}>
-              Leave
-            </button>
-          </span>
-        </div>
-      )}
+      {(state.status === 'disconnected' || state.status === 'rejected') &&
+        !session.lostAddress &&
+        !(byMailNext && state.status === 'disconnected') && (
+          <div className={styles.banner} role="alert" data-testid="disconnected-banner">
+            <span>
+              {state.status === 'rejected'
+                ? 'The host turned this connection away.'
+                : session.role === 'host'
+                  ? 'The table stopped. Your copy is saved.'
+                  : 'Connection to the host lost. The table is saved on their side.'}
+            </span>
+            <span className="row">
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={onReconnect}
+                data-testid="reconnect-button"
+              >
+                Reconnect
+              </button>
+              <CopyConnLog label="Copy log" />
+              <button className="btn btn-ghost btn-sm" onClick={onLeave}>
+                Leave
+              </button>
+            </span>
+          </div>
+        )}
 
       <div className={styles.opponentSlot}>{strip}</div>
 

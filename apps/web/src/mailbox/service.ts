@@ -386,8 +386,9 @@ async function wake(deps: MailboxDeps, player: string): Promise<number> {
           Authorization: await vapidAuthorization(deps.vapid, d.endpoint, deps.now()),
           TTL: String(7 * 24 * 3600),
           Urgency: 'high',
-          'Content-Length': '0',
         },
+        // No payload: the worker collects the mail itself.
+        body: '',
       });
       if (res.ok) woke++;
       else if (res.status === 404 || res.status === 410) {

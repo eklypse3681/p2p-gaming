@@ -176,8 +176,7 @@ describe('the mailbox', () => {
     });
     expect(out.woke).toBe(1);
     const headers = pushed[0]!.init.headers as Record<string, string>;
-    expect(pushed[0]!.init.body).toBeUndefined();
-    expect(headers['Content-Length']).toBe('0');
+    expect(pushed[0]!.init.body).toBe('');
     // The JWT verifies with the public key and names the push service as its audience.
     const m = /^vapid t=([^.]+)\.([^.]+)\.([^,]+), k=(.+)$/.exec(headers.Authorization!)!;
     const claims = JSON.parse(new TextDecoder().decode(base64UrlToBytes(m[2]!)));

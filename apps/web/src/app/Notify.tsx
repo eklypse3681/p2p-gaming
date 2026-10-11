@@ -18,6 +18,19 @@ export function openNotifyDialog(): void {
   window.dispatchEvent(new Event(OPEN_EVENT));
 }
 
+/** Whether this site has a mailbox (false until known). */
+export function useMailboxAvailable(): boolean {
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void mailboxStatus().then((s) => live && setAvailable(s.available));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return available;
+}
+
 /**
  * Whether turn notifications are on for this player here, and whether they could be (the site
  * has a mailbox with push). `null` while checking.
