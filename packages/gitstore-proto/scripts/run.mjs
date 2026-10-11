@@ -13,17 +13,7 @@ const out = join(outDir, `entry-${process.pid}.mjs`);
 const esbuild = resolve(pkg, '../../node_modules/.bin/esbuild');
 execFileSync(
   esbuild,
-  [
-    entry,
-    '--bundle',
-    '--platform=node',
-    '--format=esm',
-    `--outfile=${out}`,
-    '--external:node-datachannel',
-    '--external:peerjs',
-    '--external:@duckdb/*',
-    '--log-level=error',
-  ],
+  [entry, '--bundle', '--platform=node', '--format=esm', `--outfile=${out}`, '--external:node-datachannel', '--external:peerjs', '--external:@duckdb/*', '--log-level=error'],
   { stdio: 'inherit' },
 );
 const r = spawnSync(process.execPath, [out, ...rest], { stdio: 'inherit' });

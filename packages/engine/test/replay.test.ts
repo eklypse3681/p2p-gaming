@@ -33,13 +33,11 @@ function simulateMatch(seed: number, length: number): { actions: Action[]; final
     const ph = g.phase;
     switch (ph.kind) {
       case 'opening':
-        if (ph.rolls.white === undefined)
-          step({ type: 'opening-roll', player: 'white', die: dice.rollDie() });
+        if (ph.rolls.white === undefined) step({ type: 'opening-roll', player: 'white', die: dice.rollDie() });
         else step({ type: 'opening-roll', player: 'black', die: dice.rollDie() });
         break;
       case 'to-roll':
-        if (canDouble(g, ph.player) && coin.rollDie() === 6)
-          step({ type: 'double', player: ph.player });
+        if (canDouble(g, ph.player) && coin.rollDie() === 6) step({ type: 'double', player: ph.player });
         else step({ type: 'roll', player: ph.player, dice: rollDice(dice) });
         break;
       case 'double-offered':

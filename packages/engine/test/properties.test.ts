@@ -28,8 +28,7 @@ describe('properties of legalPlays', () => {
     let playsChecked = 0;
     const problems: string[] = [];
     const note = (what: string, board: unknown, dice: DiceRoll, p: readonly SubMove[]) => {
-      if (problems.length < 5)
-        problems.push(`${what}: dice=${dice} play=${sig(p)} board=${JSON.stringify(board)}`);
+      if (problems.length < 5) problems.push(`${what}: dice=${dice} play=${sig(p)} board=${JSON.stringify(board)}`);
     };
     for (let i = 0; i < ITERATIONS; i++) {
       const board = randomBoard(rnd);

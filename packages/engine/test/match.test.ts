@@ -38,11 +38,7 @@ function playOut(
 ): MatchState {
   const loser: Player = winner === 'white' ? 'black' : 'white';
   const loserSpec =
-    kind === 'single'
-      ? { [OFF]: 1, 13: 14 }
-      : kind === 'gammon'
-        ? { 13: 15 }
-        : { [BAR]: 1, 13: 14 };
+    kind === 'single' ? { [OFF]: 1, 13: 14 } : kind === 'gammon' ? { 13: 15 } : { [BAR]: 1, 13: 14 };
   const winnerSpec = { 1: 1, [OFF]: 14 };
   const board =
     winner === 'white' ? boardFrom(winnerSpec, loserSpec) : boardFrom(loserSpec, winnerSpec);
@@ -79,9 +75,9 @@ describe('newMatch / startGame', () => {
   });
 
   it('actions without a game fail with no-game', () => {
-    expect(
-      code(() => applyAction(newMatch(), { type: 'roll', player: 'white', dice: [1, 2] })),
-    ).toBe('no-game');
+    expect(code(() => applyAction(newMatch(), { type: 'roll', player: 'white', dice: [1, 2] }))).toBe(
+      'no-game',
+    );
   });
 
   it('pointsAway', () => {
@@ -180,17 +176,9 @@ describe('Jacoby rule (money play)', () => {
   it('scoreResult exposes the same rule', () => {
     const m = newMatch({ length: 0, jacoby: true });
     const g = newGame();
-    const result = {
-      winner: 'white' as const,
-      kind: 'gammon' as const,
-      how: 'bearoff' as const,
-      cube: 1,
-      points: 0,
-    };
+    const result = { winner: 'white' as const, kind: 'gammon' as const, how: 'bearoff' as const, cube: 1, points: 0 };
     expect(scoreResult(m, g, result)).toBe(1);
-    expect(
-      scoreResult(m, { ...g, cube: { value: 2, owner: 'white' } }, { ...result, cube: 2 }),
-    ).toBe(4);
+    expect(scoreResult(m, { ...g, cube: { value: 2, owner: 'white' } }, { ...result, cube: 2 })).toBe(4);
   });
 
   it('money play never produces a match winner', () => {
